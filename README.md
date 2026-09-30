@@ -14,9 +14,11 @@ capabilities.
 | --- | --- |
 | Go module `github.com/truvity/k8s` | `go get github.com/truvity/k8s@v0.1.0` |
 | `pkg/cluster` — the provider-neutral contract: outputs and capabilities, with a validator | Go package, no cloud dependency |
+| `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component, unreleased |
 
 The provider packages (EKS first) are not in `v0.1.0`; they arrive one
 reviewed extraction at a time and are listed in the [CHANGELOG](CHANGELOG.md).
+The first extracted component, the pull-through cache, is unreleased.
 
 ## Who it is for
 
