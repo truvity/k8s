@@ -1,0 +1,30 @@
+# Tag-triggered release through truvity/ci-workflows release-public.yaml.
+#
+# A library: the tag is the Go module's version and needs no build step. No
+# binary is built yet, so `builds` is skipped; add one here when a command
+# is added, and archives follow from it.
+version: 2
+
+project_name: k8s
+
+builds:
+  - skip: true
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^chore"
+      - "^ci"
+      - "^docs"
+      - "^test"
+
+release:
+  github: {}
+  header: |
+    ## k8s {{ .Tag }}
+
+    Go module: `go get github.com/truvity/k8s@{{ .Tag }}`.

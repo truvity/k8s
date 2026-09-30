@@ -1,0 +1,139 @@
+# k8s
+
+**Kubernetes clusters as Pulumi components, behind one provider-neutral contract.**
+
+Provisions the cluster and the things a cluster needs around it — the
+network, the peering, a registry pull-through cache, a backup store — as
+Pulumi `ComponentResource`s with documented child names and names the
+caller supplies. EKS Auto Mode is the first provider; self-hosted Talos is
+the second. Whichever provider made it, the consumer of a cluster sees the
+same thing: a name, an endpoint, a CA, an OIDC issuer and a set of
+capabilities.
+
+| What | Where |
+| --- | --- |
+| Go module `github.com/truvity/k8s` | `go get github.com/truvity/k8s@v0.1.0` |
+| `pkg/cluster` — the provider-neutral contract: outputs and capabilities, with a validator | Go package, no cloud dependency |
+
+The provider packages (EKS first) are not in `v0.1.0`; they arrive one
+reviewed extraction at a time and are listed in the [CHANGELOG](CHANGELOG.md).
+
+## Who it is for
+
+A team that runs its own clusters from a Pulumi program in Go and wants the
+cluster, its network and its supporting pieces as reusable components,
+rather than as a copy of another team's infrastructure repository. It
+assumes you already have a Pulumi backend, cloud credentials and a naming
+scheme; it chooses none of them.
+
+It deliberately does not pick your names, your address ranges, your
+permission boundaries or your accounts, does not install workloads into the
+cluster (charts are a separate concern), and does not ship a Pod Security
+baseline yet (that will be its own chart).
+
+## The model
+
+Three ideas.
+
+A **component** is a Pulumi `ComponentResource` with a documented set of
+child resources. The child names are part of the API: a caller that adopts
+a component over existing infrastructure relies on them to keep its
+resources' URNs, through aliases the component declares.
+
+A **contract** is what every provider component reports, in
+`pkg/cluster.Outputs`: name, endpoint, certificate authority, OIDC issuer
+and the capabilities the cluster offers (node pools, storage, network
+policy, workload identity, load balancing, API access). A consumer asks for
+a capability; it does not branch on the provider.
+
+A **caller-supplied name** is any name, tag, range or boundary a component
+would otherwise have to choose. Components take them as inputs; none has a
+default that belongs to one estate.
+
+## Install and a worked example
+
+```sh
+go get github.com/truvity/k8s@v0.1.0
+```
+
+The contract is what a consumer of any provider writes against:
+
+```go
+out := cluster.Outputs{
+	Provider:                cluster.ProviderEKS,
+	Name:                    "example",
+	Endpoint:                "https://api.example.test",
+	CertificateAuthorityPEM: caPEM,
+	OIDCIssuer:              "https://oidc.example.test/id/abc",
+	Capabilities:            cluster.NewCapabilities(cluster.NodePools, cluster.WorkloadIdentity),
+}
+if err := out.Validate(); err != nil {
+	return err // the provider reported something a consumer cannot use
+}
+if out.Capabilities.Has(cluster.WorkloadIdentity) {
+	// wire pod identities against out.OIDCIssuer
+}
+```
+
+## Consumers
+
+The estate this is being extracted from will adopt it cluster by cluster,
+each adoption proven by an empty Pulumi preview (see
+[docs/decisions/0002-urn-stability.md](docs/decisions/0002-urn-stability.md)).
+No consumer is recorded at v0; a repository that adopts it adds a line here.
+
+## Neighbours
+
+- [pulumi-pipeline](https://github.com/truvity/pulumi-pipeline) — runs many
+  Pulumi stacks as one pipeline with refusal gates; the natural driver for
+  programs that use these components.
+- [policy](https://github.com/truvity/policy) — the contracts this repository
+  is held to (`docs/contracts/component.md`).
+- [ci-workflows](https://github.com/truvity/ci-workflows) — the shared CI and
+  release workflows this repository calls.
+
+## Documentation
+
+- [docs/adoption.md](docs/adoption.md) — using a component, adopting one over
+  existing infrastructure, and every breaking upgrade.
+- [docs/reference.md](docs/reference.md) — the Go types and the capability set.
+- [docs/safety.md](docs/safety.md) — what is refused and what must never be
+  done to a cluster's resources.
+- [docs/doctrine.md](docs/doctrine.md) — why it is shaped this way.
+- [docs/decisions/](docs/decisions/) — the decisions, one page each.
+- [SECURITY.md](SECURITY.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## The rule that makes this repository public
+
+Mechanism only. A cluster's name, its address ranges, its account, its
+permission boundaries and every tag pattern are the caller's: an input, a
+hook the caller supplies, or a file the caller commits. Nothing here
+defaults to one estate's value, and the tests never reach a real cloud —
+providers run against Pulumi mocks and cluster behaviour against kind.
+[`hack/leak-canary.sh`](hack/leak-canary.sh) enforces the mechanical half
+over tracked files and runs in the gate.
+
+## Status
+
+v0: the API may still move in a minor release, and every move is a
+`Breaking:` bullet in the [CHANGELOG](CHANGELOG.md). Today the module holds
+the contract only; providers are added by extraction from a running
+estate, each with its URN-stability proof.
+
+## Development
+
+```sh
+devbox shell        # pins every tool
+just check          # build, test, lint, leak-canary
+just vuln           # reachable Go advisories (its own workflow in CI, not in check)
+```
+
+## Releasing
+
+Releases are a `v*` tag, which the shared release workflow turns into the
+Go module version and a GitHub Release. Automatic patch releases are not
+armed; the first release and every minor and major are hand-cut tags.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
