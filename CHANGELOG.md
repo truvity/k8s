@@ -4,6 +4,22 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/backupbucket`: the cross-account backup bucket as a component,
+  `truvity:k8s/aws:BackupBucket`. A versioned bucket in a backup account
+  with its own KMS key (rotation on, retained on delete), a bucket policy
+  that admits a named writer role, an optional read-only role and list-only
+  roles and denies `s3:DeleteObjectVersion` outside the backup account, a
+  caller-supplied lifecycle (`Backstop` builds the common rule), optional
+  COMPLIANCE Object Lock, and an optional same-account replica in another
+  region with its replication role. Names, tags, key descriptions, the
+  replication role's permissions boundary and the partition are inputs; none
+  has an estate default. The bucket, the replica bucket and both keys are
+  protected unless `Protect` points at false. `LegacyTopLevel` adopts loose
+  resources by alias, including the SDK's former-type aliases re-expressed
+  with no parent, so a state that still holds the pre-v2 type resolves.
+
 ## v0.1.0
 
 - The provider-neutral cluster contract (`pkg/cluster`): `Outputs` (name,

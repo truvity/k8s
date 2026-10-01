@@ -30,6 +30,12 @@ from a replace.
 5. **A component with a different old shape** (an old parent, a renamed
    prefix) takes an input that carries that shape instead, and documents it
    on its reference page. The switch is for the top-level case only.
+6. **A provider SDK's own aliases do not follow a child under a parent.**
+   An SDK that aliases a type from its former name declares the alias with no
+   parent, which resolves beneath the child's new parent. `LegacyTopLevel`
+   therefore also gives such a child one alias with the former type and no
+   parent, once per distinct type (an identical pair is one). A test lists
+   what the SDK registers and fails when the component's set falls short.
 
 ## Consequences
 
