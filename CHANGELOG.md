@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.3.0
 
 - `pkg/aws/vpcpeering`: a VPC peering as a component,
   `truvity:k8s/aws:VpcPeering`. A connection requested from one side and
