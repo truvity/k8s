@@ -4,6 +4,29 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/vpc`: a VPC as a component, `truvity:k8s/aws:Vpc`. The caller
+  states the IPv4 CIDR, the availability zones and the logical subnets (one
+  CIDR per zone each, a public or private type, an explicit IPv6 /64 index);
+  the component adds the internet gateway and public route table, one private
+  route table per zone, IPv6 (an Amazon-provided /56, a /64 per subnet, an
+  egress-only gateway; `DisableIPv6` turns it off), NAT egress for the private
+  route tables (`NAT`: one gateway by default, one per zone, or none), S3 and
+  DynamoDB gateway endpoints (`GatewayEndpoints`), an emptied default security
+  group, a restrictive default network ACL (with `DefaultNACLHTTPSIngress` for
+  peered VPCs; `KeepDefaultSecurityGroup` and `KeepDefaultNACL` opt out) and
+  CloudWatch flow logs with a 365-day default retention (`FlowLogs`). It
+  refuses a bad CIDR, subnets outside the VPC or overlapping, a subnet that
+  does not span exactly the listed zones, colliding or out-of-range IPv6
+  indexes, a NAT with no public subnet, a missing provider and a naming hook
+  that returns an empty or repeated name, all reported at once. Every child's
+  name comes from a caller-supplied hook, and tags can be set per child; there
+  is no estate default. The VPC and the subnets are protected unless `Protect`
+  points at false. The default network ACL is owned whole by the component:
+  a rule added to it elsewhere is deleted by the next apply. `LegacyTopLevel`
+  adopts loose resources by alias.
+
 ## v0.3.0
 
 - `pkg/aws/vpcpeering`: a VPC peering as a component,
