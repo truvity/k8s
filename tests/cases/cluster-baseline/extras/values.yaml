@@ -1,0 +1,39 @@
+# The opt-in extras, each for a listed namespace; the PSA list is left empty
+# to show that the parts are independent.
+networkPolicy:
+  name: example-default-deny
+  dns:
+    namespace: example-dns
+    podLabelKey: app
+    podLabelValue: example-dns
+  namespaces:
+    example-app:
+      deny: [ingress, egress]
+      dnsEgress: true
+    example-data:
+      deny: [ingress]
+    example-sealed:
+      name: example-sealed-deny
+      deny: [egress]
+      dnsEgress: false
+resourceQuota:
+  protect: true
+  namespaces:
+    example-app:
+      reason: "caps a runaway batch job from starving the node pool"
+      hard:
+        pods: 50
+        requests.cpu: "20"
+        requests.memory: 64Gi
+        count/jobs.batch: 1000000
+    example-data:
+      owner: example-team
+      hard:
+        requests.storage: 500Gi
+limitRange:
+  namespaces:
+    example-app:
+      container:
+        defaultRequest: { cpu: 100m, memory: 128Mi }
+        default: { memory: 512Mi }
+        max: { memory: 4Gi }

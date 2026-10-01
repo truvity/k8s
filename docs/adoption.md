@@ -61,10 +61,26 @@ change, per cluster, the least important cluster first.
    and CSI drivers, container-build daemons and CI runners are the usual
    ones. Pin `podSecurity.version` to the cluster's Kubernetes minor before
    the next stage.
-3. **Enforce.** First one namespace at a time (a `modes.enforce` override,
-   the canary), then cluster-wide by switching `podSecurity.modes.enforce.enabled`.
-   Enforcing at `baseline` first is a cheap floor that admits almost every
-   workload; move to `restricted` namespace by namespace.
+3. **Enforce, one namespace at a time.** There is no cluster-wide baseline
+   floor: do not switch `podSecurity.modes.enforce.enabled` on for the whole
+   cluster, and do not enforce `baseline` everywhere as an interim. Pin the
+   version first, then give a namespace a `modes.enforce` override (the
+   canary) and, once it has been quiet, move that namespace to `restricted`.
+   The next namespace follows, each its own reviewed change. The policy is to
+   fix a workload that fails `restricted` rather than exempt it; an exemption
+   is `privileged` plus a `reason`, for the few that cannot.
+
+The **guard** (`guard.enabled`) belongs in stage 1, in Warn mode: it warns and
+audits when a namespace is created without a label, which tells you which
+namespaces the list does not cover yet. Keep `validationActions: [Warn, Audit]`
+and `failurePolicy: Ignore`; add `Deny` only when the warnings are quiet and
+after reviewing `excludeNamespaces`.
+
+The opt-in extras (`networkPolicy`, `resourceQuota`, `limitRange`) are not part
+of this rollout and change nothing until a namespace opts in. Adopt them
+separately, one namespace per change: check first that the namespace has no
+default-deny policy of another owner, and give every quota a `reason` or an
+`owner`.
 
 Rolling back is a values change: switch the kind off or lower the level. A
 refused pod is a deployment that stops rolling, so enforce on a day someone

@@ -19,6 +19,19 @@ them, and for anything breaking, what to do.
   list of namespaces is empty by default: the estate names its own.
   `just lint` and `just test` now cover the chart (schema, ten refused
   fixtures, four golden renders); the devbox pins `kubernetes-helm`.
+- `charts/cluster-baseline`: a guard, and three extras, all off until switched
+  on. `guard.enabled` renders a `ValidatingAdmissionPolicy` and binding that
+  warn and audit (`validationActions`, `Deny` allowed later;
+  `failurePolicy: Ignore`) when a namespace is created, or updated to drop its
+  labels, with no Pod Security label; the control-plane namespaces are
+  excluded, the list is configurable. Per listed namespace, opt-in:
+  `networkPolicy` (default-deny ingress and/or egress; a `dnsEgress` decision
+  is required when egress is denied; configurable name, to avoid duplicating
+  an owner's deny policy), `resourceQuota` (values only; a `reason` or an
+  `owner` required) and `limitRange` (container defaults and bounds). Each has
+  a `protect` switch, default off: removal only relaxes a limit. No
+  cluster-wide baseline floor is offered; namespaces move to `restricted` one
+  at a time. 14 more refused fixtures and three more golden renders.
 
 ## v0.7.0
 

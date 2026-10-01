@@ -748,16 +748,79 @@ if set, else (when the kind is on) the namespace `level`, else the kind's
 `podSecurity.version`. No level resolves to no label.
 
 
-### Not in this chart yet
+### The guard
 
-Proposed, deliberately left out of the first version so that the one
-mechanism can be reviewed alone:
+`guard.enabled` (default `false`) renders a `ValidatingAdmissionPolicy` and
+its binding (Kubernetes 1.30+). It warns, and writes an audit annotation, when
+a `Namespace` is created without a `pod-security.kubernetes.io/<kind>` label,
+or updated so that it drops the labels it had. An update that leaves a
+never-labelled namespace as it was is not nagged. It only validates, so it
+cannot fight a namespace's owner, and the namespaces this chart labels satisfy
+it. The policy and binding are never marked for protection: removing them only
+stops warnings (with `Deny` in `validationActions` that would loosen a gate,
+which is a reviewed values change like any other).
 
-- A default-deny `NetworkPolicy` per listed namespace, with an allow list for
-  DNS. Needs the `network-policy` capability, and breaks every workload that
-  was relying on open traffic, so it would ship warn-first too (a no-op
-  policy first, then enforcing).
-- `ResourceQuota` and `LimitRange` defaults per namespace, inputs only.
-- A guard (`ValidatingAdmissionPolicy`, GA from Kubernetes 1.30) that warns
-  when a namespace is created without PSA labels, closing the gap that only
-  listed namespaces are covered.
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `guard.enabled` | `false` | Render the policy and its binding. |
+| `guard.name` | `cluster-baseline-pod-security-labels` | Name of both objects. |
+| `guard.validationActions` | `[Warn, Audit]` | Any of `Warn`, `Audit`, `Deny`. Add `Deny` only after the warnings have been quiet: it refuses every tool that creates a namespace without the labels. |
+| `guard.failurePolicy` | `Ignore` | `Ignore` or `Fail`. `Ignore` means a broken policy never blocks a namespace. |
+| `guard.satisfiedBy` | `[warn, audit, enforce]` | Label kinds, any one of which satisfies the guard. |
+| `guard.excludeNamespaces` | `kube-system`, `kube-public`, `kube-node-lease`, `default` | Never checked. Replaces the list: extend it with namespaces whose owner you do not control. |
+| `guard.excludeNamePrefixes` | `[]` | Namespaces whose name starts with one of these are never checked. |
+| `guard.namespaceSelector` | `{}` | A label selector over the namespace's own labels. Empty matches all. |
+
+### Opt-in extras
+
+Each renders nothing until a namespace is listed under it, and none of them
+creates the namespace: it must exist. They are independent of each other and
+of `podSecurity.namespaces`.
+
+**`networkPolicy`: default deny.** Per namespace, `deny` is a non-empty list of
+`ingress` and/or `egress`; the policy selects every pod. When egress is denied
+the render demands a `dnsEgress` decision (and refuses one on an ingress-only
+entry): `true` allows port 53, UDP and TCP, to the DNS pods named by
+`networkPolicy.dns` (`namespace`, `podLabelKey`, `podLabelValue`, default
+`kube-system` and `k8s-app=kube-dns`) and nothing else; `false` is a
+deliberate total egress deny. The object name is `networkPolicy.name`
+(`cluster-baseline-default-deny`), or the entry's own `name`. **Do not list a
+namespace that already has a default-deny policy from another owner.**
+NetworkPolicy is additive, so a second deny changes nothing today, but it
+keeps denying after the owner narrows theirs, and a same-named policy is an
+apply conflict. Leave such a namespace to its owner. A node-local DNS cache
+listening on a link-local address is not covered by the DNS allow.
+`networkPolicy.protect` (default `false`): a deny policy is prunable, because
+removing it from the list is how a namespace is handed to its real owner and
+the declaration is in git. Turn it on if an accidental prune opening a
+namespace worries you more than a stuck object.
+
+**`resourceQuota`: values only.** Per namespace, `hard` is a non-empty map of
+resource name to quantity (a string such as `"20"` or `64Gi`, or a whole
+number), and the entry must carry a `reason` or an `owner`, written to
+`resourceQuota.reasonAnnotation` / `ownerAnnotation` (`cluster-baseline/quota-reason`,
+`cluster-baseline/quota-owner`). The chart supplies no number. Name:
+`resourceQuota.name` (`cluster-baseline`) or the entry's `name`.
+`resourceQuota.protect` (default `false`): removing a quota only relaxes a
+limit, so it is prunable.
+
+**`limitRange`: container defaults.** Per namespace, `container` is a
+non-empty object of `default` (the limit), `defaultRequest`, `min` and `max`,
+each a map of resource to quantity. No defaults are shipped: a default memory
+limit can OOM-kill a workload nobody sized. `limitRange.protect` (default
+`false`): removal stops adding defaults to new pods only. Protect it where a
+quota in the same namespace requires requests, so that removing it cannot
+leave new pods unschedulable.
+
+| Value | Default |
+| --- | --- |
+| `networkPolicy.name` / `.protect` / `.dns.*` / `.namespaces.<ns>.{name,deny,dnsEgress}` | see above |
+| `resourceQuota.name` / `.protect` / `.reasonAnnotation` / `.ownerAnnotation` / `.namespaces.<ns>.{name,hard,reason,owner}` | see above |
+| `limitRange.name` / `.protect` / `.namespaces.<ns>.{name,container}` | see above |
+
+### What is deliberately not here
+
+- A cluster-wide Pod Security floor: no namespace is held to `baseline` by
+  default or by switch-flip. Namespaces move to `restricted` one at a time.
+- Fixing workloads so that they meet `restricted` rather than exempting them
+  is the policy, and is each workload's change, not this chart's.

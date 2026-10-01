@@ -1,0 +1,4 @@
+limitRange:
+  namespaces:
+    example-app:
+      container: {}

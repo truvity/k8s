@@ -1,0 +1,56 @@
+{{- /*
+The guard: warn (and audit) when a Namespace is created, or updated to drop
+its Pod Security labels, without one of them. A ValidatingAdmissionPolicy only
+validates: it cannot mutate, so it never competes with a namespace's owner.
+Not protected from pruning: removing it only stops warnings.
+*/ -}}
+{{- $g := .Values.guard -}}
+{{- if $g.enabled -}}
+{{- $label := "pod-security.kubernetes.io/" -}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $g.name }}
+spec:
+  failurePolicy: {{ $g.failurePolicy }}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
+    - name: not-excluded
+      expression: "!(object.metadata.name in {{ $g.excludeNamespaces | toJson | replace "\"" "'" }})"
+    {{- if $g.excludeNamePrefixes }}
+    - name: not-excluded-prefix
+      expression: "!{{ $g.excludeNamePrefixes | toJson | replace "\"" "'" }}.exists(p, object.metadata.name.startsWith(p))"
+    {{- end }}
+  variables:
+    - name: kinds
+      expression: "{{ $g.satisfiedBy | toJson | replace "\"" "'" }}"
+    - name: labelled
+      expression: "has(object.metadata.labels) && variables.kinds.exists(k, '{{ $label }}' + k in object.metadata.labels)"
+    - name: wasLabelled
+      expression: "request.operation == 'UPDATE' && has(oldObject.metadata.labels) && variables.kinds.exists(k, '{{ $label }}' + k in oldObject.metadata.labels)"
+  validations:
+    # A create must carry a label. An update only has to keep the ones it had,
+    # so a namespace that never had them is not nagged on every edit.
+    - expression: "variables.labelled || (request.operation == 'UPDATE' && !variables.wasLabelled)"
+      messageExpression: "'namespace ' + object.metadata.name + ' has no {{ $label }}{{ $g.satisfiedBy | join "|" }} label; add one, or list the namespace in cluster-baseline'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $g.name }}
+spec:
+  policyName: {{ $g.name }}
+  validationActions: {{ $g.validationActions | toJson }}
+  {{- with $g.namespaceSelector }}
+  matchResources:
+    namespaceSelector:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+{{- end }}

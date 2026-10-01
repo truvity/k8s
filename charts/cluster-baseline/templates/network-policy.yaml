@@ -1,0 +1,39 @@
+{{- /*
+A default-deny NetworkPolicy per listed namespace, opt-in. The DNS decision is
+required by the schema whenever egress is denied. Prunable unless
+networkPolicy.protect.
+*/ -}}
+{{- $np := .Values.networkPolicy -}}
+{{- range $ns := keys ($np.namespaces | default dict) | sortAlpha }}
+{{- $e := index $np.namespaces $ns }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $e.name | default $np.name }}
+  namespace: {{ $ns }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" $np.protect "extra" dict) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  podSelector: {}
+  policyTypes:
+    {{- range $t := sortAlpha $e.deny }}
+    - {{ title $t }}
+    {{- end }}
+  {{- if and (has "egress" $e.deny) $e.dnsEgress }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.dns.namespace }}
+          podSelector:
+            matchLabels:
+              {{ $np.dns.podLabelKey }}: {{ $np.dns.podLabelValue | quote }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+  {{- end }}
+{{- end }}

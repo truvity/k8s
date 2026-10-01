@@ -2,11 +2,12 @@ apiVersion: v2
 name: cluster-baseline
 description: >-
   The security baseline every namespace of a cluster is held to, as data.
-  The first (and so far only) part is Pod Security Admission: the labels that
-  set each namespace's warn, audit and enforce level, with a default level, a
-  per-namespace override that must carry a reason, and a warn-first rollout.
-  Cluster-agnostic: it asks nothing of the provider, because the labels are the
-  one mechanism every conformant cluster supports.
+  Pod Security Admission: the labels that set each namespace's warn, audit and
+  enforce level, with a default level, a per-namespace override that must carry
+  a reason, and a warn-first rollout; a guard that warns when a namespace is
+  created without them. Opt-in per namespace, off until listed: a default-deny
+  NetworkPolicy, a ResourceQuota and a LimitRange. Cluster-agnostic: nothing
+  provider-specific.
 type: application
 # Placeholder: the git tag is the sole version authority. The release
 # workflow stamps both fields from the tag (truvity/ci-workflows
@@ -20,6 +21,8 @@ keywords:
   - pod-security
   - psa
   - baseline
+  - networkpolicy
+  - resourcequota
 maintainers:
   - name: Truvity
     url: https://github.com/truvity

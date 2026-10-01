@@ -1,0 +1,5 @@
+networkPolicy:
+  namespaces:
+    example-app:
+      deny: [ingress]
+      dnsEgress: true

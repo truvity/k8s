@@ -1,0 +1,2 @@
+guard:
+  excludeNamespaces: ["Not_A_Namespace'"]

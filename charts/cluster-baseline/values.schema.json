@@ -33,13 +33,187 @@
       }
     },
     "protect": { "type": "boolean" },
-    "reasonAnnotation": {
-      "type": "string",
-      "description": "Annotation key that carries an exemption reason.",
-      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
+    "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
+    "guard": {
+      "type": "object",
+      "description": "A ValidatingAdmissionPolicy and its binding that warn when a Namespace is created, or updated to drop its labels, with no Pod Security label.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": { "$ref": "#/definitions/objectName" },
+        "validationActions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["Warn", "Audit", "Deny"] }
+        },
+        "failurePolicy": { "enum": ["Ignore", "Fail"] },
+        "satisfiedBy": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["warn", "audit", "enforce"] }
+        },
+        "excludeNamespaces": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/namespaceName" }
+        },
+        "excludeNamePrefixes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,61})?$" }
+        },
+        "namespaceSelector": { "$ref": "#/definitions/labelSelector" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/objectName" },
+        "protect": { "type": "boolean" },
+        "dns": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "namespace": { "$ref": "#/definitions/namespaceName" },
+            "podLabelKey": { "type": "string", "minLength": 1 },
+            "podLabelValue": { "type": "string", "minLength": 1 }
+          }
+        },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "additionalProperties": { "$ref": "#/definitions/networkPolicyNamespace" }
+        }
+      }
+    },
+    "resourceQuota": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/objectName" },
+        "protect": { "type": "boolean" },
+        "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
+        "ownerAnnotation": { "$ref": "#/definitions/annotationKey" },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "additionalProperties": { "$ref": "#/definitions/quotaNamespace" }
+        }
+      }
+    },
+    "limitRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/objectName" },
+        "protect": { "type": "boolean" },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "additionalProperties": { "$ref": "#/definitions/limitRangeNamespace" }
+        }
+      }
     }
   },
   "definitions": {
+    "namespaceName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
+    "objectName": {
+      "type": "string",
+      "description": "A DNS subdomain: the name of a rendered object.",
+      "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
+    },
+    "annotationKey": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
+    },
+    "labelSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "matchLabels": { "type": "object", "additionalProperties": { "type": "string" } },
+        "matchExpressions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "operator"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "operator": { "enum": ["In", "NotIn", "Exists", "DoesNotExist"] },
+              "values": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "quantity": {
+      "description": "A Kubernetes quantity, as a string (\"500m\", \"2Gi\") or a whole number.",
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?([KMGTPE]i?|[numkMGTPE]|[eE][0-9]+)?$" }
+      ]
+    },
+    "quantityMap": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[A-Za-z0-9][-A-Za-z0-9_./]*$" },
+      "additionalProperties": { "$ref": "#/definitions/quantity" }
+    },
+    "networkPolicyNamespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deny"],
+      "properties": {
+        "name": { "$ref": "#/definitions/objectName" },
+        "deny": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["ingress", "egress"] }
+        },
+        "dnsEgress": {
+          "type": "boolean",
+          "description": "Required when egress is denied: true adds a DNS allow, false is a deliberate total egress deny."
+        }
+      },
+      "if": { "properties": { "deny": { "contains": { "const": "egress" } } }, "required": ["deny"] },
+      "then": { "required": ["dnsEgress"] },
+      "else": { "not": { "required": ["dnsEgress"] } }
+    },
+    "quotaNamespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard"],
+      "properties": {
+        "name": { "$ref": "#/definitions/objectName" },
+        "reason": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "hard": { "$ref": "#/definitions/quantityMap" }
+      },
+      "anyOf": [{ "required": ["reason"] }, { "required": ["owner"] }]
+    },
+    "limitRangeNamespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["container"],
+      "properties": {
+        "name": { "$ref": "#/definitions/objectName" },
+        "container": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "default": { "$ref": "#/definitions/quantityMap" },
+            "defaultRequest": { "$ref": "#/definitions/quantityMap" },
+            "min": { "$ref": "#/definitions/quantityMap" },
+            "max": { "$ref": "#/definitions/quantityMap" }
+          }
+        }
+      }
+    },
     "level": {
       "type": "string",
       "enum": ["privileged", "baseline", "restricted"]

@@ -1,0 +1,14 @@
+# Every guard knob: its own name, enforce not counted as a label, extra
+# exclusions by name and prefix, a scope, and Deny added (a later stage).
+guard:
+  enabled: true
+  name: example-ps-guard
+  validationActions: [Warn, Audit, Deny]
+  satisfiedBy: [warn, enforce]
+  excludeNamespaces: [kube-system, example-system]
+  excludeNamePrefixes: [tmp-, preview-]
+  namespaceSelector:
+    matchExpressions:
+      - key: example.com/managed
+        operator: In
+        values: ["true"]

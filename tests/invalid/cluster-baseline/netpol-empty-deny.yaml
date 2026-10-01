@@ -1,0 +1,4 @@
+networkPolicy:
+  namespaces:
+    example-app:
+      deny: []

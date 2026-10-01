@@ -1,0 +1,4 @@
+# The guard with its defaults: Warn and Audit, failurePolicy Ignore, the four
+# control-plane namespaces excluded.
+guard:
+  enabled: true

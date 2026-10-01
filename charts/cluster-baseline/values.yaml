@@ -59,3 +59,111 @@ protect: true
 # The annotation that carries a namespace's exemption reason, so the reason
 # is visible with `kubectl get ns -o yaml` and not only in git.
 reasonAnnotation: cluster-baseline/psa-reason
+
+# --- The guard ---------------------------------------------------------------
+# The labels above only cover the namespaces listed. The guard closes the gap:
+# a ValidatingAdmissionPolicy (Kubernetes 1.30+) that WARNS and AUDITS when a
+# Namespace is created without a Pod Security label, or updated to drop the
+# labels it had. It never mutates, so it cannot fight a namespace's owner.
+# Off by default, like every part below: installing the chart changes nothing
+# until something is switched on.
+guard:
+  enabled: false
+  name: cluster-baseline-pod-security-labels
+  # Warn and Audit by default. Add Deny only after the warnings have been
+  # quiet for a while: Deny refuses every tool that creates a namespace
+  # without the labels.
+  validationActions: [Warn, Audit]
+  # Ignore: if the policy machinery is unavailable, namespaces are still
+  # admitted. A warning guard must never be able to block a namespace.
+  failurePolicy: Ignore
+  # A namespace satisfies the guard with ANY of these label kinds.
+  satisfiedBy: [warn, audit, enforce]
+  # Namespaces the guard never looks at: the ones the control plane creates.
+  # Extend the list for namespaces whose owner you do not control.
+  excludeNamespaces:
+    - kube-system
+    - kube-public
+    - kube-node-lease
+    - default
+  # Namespaces whose NAME starts with one of these are skipped too (for
+  # short-lived, tool-generated namespaces). Empty by default.
+  excludeNamePrefixes: []
+  # Restrict the guard to namespaces whose own labels match (a standard label
+  # selector). Empty matches every namespace.
+  namespaceSelector: {}
+
+# --- Opt-in per namespace ----------------------------------------------------
+# Each block below renders nothing until a namespace is listed under it. The
+# namespaces must already exist: these objects are namespaced and do not
+# create them. Each kind decides below whether it is protected from pruning,
+# and why.
+
+# A default-deny NetworkPolicy. NetworkPolicy is additive: a second deny-all
+# policy changes nothing today, but the day the real owner narrows theirs this
+# one still denies. So do NOT list a namespace that already has a deny policy
+# from another owner; leave that namespace to its owner. A different `name`
+# (here or per namespace) avoids a server-side apply conflict, not the
+# duplication.
+networkPolicy:
+  name: cluster-baseline-default-deny
+  # Removing a deny policy opens traffic, but it is how a namespace is handed
+  # to its real owner, and the declaration is in git: prunable by default.
+  protect: false
+  # Where cluster DNS runs, for the DNS allow rule.
+  dns:
+    namespace: kube-system
+    # The label that selects the DNS pods, one key and one value (a map would
+    # merge with this default instead of replacing it).
+    podLabelKey: k8s-app
+    podLabelValue: kube-dns
+  # Namespaces, by name:
+  #
+  #   namespaces:
+  #     team-a:
+  #       deny: [ingress, egress]
+  #       dnsEgress: true          # REQUIRED when egress is denied
+  #     batch:
+  #       deny: [ingress]
+  #
+  # `dnsEgress` is a decision the render demands whenever egress is denied: a
+  # plain egress deny-all breaks name resolution. true allows DNS (port 53,
+  # UDP and TCP) to the cluster DNS above and nothing else; false is a
+  # deliberate total egress deny. It is refused on an ingress-only entry.
+  namespaces: {}
+
+# A ResourceQuota. Values-driven: the chart ships no numbers, because any
+# default could block a workload. Every entry needs `hard` and a `reason` or an
+# `owner` (the render refuses one with neither), recorded as an annotation.
+resourceQuota:
+  name: cluster-baseline
+  # Removing a quota only relaxes a limit: prunable by default.
+  protect: false
+  reasonAnnotation: cluster-baseline/quota-reason
+  ownerAnnotation: cluster-baseline/quota-owner
+  #   namespaces:
+  #     team-a:
+  #       reason: "caps a runaway batch job from starving the node pool"
+  #       hard:
+  #         pods: 50
+  #         requests.cpu: "20"
+  #         requests.memory: 64Gi
+  namespaces: {}
+
+# A LimitRange for Container defaults and bounds. Opt-in and values-driven; no
+# defaults. `default` is the LIMIT a container without one receives and
+# `defaultRequest` its REQUEST; a limit without a request makes the request
+# equal to the limit. A default memory limit can OOM-kill an unsized workload.
+limitRange:
+  name: cluster-baseline
+  # Removing it stops adding defaults to NEW pods only; existing pods keep
+  # what they were given. Prunable by default. Protect it if a quota in the
+  # same namespace requires requests, so removal cannot leave pods
+  # unschedulable.
+  protect: false
+  #   namespaces:
+  #     team-a:
+  #       container:
+  #         defaultRequest: { cpu: 100m, memory: 128Mi }
+  #         default: { memory: 512Mi }
+  namespaces: {}
