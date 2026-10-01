@@ -4,6 +4,22 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/vpcpeering`: a VPC peering as a component,
+  `truvity:k8s/aws:VpcPeering`. A connection requested from one side and
+  accepted from the other (accounts and regions differ: the caller supplies
+  one AWS provider per side), a route to the other VPC's CIDR in every route
+  table listed on each side (IPv6 too when both IPv6 CIDRs are given),
+  optional DNS-resolution options per side and optional private hosted-zone
+  associations (cross-account ones authorize first). It refuses overlapping
+  IPv4 CIDRs, a missing provider, a side with no route table and a half
+  IPv6 pair, all reported at once. Every child's name comes from a
+  caller-supplied hook; there is no estate default. It creates no network
+  ACL or security group rules. The connection and its accepter are protected
+  unless `Protect` points at false. `LegacyTopLevel` adopts loose resources
+  by alias.
+
 ## v0.2.0
 
 - `pkg/aws/backupbucket`: the cross-account backup bucket as a component,
