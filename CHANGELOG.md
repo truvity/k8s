@@ -4,6 +4,25 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/podidentity`: an EKS Pod Identity role as a component,
+  `truvity:k8s/aws:PodIdentity`. One IAM role, its trust policy and one
+  `PodIdentityAssociation` per service account; the permissions are the
+  caller's (an inline role policy, a managed policy the component creates and
+  attaches, or both). The default trust policy is always scoped to the
+  cluster (source account and source ARN) and to the namespace and service
+  accounts; `TrustPolicy` replaces it verbatim, for adopting a role whose
+  document was rendered another way. It refuses a missing provider or
+  cluster, an empty role name or namespace, no service account or a repeated
+  one, no way to render the trust, a permission with no name or document, an
+  import for an unlisted service account and a naming hook that returns an
+  empty or repeated name, all reported at once. Every child's name comes from
+  a caller-supplied hook; there is no estate default. Nothing is protected
+  unless `Protect` is true. `Imports` adopts an existing role, policy,
+  attachment or association by ID, and `IgnoreAssociationTags` leaves the
+  tags another tool set. `LegacyTopLevel` adopts loose resources by alias.
+
 ## v0.4.0
 
 - `pkg/aws/vpc`: a VPC as a component, `truvity:k8s/aws:Vpc`. The caller

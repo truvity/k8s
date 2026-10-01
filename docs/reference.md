@@ -430,6 +430,108 @@ maps `PrivateRouteTableIDs` (zone), `SubnetIDs` (subnet, zone),
 `GatewayEndpointIDs` (service). The component exports no stack output of its
 own: the caller names those.
 
+## `pkg/aws/podidentity`
+
+`truvity:k8s/aws:PodIdentity` deploys one EKS Pod Identity role: the IAM role
+whose trust policy admits the EKS Pod Identity service for one namespace and
+its service accounts, the permissions it carries, and one
+`PodIdentityAssociation` per service account. A role and its associations are
+one component because the trust policy is what binds the role to those service
+accounts. It takes its AWS provider in `Args.Provider`, never from
+`pulumi.Providers`.
+
+```go
+id, err := podidentity.New(ctx, "reports", &podidentity.Args{
+	Provider:        provider,
+	ClusterName:     cluster.Name,
+	Namespace:       "reports",
+	ServiceAccounts: []string{"reports-api", "reports-job"},
+	RoleName:        "reports",
+	AccountID:       accountID,
+	ClusterARN:      clusterARN,
+	InlinePolicy:    &podidentity.InlinePolicy{Name: "access", Document: doc},
+	Names: func(c podidentity.Child) string { /* the names your stack already uses */ },
+})
+// id.RoleARN, id.RoleName: export them under the names you choose.
+```
+
+### `Args`
+
+| Field | Meaning |
+| --- | --- |
+| `Provider` | The AWS provider of the cluster's account and region. Required. |
+| `ClusterName` | The cluster the associations are in; pass the cluster's `Name` output to order them after it. Required. |
+| `Region` | Set on each association when not empty. Empty leaves the provider's region in force. |
+| `Namespace`, `ServiceAccounts` | Which pods may assume the role: one association per service account. Required, no repeats. |
+| `RoleName` | The IAM role's name. Required. |
+| `PermissionsBoundary` | A permissions boundary ARN. Empty sets none. |
+| `AccountID`, `ClusterARN` | Pin the default trust policy to the cluster (`aws:SourceAccount`, `aws:SourceArn`). Required unless `TrustPolicy` is set. |
+| `TrustPolicy` | Replaces the default trust policy; used verbatim. For adopting a role whose trust document was rendered another way (IAM compares the JSON, the provider compares the string). |
+| `InlinePolicy` | `Name`, `Document`: an inline role policy. |
+| `ManagedPolicy` | `Name`, `Description`, `Document`: a customer-managed policy the component creates and attaches. |
+| `IgnoreAssociationTags` | Ignore changes to the associations' `tags` and `tagsAll`. |
+| `Imports` | IDs of existing `Role`, `Policy`, `Attachment` and per-service-account `Associations` to adopt. Empty creates the child. |
+| `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
+| `LegacyTopLevel` | Adopt loose resources by alias. |
+| `Protect` | `bool`; false (the default) protects nothing. |
+
+`Args.Validate()` (called by the constructor before anything is registered)
+returns one error joining every problem: a missing provider or cluster, an
+empty role name or namespace, no service account, an empty or repeated service
+account, no way to render the trust policy (neither `TrustPolicy` nor
+`AccountID` and `ClusterARN`), an inline or managed policy with no name or
+document, an import for a service account that is not listed, and a naming
+hook that returns an empty or repeated name.
+
+The default trust policy is always scoped: the EKS Pod Identity service, the
+actions `sts:AssumeRole` and `sts:TagSession`, `aws:SourceAccount` and
+`aws:SourceArn` for the cluster, and `aws:RequestTag/kubernetes-namespace` and
+`aws:RequestTag/kubernetes-service-account` for the namespace and service
+accounts (a string for one, a list in the order given for several). A trust
+that is not scoped that way can only come through `TrustPolicy`.
+
+### Children
+
+`Names` receives a `Child` (`Component`, `Kind`, `Key`) and returns the
+logical name; the defaults below use the component name `<c>`. Names are API.
+
+| Child | Type | Default name | Present when |
+| --- | --- | --- | --- |
+| policy | `aws:iam/policy:Policy` | `<c>-policy` | `ManagedPolicy` is set |
+| role | `aws:iam/role:Role` | `<c>-role` | always |
+| inline policy | `aws:iam/rolePolicy:RolePolicy` | `<c>-role-policy` | `InlinePolicy` is set |
+| attachment | `aws:iam/rolePolicyAttachment:RolePolicyAttachment` | `<c>-attachment` | `ManagedPolicy` is set |
+| association | `aws:eks/podIdentityAssociation:PodIdentityAssociation` | `<c>-pia-<sa>` | one per service account (`Key` is the service account) |
+
+### Adopting existing resources
+
+`Imports` makes a child adopt what exists. The IDs must be known when the
+program declares the resource, so the caller looks them up first. An
+association's import ID (`<cluster>,<association id>`) differs from the ID the
+provider keeps in state (the bare association id): leave an import option on
+an association that is already in state and the next preview plans a
+replacement, whose delete succeeds and whose create may not. Set
+`Imports.Associations` only while adopting.
+
+### Aliases
+
+With `LegacyTopLevel` every child carries
+`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
+hook gives it, the same type, no parent. The AWS SDK declares no aliases of
+its own on these types today (ADR 0003 item 6); a test fails when an upgrade
+adds one the component does not mirror.
+
+### Protection
+
+Nothing is protected unless `Protect` is true, which protects the role, the
+managed policy and the associations (not the inline policy or the attachment,
+which are replaced with the role).
+
+### Outputs
+
+`RoleARN`, `RoleName` (`pulumi.StringOutput`). The component exports no stack
+output of its own: the caller names those.
+
 ## Other provider components
 
 None yet. Each provider's page lands here with its inputs, its children and
