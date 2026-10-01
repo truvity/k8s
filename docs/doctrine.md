@@ -90,6 +90,8 @@ asks namespaces to carry a label and never writes one, so no owner is fought.
 A default-deny policy, a quota and a limit range change what workloads can do,
 so each renders nothing until a namespace opts in, ships no numbers, and says
 how to remove it. Each decides deliberately whether removal is harmful:
-all three are prunable by default, because removing one only relaxes a limit
-or hands the namespace to its owner, and each has a `protect` switch. A deny
-policy never duplicates one an owner already ships.
+only the deny policy is protected by default, because an accidental prune of
+it silently opens a namespace; a quota and a limit range are prunable, because
+removing one only relaxes a limit. Each kind has a `protect` switch, and each
+entry may override it. A quota and a limit range both need a `reason` or an
+`owner`. A deny policy never duplicates one an owner already ships.

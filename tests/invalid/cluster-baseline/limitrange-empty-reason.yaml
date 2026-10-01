@@ -1,0 +1,6 @@
+limitRange:
+  namespaces:
+    example-app:
+      reason: ""
+      container:
+        default: { memory: 512Mi }

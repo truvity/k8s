@@ -1,17 +1,23 @@
 {{- /*
 A LimitRange (Container defaults and bounds) per listed namespace, opt-in.
-Prunable unless limitRange.protect.
+A reason or an owner is required (schema and render) and recorded as an
+annotation. Prunable unless protected (limitRange.protect or the entry's
+`protect`).
 */ -}}
 {{- $l := .Values.limitRange -}}
 {{- range $ns := keys ($l.namespaces | default dict) | sortAlpha }}
 {{- $e := index $l.namespaces $ns }}
+{{- if not (or $e.reason $e.owner) }}{{- fail (printf "limitRange.namespaces.%s needs a reason or an owner" $ns) }}{{- end }}
+{{- $extra := dict }}
+{{- if $e.reason }}{{- $_ := set $extra $l.reasonAnnotation $e.reason }}{{- end }}
+{{- if $e.owner }}{{- $_ := set $extra $l.ownerAnnotation $e.owner }}{{- end }}
 ---
 apiVersion: v1
 kind: LimitRange
 metadata:
   name: {{ $e.name | default $l.name }}
   namespace: {{ $ns }}
-  {{- with include "cluster-baseline.annotations" (dict "protect" $l.protect "extra" dict) }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" (ternary $e.protect $l.protect (hasKey $e "protect")) "extra" $extra) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:

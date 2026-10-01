@@ -5,6 +5,9 @@ kind: NetworkPolicy
 metadata:
   name: example-default-deny
   namespace: example-app
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
 spec:
   podSelector: {}
   policyTypes:
@@ -43,6 +46,9 @@ kind: NetworkPolicy
 metadata:
   name: example-sealed-deny
   namespace: example-sealed
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
 spec:
   podSelector: {}
   policyTypes:
@@ -88,6 +94,8 @@ kind: LimitRange
 metadata:
   name: cluster-baseline
   namespace: example-app
+  annotations:
+    cluster-baseline/limit-range-reason: pods without sizing get a bounded default
 spec:
   limits:
     - type: Container
