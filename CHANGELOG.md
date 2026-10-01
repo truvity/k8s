@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.8.0
 
 - `charts/cluster-baseline`: the Pod Security Admission baseline as a Helm
   chart, published to `oci://ghcr.io/truvity/charts/cluster-baseline` from the
