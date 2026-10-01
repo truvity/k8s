@@ -1,0 +1,25 @@
+---
+# Source: cluster-baseline/templates/pod-security.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-app
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-baseline/templates/pod-security.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-data
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

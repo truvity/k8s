@@ -1,0 +1,6 @@
+podSecurity:
+  namespaces:
+    example-canary:
+      modes:
+        enforce:
+          level: restricted

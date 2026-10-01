@@ -37,3 +37,37 @@ the most important cluster last.
 Public CI is a mock for the provider layer and kind for the cluster layer.
 A test that needs an account is a test that holds a credential, and a public
 repository should hold none.
+
+## A baseline labels namespaces, it does not own them
+
+A namespace has an owner: whoever created it, a tool that prunes it, a chart
+that names it. A second tool that renders the whole `Namespace` object
+fights the first over every field and, on removal, deletes the namespace and
+everything in it. `cluster-baseline` therefore renders labels-only objects
+for server-side apply, where the field manager owns exactly the PSA labels,
+and marks each object so no tool deletes it when a name leaves the list. A
+Job that runs `kubectl label` would also work, and was refused: it needs an
+image (an estate fact), a credential to patch every namespace, and it leaves
+no declared state to review or to drift against.
+
+## Warn first, enforce last
+
+A refusal is a loud, late failure: a deployment stops rolling in the middle
+of an unrelated change. A warning is the same finding with no outage. The
+defaults therefore warn and audit and never enforce, and enforcement is a
+reviewed values change that can be made one namespace at a time.
+
+## An exemption is a reasoned debt
+
+A namespace that cannot meet the default level is listed with a lower one and
+a reason, and the render refuses it without the reason. The reason is also
+written to the namespace as an annotation, so it is read where the exemption
+is felt. An exemption is never a silent default: no namespace is exempt unless
+someone said so. It names the cause (host namespaces, privileged storage
+driver, a build daemon) and is deleted when the cause is.
+
+## The chart carries no namespace names
+
+Which namespaces exist, and which are exempt, is the estate's. The list is
+empty by default and the schema accepts any DNS label.
+

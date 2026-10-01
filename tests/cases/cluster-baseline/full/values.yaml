@@ -1,0 +1,32 @@
+# Every knob: a pinned version, enforcement on at baseline cluster-wide, a
+# namespace exempted from restricted, a per-kind exemption, an enforce
+# canary, a namespace pinned to its own version, and no protection
+# annotations on one render path (see the protect case).
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes:
+    warn:
+      enabled: true
+    audit:
+      enabled: true
+      version: latest
+    enforce:
+      enabled: true
+      level: baseline
+  namespaces:
+    example-app: {}
+    example-agents:
+      level: privileged
+      reason: "runs host-level agents; cannot meet baseline"
+    example-proxy:
+      reason: "binds a host port; stays at baseline until it is rebuilt"
+      modes:
+        enforce:
+          level: baseline
+          version: v1.33
+    example-legacy:
+      version: v1.30
+      reason: "audited against the oldest standard its image was built for"
+      level: baseline
+reasonAnnotation: example.com/psa-reason

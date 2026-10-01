@@ -713,3 +713,51 @@ output of its own: the caller names those.
 
 None yet. Each provider's page lands here with its inputs, its children and
 the alias each child carries.
+
+## `charts/cluster-baseline`
+
+Pod Security Admission labels, per namespace, as data. Install a pinned
+version from `oci://ghcr.io/truvity/charts/cluster-baseline`, for example
+`--version 0.8.0`; see [adoption](adoption.md#cluster-baseline-warn-first).
+
+The chart renders one `Namespace` per entry of `podSecurity.namespaces` with
+only `metadata.name`, labels and annotations. Apply it server-side
+(`ServerSideApply=true` in Argo CD, `kubectl apply --server-side
+--field-manager=cluster-baseline`, or Helm 4's `--server-side`): the object
+then owns the PSA labels and nothing else, and the namespace's real owner
+keeps the rest. A name that does not exist yet is created, empty.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `podSecurity.level` | `restricted` | The level every mode that is on uses. `privileged`, `baseline` or `restricted`. |
+| `podSecurity.version` | `""` | Pin of the Pod Security Standards version for every mode: `latest` or `v1.<minor>`. Empty renders no version label, which the API server reads as latest. |
+| `podSecurity.modes.<kind>.enabled` | `warn`: true, `audit`: true, `enforce`: false | One switch per label kind. Off renders no label of that kind. |
+| `podSecurity.modes.<kind>.level` / `.version` | `""` | Replace the two values above for this one kind; empty inherits. |
+| `podSecurity.namespaces.<name>` | `{}` | The namespaces to label. An empty entry takes the defaults. The name is a DNS label. |
+| `podSecurity.namespaces.<name>.level` | unset | Replaces the level for every mode that is on in this namespace. Requires `reason`. |
+| `podSecurity.namespaces.<name>.version` | unset | Replaces the version pin for this namespace. |
+| `podSecurity.namespaces.<name>.modes.<kind>.level` / `.version` | unset | Overrides one kind and renders its label even when the kind is off cluster-wide. This is the enforce canary. A level that differs from the default requires `reason`. |
+| `podSecurity.namespaces.<name>.reason` | unset | Why this namespace departs from the defaults. Required by the render for any override of the level or any kind that is off; rendered into `reasonAnnotation`. |
+| `protect` | `true` | Annotate each Namespace so that Helm keeps it and Argo CD neither prunes nor deletes it. |
+| `reasonAnnotation` | `cluster-baseline/psa-reason` | The annotation key that carries the reason. |
+
+Resolution, per namespace and per kind: the namespace's `modes.<kind>.level`
+if set, else (when the kind is on) the namespace `level`, else the kind's
+`level`, else `podSecurity.level`. The version resolves the same way through
+`modes.<kind>.version`, namespace `version`, kind `version` and
+`podSecurity.version`. No level resolves to no label.
+
+
+### Not in this chart yet
+
+Proposed, deliberately left out of the first version so that the one
+mechanism can be reviewed alone:
+
+- A default-deny `NetworkPolicy` per listed namespace, with an allow list for
+  DNS. Needs the `network-policy` capability, and breaks every workload that
+  was relying on open traffic, so it would ship warn-first too (a no-op
+  policy first, then enforcing).
+- `ResourceQuota` and `LimitRange` defaults per namespace, inputs only.
+- A guard (`ValidatingAdmissionPolicy`, GA from Kubernetes 1.30) that warns
+  when a namespace is created without PSA labels, closing the gap that only
+  listed namespaces are covered.

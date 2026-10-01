@@ -1,0 +1,4 @@
+podSecurity:
+  modes:
+    warning:
+      enabled: true

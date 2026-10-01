@@ -1,0 +1,6 @@
+# For a tool that owns the namespace lifecycle already: no keep or prune
+# annotations.
+protect: false
+podSecurity:
+  namespaces:
+    example-app: {}

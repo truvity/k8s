@@ -1,0 +1,11 @@
+# The enforce rollout, one namespace at a time: enforcement is off
+# cluster-wide, and exactly one namespace opts in.
+podSecurity:
+  namespaces:
+    example-app: {}
+    example-canary:
+      reason: "first namespace to be enforced"
+      modes:
+        enforce:
+          level: restricted
+          version: v1.34

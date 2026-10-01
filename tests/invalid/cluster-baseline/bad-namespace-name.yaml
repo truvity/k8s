@@ -1,0 +1,3 @@
+podSecurity:
+  namespaces:
+    Not_A_Label: {}

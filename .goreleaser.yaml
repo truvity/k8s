@@ -28,3 +28,4 @@ release:
     ## k8s {{ .Tag }}
 
     Go module: `go get github.com/truvity/k8s@{{ .Tag }}`.
+    Chart: `oci://ghcr.io/truvity/charts/cluster-baseline`, version `{{ .Version }}`.

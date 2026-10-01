@@ -1,0 +1,38 @@
+{{- /*
+One labels-only Namespace per entry of podSecurity.namespaces. No spec, no
+other metadata: applied server-side, the object owns the PSA labels and
+nothing else, so the namespace's real owner keeps owning the rest.
+*/ -}}
+{{- $root := . -}}
+{{- $names := keys (.Values.podSecurity.namespaces | default dict) | sortAlpha -}}
+{{- range $name := $names }}
+{{- $entry := index $root.Values.podSecurity.namespaces $name | default dict -}}
+{{- $r := include "cluster-baseline.resolve" (dict "root" $root "name" $name "ns" $entry) | fromYaml }}
+{{- if and $r._override (not $entry.reason) }}
+{{- fail (printf "podSecurity.namespaces.%s departs from the defaults (a level override, or a label kind that is switched off) and has no reason; say why, so the exemption can be reviewed and retired" $name) }}
+{{- end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- range $mode := list "audit" "enforce" "warn" }}
+    {{- with index $r $mode }}
+    pod-security.kubernetes.io/{{ $mode }}: {{ .level }}
+    {{- if .version }}
+    pod-security.kubernetes.io/{{ $mode }}-version: {{ .version }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+  {{- if or $root.Values.protect $entry.reason }}
+  annotations:
+    {{- if $root.Values.protect }}
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    {{- end }}
+    {{- if $entry.reason }}
+    {{ $root.Values.reasonAnnotation }}: {{ $entry.reason | quote }}
+    {{- end }}
+  {{- end }}
+{{- end }}
