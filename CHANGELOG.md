@@ -4,6 +4,22 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `charts/cluster-baseline`: the Pod Security Admission baseline as a Helm
+  chart, published to `oci://ghcr.io/truvity/charts/cluster-baseline` from the
+  next tag. It renders one labels-only `Namespace` per entry of
+  `podSecurity.namespaces`, to be applied server-side so it owns the PSA labels
+  and nothing else. The defaults are warn-first: every listed namespace is
+  warned and audited at `restricted`, nothing is enforced. A namespace may
+  override its level, or one label kind, only with a `reason`, which the render
+  enforces and records as an annotation. Version pinning per mode, an
+  enforce canary per namespace, and `protect` (on by default: Helm keeps and
+  Argo CD neither prunes nor deletes a namespace that leaves the list). The
+  list of namespaces is empty by default: the estate names its own.
+  `just lint` and `just test` now cover the chart (schema, ten refused
+  fixtures, four golden renders); the devbox pins `kubernetes-helm`.
+
 ## v0.7.0
 
 - `pkg/aws/eksoidc`: the external OIDC issuer association of an EKS cluster

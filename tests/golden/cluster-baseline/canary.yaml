@@ -1,0 +1,28 @@
+---
+# Source: cluster-baseline/templates/pod-security.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-app
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-baseline/templates/pod-security.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-canary
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    cluster-baseline/psa-reason: "first namespace to be enforced"

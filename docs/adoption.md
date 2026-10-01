@@ -32,6 +32,47 @@ adoption follows the same four steps.
 Order the clusters so that the one that matters most comes last: a wrong
 alias is found on the cluster you can afford to learn on.
 
+## cluster-baseline: warn first
+
+`cluster-baseline` puts Pod Security Admission labels on the namespaces you
+list. PSA cannot be configured cluster-wide on a managed control plane, so
+labels per namespace are the mechanism, and a namespace you do not list is
+not covered. The rollout is three stages, each its own reviewed values
+change, per cluster, the least important cluster first.
+
+1. **Warn and audit (the defaults).** List the namespaces, pin nothing yet.
+   Every listed namespace is warned and audited at `restricted`; nothing is
+   refused. Applying a workload now prints a warning naming each violated
+   control, and the audit log records it. Before listing a namespace, dry-run
+   the stricter label to see what would break:
+
+   ```sh
+   kubectl label --dry-run=server --overwrite ns <ns> \
+     pod-security.kubernetes.io/enforce=restricted
+   ```
+
+   The API server answers with a warning per distinct violation set. It
+   checks the pods that exist now, so a workload scaled to zero shows
+   nothing; read the pod templates of those.
+2. **Settle exemptions.** For each namespace that cannot meet `restricted`,
+   either fix the workload (a `seccompProfile`, no privilege escalation,
+   dropped capabilities, a non-root user) or give the namespace the level it
+   can meet with a `reason`. Expect a short list: node-level agents, storage
+   and CSI drivers, container-build daemons and CI runners are the usual
+   ones. Pin `podSecurity.version` to the cluster's Kubernetes minor before
+   the next stage.
+3. **Enforce.** First one namespace at a time (a `modes.enforce` override,
+   the canary), then cluster-wide by switching `podSecurity.modes.enforce.enabled`.
+   Enforcing at `baseline` first is a cheap floor that admits almost every
+   workload; move to `restricted` namespace by namespace.
+
+Rolling back is a values change: switch the kind off or lower the level. A
+refused pod is a deployment that stops rolling, so enforce on a day someone
+is watching.
+
+Apply the chart server-side (see the [reference](reference.md#chartscluster-baseline)).
+Client-side apply makes the chart the owner of the whole namespace object.
+
 ## Upgrading
 
 Breaking changes are `Breaking:` bullets in the [CHANGELOG](../CHANGELOG.md)

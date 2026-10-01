@@ -1,0 +1,5 @@
+podSecurity:
+  namespaces:
+    example-agents:
+      level: privileged
+      reason: ""

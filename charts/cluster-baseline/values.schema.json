@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cluster-baseline values",
+  "description": "An unknown key is an error, not a silent no-op: a typo in a mode name would otherwise leave a namespace unlabelled and the rollout would look finished.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it."
+    },
+    "podSecurity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "$ref": "#/definitions/level" },
+        "version": { "$ref": "#/definitions/version" },
+        "modes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "warn": { "$ref": "#/definitions/mode" },
+            "audit": { "$ref": "#/definitions/mode" },
+            "enforce": { "$ref": "#/definitions/mode" }
+          }
+        },
+        "namespaces": {
+          "type": "object",
+          "description": "Namespaces by name. The name must be a DNS label.",
+          "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
+          "additionalProperties": { "$ref": "#/definitions/namespace" }
+        }
+      }
+    },
+    "protect": { "type": "boolean" },
+    "reasonAnnotation": {
+      "type": "string",
+      "description": "Annotation key that carries an exemption reason.",
+      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
+    }
+  },
+  "definitions": {
+    "level": {
+      "type": "string",
+      "enum": ["privileged", "baseline", "restricted"]
+    },
+    "optionalLevel": {
+      "type": "string",
+      "enum": ["", "privileged", "baseline", "restricted"]
+    },
+    "version": {
+      "type": "string",
+      "description": "latest, or a Kubernetes minor such as v1.34. Empty renders no version label (latest).",
+      "pattern": "^(|latest|v1\\.[0-9]+)$"
+    },
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "level": { "$ref": "#/definitions/optionalLevel" },
+        "version": { "$ref": "#/definitions/version" }
+      }
+    },
+    "modeOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "$ref": "#/definitions/level" },
+        "version": { "$ref": "#/definitions/version" }
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "$ref": "#/definitions/level" },
+        "version": { "$ref": "#/definitions/version" },
+        "reason": { "type": "string", "minLength": 1 },
+        "modes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "warn": { "$ref": "#/definitions/modeOverride" },
+            "audit": { "$ref": "#/definitions/modeOverride" },
+            "enforce": { "$ref": "#/definitions/modeOverride" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+podSecurity:
+  namespaces:
+    example-app:
+      exempt: true

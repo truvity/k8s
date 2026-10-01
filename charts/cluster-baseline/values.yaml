@@ -1,0 +1,61 @@
+# Nothing here names an estate: the list of namespaces is the caller's.
+# The defaults are the warn-first posture: every listed namespace is
+# WARNED and AUDITED at `restricted`, and nothing is enforced.
+podSecurity:
+  # The level every mode that is on uses, unless a namespace or a mode
+  # overrides it. One of privileged, baseline, restricted.
+  level: restricted
+
+  # Pin the Pod Security Standards version for every mode, "latest" or a
+  # Kubernetes minor such as "v1.34". Empty renders no *-version label, which
+  # the API server reads as latest. Pin before enforcing: with "latest" an
+  # upgrade of the cluster can tighten what an enforced namespace admits.
+  version: ""
+
+  # One switch per label kind. `enabled: false` renders no label of that
+  # kind (for a namespace that does not override it). `level` and `version`
+  # here replace the two values above for this one mode; empty inherits.
+  modes:
+    warn:
+      enabled: true
+      level: ""
+      version: ""
+    audit:
+      enabled: true
+      level: ""
+      version: ""
+    enforce:
+      enabled: false
+      level: ""
+      version: ""
+
+  # The namespaces this chart labels, by name. An empty entry takes the
+  # defaults above:
+  #
+  #   namespaces:
+  #     team-a: {}
+  #     node-agents:
+  #       level: privileged
+  #       reason: "runs host-level agents; cannot meet baseline"
+  #     batch-runner:
+  #       reason: "enforce canary while the rest of the cluster only warns"
+  #       modes:
+  #         enforce: { level: restricted }
+  #
+  # `level` replaces the default level for every mode that is on in this
+  # namespace. `modes.<kind>` overrides one kind and renders its label even
+  # when that kind is switched off cluster-wide, which is how enforcement is
+  # rolled out one namespace at a time. Any override of the resolved level
+  # must carry a `reason`: the render refuses one that does not.
+  namespaces: {}
+
+# Labels-only Namespace objects are meant to be applied server-side, so they
+# own exactly their labels and annotations. A pruning or uninstalling tool
+# would otherwise delete the namespace, and everything in it, when a name
+# leaves the list. With protection on, each object says not to: Helm keeps
+# it (resource-policy keep) and Argo CD neither prunes nor deletes it.
+protect: true
+
+# The annotation that carries a namespace's exemption reason, so the reason
+# is visible with `kubectl get ns -o yaml` and not only in git.
+reasonAnnotation: cluster-baseline/psa-reason

@@ -1,0 +1,6 @@
+# Warn-first defaults: two namespaces, nothing overridden. Both are warned
+# and audited at restricted; neither is enforced.
+podSecurity:
+  namespaces:
+    example-app: {}
+    example-data: {}

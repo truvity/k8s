@@ -21,6 +21,7 @@ capabilities.
 | `pkg/aws/podidentity` — an EKS Pod Identity role with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component, unreleased |
 | `pkg/aws/ekscluster` — an EKS Auto Mode cluster with its secrets key, cluster and node roles and control-plane log group, `truvity:k8s/aws:EksCluster` | Pulumi component, unreleased |
 | `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component, unreleased |
+| `charts/cluster-baseline` — Pod Security Admission labels per namespace: a default level, reasoned exemptions, a warn-first rollout | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
 
 The provider packages (EKS first) are not in `v0.1.0`; they arrive one
 reviewed extraction at a time and are listed in the [CHANGELOG](CHANGELOG.md).
@@ -37,8 +38,8 @@ scheme; it chooses none of them.
 
 It deliberately does not pick your names, your address ranges, your
 permission boundaries or your accounts, does not install workloads into the
-cluster (charts are a separate concern), and does not ship a Pod Security
-baseline yet (that will be its own chart).
+cluster. The one chart, `cluster-baseline`, labels namespaces and nothing
+else; see [the reference](docs/reference.md#chartscluster-baseline).
 
 ## The model
 
