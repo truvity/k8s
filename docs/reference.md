@@ -195,6 +195,100 @@ alias the component does not mirror.
 `BucketName`, `BucketARN`, `KMSKeyARN` (`pulumi.StringOutput`). The component
 exports no stack output of its own: the caller names those.
 
+## `pkg/aws/vpcpeering`
+
+`truvity:k8s/aws:VpcPeering` deploys one VPC peering between two VPCs that
+may be in different accounts and regions: the connection, its acceptance, the
+routes, and optionally DNS-resolution options and private hosted-zone
+associations. It takes one AWS provider per side in `Args`
+(`RequesterProvider`, `AccepterProvider`), never from `pulumi.Providers`: a
+default provider would put the accepter's resources in the requester's
+account.
+
+```go
+p, err := vpcpeering.New(ctx, "hub-spoke", &vpcpeering.Args{
+	RequesterVPCID:       hubVPC,
+	AccepterVPCID:        spokeVPC,
+	AccepterAccountID:    spokeAccountID,
+	RequesterCIDR:        "10.64.0.0/16",
+	AccepterCIDR:         "10.65.0.0/16",
+	RequesterRouteTables: map[string]pulumi.StringInput{"a": hubRTA, "public": hubRTPublic},
+	AccepterRouteTables:  map[string]pulumi.StringInput{"a": spokeRTA, "public": spokeRTPublic},
+	RequesterProvider:    hubProvider,
+	AccepterProvider:     spokeProvider,
+	Names: func(c vpcpeering.Child) string { /* the names your stack already uses */ },
+})
+// p.ConnectionID: export it under the name you choose.
+```
+
+### `Args`
+
+| Field | Meaning |
+| --- | --- |
+| `RequesterVPCID`, `AccepterVPCID` | The two VPCs. Required. |
+| `AccepterAccountID` | Owner of the accepter VPC (`PeerOwnerId`). Required. |
+| `AccepterRegion` | Accepter VPC region, for a cross-region peering. Empty: the requester's. |
+| `RequesterCIDR`, `AccepterCIDR` | Primary IPv4 CIDRs. Required, must not overlap. |
+| `RequesterIPv6CIDR`, `AccepterIPv6CIDR` | Both for IPv6 routes, or neither. |
+| `RequesterRouteTables`, `AccepterRouteTables` | Route tables by caller-chosen key (an AZ name, `"public"`). At least one per side. |
+| `RequesterProvider`, `AccepterProvider` | AWS providers of the two accounts and regions. Required. |
+| `RequesterDNSResolution`, `AccepterDNSResolution` | `*bool`: `AllowRemoteVpcDnsResolution` for that side. Nil: no options child for it. |
+| `ZoneAssociations` | Private hosted zones to associate with a VPC (`Name`, `ZoneID`, `VPCID`, `Region`, `CrossAccount`, `ZoneProvider`, `VPCProvider`). Cross-account ones need both providers and register an authorization first. |
+| `Tags` | Set on the connection and the accepter. |
+| `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
+| `LegacyTopLevel` | Adopt loose resources by alias. |
+| `Protect` | `*bool`; nil means true. |
+
+`Args.Validate()` (called by the constructor before anything is registered)
+returns one error joining every problem: overlapping or non-IPv4 CIDRs, a
+missing provider, VPC or account, a side with no route table (or a nil one),
+a half-specified IPv6 pair, a zone association with no name, zone, VPC,
+region or provider, and a naming hook that returns an empty or repeated
+name.
+
+The component creates no network ACL rules and no security group rules. A
+caller that owns a VPC's default network ACL owns its whole rule list; admit
+cross-VPC traffic where the ACL and the groups are defined.
+
+### Children
+
+`Names` receives a `Child` (`Component`, `Kind`, `Side`, `Family`, `Key`) and
+returns the logical name; the defaults below use the component name `<c>`.
+Names are API.
+
+| Child | Type | Default name | Present when |
+| --- | --- | --- | --- |
+| connection | `aws:ec2/vpcPeeringConnection:VpcPeeringConnection` | `<c>-connection` | always (protected; requester provider) |
+| accepter | `aws:ec2/vpcPeeringConnectionAccepter:VpcPeeringConnectionAccepter` | `<c>-accepter` | always (protected; accepter provider) |
+| route | `aws:ec2/route:Route` | `<c>-route-<side>-<family>-<key>` | one per route table per side and family (`ipv4`; `ipv6` when both IPv6 CIDRs are set); a requester route sends the accepter CIDR to the connection and the reverse; depends on the accepter |
+| DNS options | `aws:ec2/peeringConnectionOptions:PeeringConnectionOptions` | `<c>-dns-<side>` | that side's `*DNSResolution` is set |
+| zone authorization | `aws:route53/vpcAssociationAuthorization:VpcAssociationAuthorization` | `<c>-zone-<name>-auth` | `ZoneAssociations[].CrossAccount` (`ZoneProvider`) |
+| zone association | `aws:route53/zoneAssociation:ZoneAssociation` | `<c>-zone-<name>-assoc` | one per `ZoneAssociations` entry (`VPCProvider`) |
+
+Requester-side children use `RequesterProvider`, accepter-side children
+`AccepterProvider`. A same-account zone association uses `VPCProvider`, else
+`ZoneProvider`, else the requester provider.
+
+### Aliases
+
+With `LegacyTopLevel` every child carries
+`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
+hook gives it, the same type, no parent. The AWS SDK declares no aliases of
+its own on these types today (ADR 0003 item 6); a test fails when an upgrade
+adds one the component does not mirror.
+
+### Protection
+
+The connection and its accepter are protected unless `Protect` points at
+false: deleting the connection cuts all traffic between the VPCs, so a
+preview that would delete or replace it fails instead. Point `Protect` at
+false only for a peering that is meant to be torn down.
+
+### Outputs
+
+`ConnectionID` (`pulumi.StringOutput`). The component exports no stack output
+of its own: the caller names those.
+
 ## Other provider components
 
 None yet. Each provider's page lands here with its inputs, its children and
