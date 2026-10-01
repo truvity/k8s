@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.7.0
 
 - `pkg/aws/eksoidc`: the external OIDC issuer association of an EKS cluster
   as a component, `truvity:k8s/aws:EksOidc`: one `eks.IdentityProviderConfig`
