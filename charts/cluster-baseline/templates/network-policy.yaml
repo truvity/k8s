@@ -1,7 +1,7 @@
 {{- /*
 A default-deny NetworkPolicy per listed namespace, opt-in. The DNS decision is
-required by the schema whenever egress is denied. Prunable unless
-networkPolicy.protect.
+required by the schema whenever egress is denied. Protected by default
+(networkPolicy.protect, or the entry's own `protect`).
 */ -}}
 {{- $np := .Values.networkPolicy -}}
 {{- range $ns := keys ($np.namespaces | default dict) | sortAlpha }}
@@ -12,7 +12,7 @@ kind: NetworkPolicy
 metadata:
   name: {{ $e.name | default $np.name }}
   namespace: {{ $ns }}
-  {{- with include "cluster-baseline.annotations" (dict "protect" $np.protect "extra" dict) }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" (ternary $e.protect $np.protect (hasKey $e "protect")) "extra" dict) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:

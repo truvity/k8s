@@ -12,6 +12,7 @@ networkPolicy:
       dnsEgress: true
     example-data:
       deny: [ingress]
+      protect: false
     example-sealed:
       name: example-sealed-deny
       deny: [egress]
@@ -33,6 +34,7 @@ resourceQuota:
 limitRange:
   namespaces:
     example-app:
+      reason: "pods without sizing get a bounded default"
       container:
         defaultRequest: { cpu: 100m, memory: 128Mi }
         default: { memory: 512Mi }

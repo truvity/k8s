@@ -107,9 +107,12 @@ guard:
 # duplication.
 networkPolicy:
   name: cluster-baseline-default-deny
-  # Removing a deny policy opens traffic, but it is how a namespace is handed
-  # to its real owner, and the declaration is in git: prunable by default.
-  protect: false
+  # Removing a deny policy opens traffic, and an accidental prune is the one
+  # failure here that is silent, so this is the only extra protected by
+  # default: Helm keeps it, Argo CD neither prunes nor deletes it. Hand a
+  # namespace to its owner by setting `protect: false` on its entry first
+  # (or here), then removing it from the list. Each entry may override.
+  protect: true
   # Where cluster DNS runs, for the DNS allow rule.
   dns:
     namespace: kube-system
@@ -123,6 +126,7 @@ networkPolicy:
   #     team-a:
   #       deny: [ingress, egress]
   #       dnsEgress: true          # REQUIRED when egress is denied
+  #       protect: false           # optional per-entry override
   #     batch:
   #       deny: [ingress]
   #
@@ -151,7 +155,9 @@ resourceQuota:
   namespaces: {}
 
 # A LimitRange for Container defaults and bounds. Opt-in and values-driven; no
-# defaults. `default` is the LIMIT a container without one receives and
+# defaults. Every entry needs a `reason` or an `owner` (the render refuses one
+# with neither), recorded as an annotation, because a default memory limit is
+# a decision someone must be able to find and revisit. `default` is the LIMIT a container without one receives and
 # `defaultRequest` its REQUEST; a limit without a request makes the request
 # equal to the limit. A default memory limit can OOM-kill an unsized workload.
 limitRange:
@@ -161,8 +167,11 @@ limitRange:
   # same namespace requires requests, so removal cannot leave pods
   # unschedulable.
   protect: false
+  reasonAnnotation: cluster-baseline/limit-range-reason
+  ownerAnnotation: cluster-baseline/limit-range-owner
   #   namespaces:
   #     team-a:
+  #       reason: "pods without sizing get a bounded default"
   #       container:
   #         defaultRequest: { cpu: 100m, memory: 128Mi }
   #         default: { memory: 512Mi }

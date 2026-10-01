@@ -110,6 +110,8 @@
       "properties": {
         "name": { "$ref": "#/definitions/objectName" },
         "protect": { "type": "boolean" },
+        "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
+        "ownerAnnotation": { "$ref": "#/definitions/annotationKey" },
         "namespaces": {
           "type": "object",
           "propertyNames": { "$ref": "#/definitions/namespaceName" },
@@ -168,6 +170,7 @@
       "required": ["deny"],
       "properties": {
         "name": { "$ref": "#/definitions/objectName" },
+        "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
         "deny": {
           "type": "array",
           "minItems": 1,
@@ -191,6 +194,7 @@
         "name": { "$ref": "#/definitions/objectName" },
         "reason": { "type": "string", "minLength": 1 },
         "owner": { "type": "string", "minLength": 1 },
+        "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
         "hard": { "$ref": "#/definitions/quantityMap" }
       },
       "anyOf": [{ "required": ["reason"] }, { "required": ["owner"] }]
@@ -199,8 +203,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["container"],
+      "anyOf": [{ "required": ["reason"] }, { "required": ["owner"] }],
       "properties": {
         "name": { "$ref": "#/definitions/objectName" },
+        "reason": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
         "container": {
           "type": "object",
           "additionalProperties": false,

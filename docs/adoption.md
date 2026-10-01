@@ -79,8 +79,24 @@ after reviewing `excludeNamespaces`.
 The opt-in extras (`networkPolicy`, `resourceQuota`, `limitRange`) are not part
 of this rollout and change nothing until a namespace opts in. Adopt them
 separately, one namespace per change: check first that the namespace has no
-default-deny policy of another owner, and give every quota a `reason` or an
-`owner`.
+default-deny policy of another owner, and give every quota and limit range a
+`reason` or an `owner`. A default-deny policy is protected from pruning by
+default; set `protect: false` on its entry before removing the namespace from
+the list.
+
+### First exercise of the guard
+
+The guard is a CEL expression, and a `ValidatingAdmissionPolicy` is only
+checked fully by an API server. Exercise it first on a non-production cluster,
+in Warn mode (`validationActions: [Warn, Audit]`), before any production
+cluster. Check three things:
+
+1. Creating a namespace without a Pod Security label returns a warning (and
+   an audit annotation).
+2. Creating a namespace that carries the labels returns none.
+3. An unrelated update to a namespace (an annotation, say) returns none, and
+   an update that keeps the labels it already had returns none; only dropping
+   labels the namespace already had warns.
 
 Rolling back is a values change: switch the kind off or lower the level. A
 refused pod is a deployment that stops rolling, so enforce on a day someone

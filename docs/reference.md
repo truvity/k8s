@@ -790,10 +790,12 @@ NetworkPolicy is additive, so a second deny changes nothing today, but it
 keeps denying after the owner narrows theirs, and a same-named policy is an
 apply conflict. Leave such a namespace to its owner. A node-local DNS cache
 listening on a link-local address is not covered by the DNS allow.
-`networkPolicy.protect` (default `false`): a deny policy is prunable, because
-removing it from the list is how a namespace is handed to its real owner and
-the declaration is in git. Turn it on if an accidental prune opening a
-namespace worries you more than a stuck object.
+`networkPolicy.protect` (default `true`): a deny policy carries
+`argocd.argoproj.io/sync-options: Prune=false,Delete=false` and
+`helm.sh/resource-policy: keep`, because an accidental prune silently opens a
+namespace. To hand a namespace to its real owner, set `protect: false` on its
+entry (or on the kind), let that apply, then remove it from the list. A
+namespace entry may carry its own `protect` to override the kind.
 
 **`resourceQuota`: values only.** Per namespace, `hard` is a non-empty map of
 resource name to quantity (a string such as `"20"` or `64Gi`, or a whole
@@ -802,21 +804,25 @@ number), and the entry must carry a `reason` or an `owner`, written to
 `cluster-baseline/quota-owner`). The chart supplies no number. Name:
 `resourceQuota.name` (`cluster-baseline`) or the entry's `name`.
 `resourceQuota.protect` (default `false`): removing a quota only relaxes a
-limit, so it is prunable.
+limit, so it is prunable. An entry may carry its own `protect`.
 
 **`limitRange`: container defaults.** Per namespace, `container` is a
 non-empty object of `default` (the limit), `defaultRequest`, `min` and `max`,
-each a map of resource to quantity. No defaults are shipped: a default memory
+each a map of resource to quantity. Like a quota, the entry must carry a
+`reason` or an `owner` (the schema and the render refuse one with neither),
+written to `limitRange.reasonAnnotation` / `ownerAnnotation`
+(`cluster-baseline/limit-range-reason`, `cluster-baseline/limit-range-owner`).
+No defaults are shipped: a default memory
 limit can OOM-kill a workload nobody sized. `limitRange.protect` (default
 `false`): removal stops adding defaults to new pods only. Protect it where a
 quota in the same namespace requires requests, so that removing it cannot
-leave new pods unschedulable.
+leave new pods unschedulable. An entry may carry its own `protect`.
 
 | Value | Default |
 | --- | --- |
-| `networkPolicy.name` / `.protect` / `.dns.*` / `.namespaces.<ns>.{name,deny,dnsEgress}` | see above |
-| `resourceQuota.name` / `.protect` / `.reasonAnnotation` / `.ownerAnnotation` / `.namespaces.<ns>.{name,hard,reason,owner}` | see above |
-| `limitRange.name` / `.protect` / `.namespaces.<ns>.{name,container}` | see above |
+| `networkPolicy.name` / `.protect` / `.dns.*` / `.namespaces.<ns>.{name,deny,dnsEgress,protect}` | see above |
+| `resourceQuota.name` / `.protect` / `.reasonAnnotation` / `.ownerAnnotation` / `.namespaces.<ns>.{name,hard,reason,owner,protect}` | see above |
+| `limitRange.name` / `.protect` / `.reasonAnnotation` / `.ownerAnnotation` / `.namespaces.<ns>.{name,container,reason,owner,protect}` | see above |
 
 ### What is deliberately not here
 

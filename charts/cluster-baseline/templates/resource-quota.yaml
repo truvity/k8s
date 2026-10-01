@@ -1,11 +1,12 @@
 {{- /*
 A ResourceQuota per listed namespace, opt-in. The chart supplies no numbers.
 A reason or an owner is required by the schema and recorded as an annotation.
-Prunable unless resourceQuota.protect: removing a quota only relaxes a limit.
+Prunable unless protected (resourceQuota.protect or the entry's `protect`): removing a quota only relaxes a limit.
 */ -}}
 {{- $q := .Values.resourceQuota -}}
 {{- range $ns := keys ($q.namespaces | default dict) | sortAlpha }}
 {{- $e := index $q.namespaces $ns }}
+{{- if not (or $e.reason $e.owner) }}{{- fail (printf "resourceQuota.namespaces.%s needs a reason or an owner" $ns) }}{{- end }}
 {{- $extra := dict }}
 {{- if $e.reason }}{{- $_ := set $extra $q.reasonAnnotation $e.reason }}{{- end }}
 {{- if $e.owner }}{{- $_ := set $extra $q.ownerAnnotation $e.owner }}{{- end }}
@@ -15,7 +16,7 @@ kind: ResourceQuota
 metadata:
   name: {{ $e.name | default $q.name }}
   namespace: {{ $ns }}
-  {{- with include "cluster-baseline.annotations" (dict "protect" $q.protect "extra" $extra) }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" (ternary $e.protect $q.protect (hasKey $e "protect")) "extra" $extra) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:

@@ -28,10 +28,14 @@ them, and for anything breaking, what to do.
   `networkPolicy` (default-deny ingress and/or egress; a `dnsEgress` decision
   is required when egress is denied; configurable name, to avoid duplicating
   an owner's deny policy), `resourceQuota` (values only; a `reason` or an
-  `owner` required) and `limitRange` (container defaults and bounds). Each has
-  a `protect` switch, default off: removal only relaxes a limit. No
+  `owner` required) and `limitRange` (container defaults and bounds; a `reason`
+  or an `owner` required, as for quotas, enforced by the schema and the
+  render). Each has a `protect` switch, per kind and per entry. Only the
+  default-deny policy is protected by default (Helm keeps it, Argo CD neither
+  prunes nor deletes it): an accidental prune of it is silent, whereas
+  removing a quota or a limit range only relaxes a limit. No
   cluster-wide baseline floor is offered; namespaces move to `restricted` one
-  at a time. 14 more refused fixtures and three more golden renders.
+  at a time. 16 more refused fixtures and three more golden renders.
 
 ## v0.7.0
 
