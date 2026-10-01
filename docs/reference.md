@@ -638,6 +638,77 @@ for a cluster that is meant to be torn down.
 `NodeRoleARN`, `NodeRoleName` (`pulumi.StringOutput`). The component exports no
 stack output of its own: the caller names those.
 
+## `pkg/aws/eksoidc`
+
+`truvity:k8s/aws:EksOidc` points one EKS cluster's API server at an external
+OIDC issuer: one `eks.IdentityProviderConfig`. EKS validates the bearer token
+and takes the username and the groups from its claims. It takes its AWS
+provider in `Args.Provider`, never from `pulumi.Providers`. The association is a
+full cluster update (10 to 15 minutes), so callers usually run it as a stack of
+its own, last.
+
+```go
+o, err := eksoidc.New(ctx, "main", &eksoidc.Args{
+	Provider:    provider,
+	ClusterName: cluster.Name,
+	ConfigName:  "issuer",
+	IssuerURL:   "https://issuer.example.test",
+	ClientID:    "k8s:c1",
+	Names:       func(eksoidc.Child) string { /* the name your stack already uses */ },
+})
+```
+
+### `Args`
+
+| Field | Meaning |
+| --- | --- |
+| `Provider` | The AWS provider of the cluster's account and region. Required. |
+| `ClusterName` | The cluster, a `pulumi.StringInput`. Pass the cluster's `Name` output to order the association after it. Required. |
+| `ConfigName` | The association's name inside EKS. Required. |
+| `IssuerURL` | The issuer, an `https://` URL. Required. |
+| `ClientID` | The audience of every token the cluster accepts. Required. |
+| `UsernameClaim` | Default `sub`. |
+| `UsernamePrefix` | Default `-`, EKS's value for no prefix. Left unset EKS prefixes the issuer, which turns every binding on a bare name into another name. |
+| `GroupsClaim` | Default `groups`. |
+| `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
+| `LegacyTopLevel` | Adopt a loose resource by alias. |
+| `Protect` | `*bool`; nil (the default) protects. |
+
+`Args.Validate()` (called by the constructor before anything is registered)
+returns one error joining every problem: a missing provider or cluster name, an
+empty client id, association name or issuer URL, an issuer URL that is not
+https, and a naming hook that returns an empty name.
+
+### Children
+
+| Child | Type | Default name | Present when |
+| --- | --- | --- | --- |
+| provider config | `aws:eks/identityProviderConfig:IdentityProviderConfig` | `<c>-oidc` | always |
+
+Names are API: renaming the child replaces the association. EKS admits one
+external OIDC association per cluster, so a replace disassociates first and
+sign-in through the issuer is down for both legs; the child is therefore always
+registered with delete-before-replace.
+
+### Aliases
+
+With `LegacyTopLevel` the child carries
+`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
+hook gives it, the same type, no parent. The AWS SDK declares no aliases of its
+own on this type today (ADR 0003 item 6); a test fails when an upgrade adds one
+the component does not mirror.
+
+### Protection
+
+The association is protected unless `Protect` points at false: a preview that
+would delete or replace it fails instead. Point `Protect` at false only for a
+cluster that is meant to be torn down.
+
+### Outputs
+
+`ProviderConfig` (`*eks.IdentityProviderConfig`). The component exports no stack
+output of its own: the caller names those.
+
 ## Other provider components
 
 None yet. Each provider's page lands here with its inputs, its children and

@@ -4,6 +4,22 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/eksoidc`: the external OIDC issuer association of an EKS cluster
+  as a component, `truvity:k8s/aws:EksOidc`: one `eks.IdentityProviderConfig`
+  with the issuer URL (https), the client id (the audience) and the
+  association's name. The username comes from `sub` with no prefix (`-`) and
+  the groups from `groups` unless `UsernameClaim`, `UsernamePrefix` or
+  `GroupsClaim` say otherwise. EKS admits one such association per cluster, so
+  the child always registers with delete-before-replace. It refuses a missing
+  provider or cluster name, an empty client id, association name or issuer URL,
+  an issuer URL that is not https and a naming hook that returns an empty name,
+  all reported at once. The child's name comes from a caller-supplied hook. It
+  is protected unless `Protect` points at false: replacing it is a 10 to 15
+  minute cluster update with OIDC sign-in down. `LegacyTopLevel` adopts a loose
+  association by alias.
+
 ## v0.6.0
 
 - `pkg/aws/ekscluster`: an EKS Auto Mode cluster as a component,
