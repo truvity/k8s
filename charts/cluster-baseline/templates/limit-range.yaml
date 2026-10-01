@@ -1,0 +1,29 @@
+{{- /*
+A LimitRange (Container defaults and bounds) per listed namespace, opt-in.
+Prunable unless limitRange.protect.
+*/ -}}
+{{- $l := .Values.limitRange -}}
+{{- range $ns := keys ($l.namespaces | default dict) | sortAlpha }}
+{{- $e := index $l.namespaces $ns }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{ $e.name | default $l.name }}
+  namespace: {{ $ns }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" $l.protect "extra" dict) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  limits:
+    - type: Container
+      {{- range $f := list "default" "defaultRequest" "max" "min" }}
+      {{- with index $e.container $f }}
+      {{- $m := . }}
+      {{ $f }}:
+        {{- range $k := keys $m | sortAlpha }}
+        {{ $k | quote }}: {{ include "cluster-baseline.quantity" (index $m $k) | quote }}
+        {{- end }}
+      {{- end }}
+      {{- end }}
+{{- end }}

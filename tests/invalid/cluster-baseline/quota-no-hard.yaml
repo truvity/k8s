@@ -1,0 +1,4 @@
+resourceQuota:
+  namespaces:
+    example-app:
+      reason: "no limits"

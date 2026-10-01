@@ -62,7 +62,8 @@ reviewed values change that can be made one namespace at a time.
 A namespace that cannot meet the default level is listed with a lower one and
 a reason, and the render refuses it without the reason. The reason is also
 written to the namespace as an annotation, so it is read where the exemption
-is felt. An exemption is never a silent default: no namespace is exempt unless
+is felt. A quota is the same kind of debt: it can stop a workload, so it
+carries a `reason` or an `owner`. An exemption is never a silent default: no namespace is exempt unless
 someone said so. It names the cause (host namespaces, privileged storage
 driver, a build daemon) and is deleted when the cause is.
 
@@ -71,3 +72,24 @@ driver, a build daemon) and is deleted when the cause is.
 Which namespaces exist, and which are exempt, is the estate's. The list is
 empty by default and the schema accepts any DNS label.
 
+## No floor, and fix rather than exempt
+
+There is no cluster-wide baseline floor: a floor admits almost everything, so
+it buys little, and it is a second target that must later be raised.
+Namespaces move to `restricted` one at a time. A workload that fails
+`restricted` is fixed (that is the policy, and the workload owner's change);
+an exemption is the last resort.
+
+## A guard warns; it does not own
+
+The guard only validates, in Warn and Audit by default, and fails open. It
+asks namespaces to carry a label and never writes one, so no owner is fought.
+
+## Extras are opt-in and name their owners
+
+A default-deny policy, a quota and a limit range change what workloads can do,
+so each renders nothing until a namespace opts in, ships no numbers, and says
+how to remove it. Each decides deliberately whether removal is harmful:
+all three are prunable by default, because removing one only relaxes a limit
+or hands the namespace to its owner, and each has a `protect` switch. A deny
+policy never duplicates one an owner already ships.

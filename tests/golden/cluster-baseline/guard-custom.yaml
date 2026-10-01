@@ -1,0 +1,50 @@
+---
+# Source: cluster-baseline/templates/guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: example-ps-guard
+spec:
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
+    - name: not-excluded
+      expression: "!(object.metadata.name in ['kube-system','example-system'])"
+    - name: not-excluded-prefix
+      expression: "!['tmp-','preview-'].exists(p, object.metadata.name.startsWith(p))"
+  variables:
+    - name: kinds
+      expression: "['warn','enforce']"
+    - name: labelled
+      expression: "has(object.metadata.labels) && variables.kinds.exists(k, 'pod-security.kubernetes.io/' + k in object.metadata.labels)"
+    - name: wasLabelled
+      expression: "request.operation == 'UPDATE' && has(oldObject.metadata.labels) && variables.kinds.exists(k, 'pod-security.kubernetes.io/' + k in oldObject.metadata.labels)"
+  validations:
+    # A create must carry a label. An update only has to keep the ones it had,
+    # so a namespace that never had them is not nagged on every edit.
+    - expression: "variables.labelled || (request.operation == 'UPDATE' && !variables.wasLabelled)"
+      messageExpression: "'namespace ' + object.metadata.name + ' has no pod-security.kubernetes.io/warn|enforce label; add one, or list the namespace in cluster-baseline'"
+
+---
+# Source: cluster-baseline/templates/guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: example-ps-guard
+spec:
+  policyName: example-ps-guard
+  validationActions: ["Warn","Audit","Deny"]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - key: example.com/managed
+        operator: In
+        values:
+        - "true"

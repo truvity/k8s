@@ -33,3 +33,30 @@ chart defaults for any mode (and therefore needs a reason).
 {{- $_ := set $out "_override" $override -}}
 {{- toYaml $out -}}
 {{- end -}}
+
+{{/*
+Annotations of an extra object: the keep/prune pair when protected, and any
+reason/owner annotations passed in as a dict.
+Called as: include "cluster-baseline.annotations" (dict "protect" bool "extra" dict)
+Renders nothing when there is nothing to say.
+*/}}
+{{- define "cluster-baseline.annotations" -}}
+{{- $a := dict -}}
+{{- if .protect -}}
+{{- $_ := set $a "helm.sh/resource-policy" "keep" -}}
+{{- $_ := set $a "argocd.argoproj.io/sync-options" "Prune=false,Delete=false" -}}
+{{- end -}}
+{{- range $k, $v := .extra -}}{{- $_ := set $a $k $v -}}{{- end -}}
+{{- if $a -}}
+annotations:
+{{ toYaml $a | indent 2 }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+A quantity as text. YAML numbers arrive as float64, which toString would write
+as 1e+06 for a million; print whole numbers as integers.
+*/}}
+{{- define "cluster-baseline.quantity" -}}
+{{- if kindIs "float64" . -}}{{- printf "%d" (int64 .) -}}{{- else -}}{{- . -}}{{- end -}}
+{{- end -}}

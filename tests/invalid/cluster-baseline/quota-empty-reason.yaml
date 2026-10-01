@@ -1,0 +1,5 @@
+resourceQuota:
+  namespaces:
+    example-app:
+      reason: ""
+      hard: { pods: 10 }

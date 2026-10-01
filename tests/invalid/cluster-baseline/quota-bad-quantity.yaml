@@ -1,0 +1,5 @@
+resourceQuota:
+  namespaces:
+    example-app:
+      reason: "a typo in the unit"
+      hard: { requests.memory: "64 gigs" }

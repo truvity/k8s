@@ -1,0 +1,5 @@
+limitRange:
+  namespaces:
+    example-app:
+      container:
+        defaultLimit: { cpu: 1 }
