@@ -532,6 +532,112 @@ which are replaced with the role).
 `RoleARN`, `RoleName` (`pulumi.StringOutput`). The component exports no stack
 output of its own: the caller names those.
 
+## `pkg/aws/ekscluster`
+
+`truvity:k8s/aws:EksCluster` deploys one EKS Auto Mode cluster: the cluster,
+the KMS key its secrets are encrypted with, the cluster's IAM role and the
+Auto Mode node role with their policies, and the CloudWatch log group of the
+control plane. The shape is fixed: API authentication mode, no bootstrap
+creator-admin, no self-managed add-ons, a rotated customer-managed key,
+control-plane logs on, EKS-managed compute, load balancing and block storage.
+Access entries, security group rules, DNS records and add-ons are the
+caller's, attached to `Cluster`. It takes its AWS provider in `Args.Provider`,
+never from `pulumi.Providers`.
+
+```go
+c, err := ekscluster.New(ctx, "main", &ekscluster.Args{
+	Provider:        provider,
+	Name:            "c1",
+	Version:         "1.31",
+	SubnetIDs:       subnetIDs,
+	ServiceCIDR:     "172.20.0.0/16",
+	ClusterPolicies: clusterPolicyARNs,
+	NodePolicies:    nodePolicyARNs,
+	NodeInlinePolicies: []ekscluster.InlinePolicy{{Name: "pull", Document: doc}},
+	Names: func(ch ekscluster.Child) string { /* the names your stack already uses */ },
+})
+// c.Cluster, c.KeyARN, c.NodeRoleARN: use and export them under the names you choose.
+```
+
+### `Args`
+
+| Field | Meaning |
+| --- | --- |
+| `Provider` | The AWS provider of the cluster's account and region. Required. |
+| `Name`, `Version` | The cluster's name and Kubernetes version. Required. |
+| `SubnetIDs` | The subnets of the control plane and the nodes. Required, no repeats. |
+| `ServiceCIDR` | The service IPv4 range, with no host bits. Create-time immutable: another value replaces the cluster. Required. |
+| `PublicEndpoint` | Opens the API endpoint to the internet. Default false: private-only. |
+| `NodePools` | EKS-managed node pools. Default `DefaultNodePools()`: `general-purpose`, `system`. |
+| `LogTypes` | Control-plane log types. Default `DefaultLogTypes()`: `api`, `audit`, `authenticator`, `controllerManager`, `scheduler`. |
+| `PermissionsBoundary` | A permissions boundary ARN for both roles. Empty sets none. |
+| `ClusterRoleName`, `NodeRoleName` | The role names. Default `<Name>-cluster` and `<Name>-node`; they must differ. |
+| `ClusterTrustPolicy`, `NodeTrustPolicy` | Replace the default trust documents; used verbatim. For adopting a role whose document was rendered another way (IAM compares the JSON, the provider compares the string). |
+| `ClusterPolicies` | ARNs of the managed policies on the cluster role. Required: the caller passes ARNs, the component holds none. |
+| `NodePolicies` | ARNs of the managed policies on the node role. |
+| `NodeInlinePolicies` | `Name`, `Document`: inline policies of the node role. Names are unique. |
+| `KeyDescription`, `KeyAlias` | Default `EKS <Name> cluster secrets encryption` and `alias/eks-<Name>-secrets`. |
+| `KeyRotationDays` | 90 to 2560. Default 365. Rotation is always on. |
+| `LogGroupName`, `LogRetentionDays` | Default `/aws/eks/<Name>/cluster` (the group EKS writes to) and 90 days. |
+| `Tags` | Set on the key, the roles, the log group and the cluster. |
+| `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
+| `LegacyTopLevel` | Adopt loose resources by alias. |
+| `Protect` | `*bool`; nil (the default) protects. |
+
+`Args.Validate()` (called by the constructor before anything is registered)
+returns one error joining every problem: a missing provider, name, version,
+subnet or service CIDR, a service CIDR that is not IPv4 or has host bits set,
+an empty or repeated subnet or policy ARN, no cluster policy, an inline policy
+with no name, no document or a repeated name, one name for both roles, an
+unknown log type, an empty node pool, a key rotation period outside 90 to
+2560 days, a negative retention, and a naming hook that returns an empty or
+repeated name.
+
+The cluster is created after both roles, every policy attachment and the log
+group.
+
+### Children
+
+`Names` receives a `Child` (`Component`, `Kind`, `Key`) and returns the
+logical name; the defaults below use the component name `<c>`. `<key>` is the
+last path segment of a policy ARN, `<name>` an inline policy's name. Names are
+API.
+
+| Child | Type | Default name | Present when |
+| --- | --- | --- | --- |
+| key | `aws:kms/key:Key` | `<c>-key` | always |
+| key alias | `aws:kms/alias:Alias` | `<c>-key-alias` | always |
+| cluster role | `aws:iam/role:Role` | `<c>-cluster-role` | always |
+| cluster policy | `aws:iam/rolePolicyAttachment:RolePolicyAttachment` | `<c>-cluster-role-<key>` | one per `ClusterPolicies` entry (`Key` is `<key>`) |
+| node role | `aws:iam/role:Role` | `<c>-node-role` | always |
+| node policy | `aws:iam/rolePolicyAttachment:RolePolicyAttachment` | `<c>-node-role-<key>` | one per `NodePolicies` entry |
+| node inline policy | `aws:iam/rolePolicy:RolePolicy` | `<c>-node-role-policy-<name>` | one per `NodeInlinePolicies` entry |
+| log group | `aws:cloudwatch/logGroup:LogGroup` | `<c>-logs` | always |
+| cluster | `aws:eks/cluster:Cluster` | `<c>-cluster` | always |
+
+### Aliases
+
+With `LegacyTopLevel` every child carries
+`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
+hook gives it, the same type, no parent. The AWS SDK declares no aliases of
+its own on these types today (ADR 0003 item 6); a test fails when an upgrade
+adds one the component does not mirror.
+
+### Protection
+
+The cluster, the KMS key and both roles are protected unless `Protect` points
+at false: replacing the cluster is an outage, deleting the key loses what
+decrypts the cluster's secrets, and the roles are what the cluster runs as. A
+preview that would delete or replace one fails instead. No other child is
+protected; they are rebuilt from the program. Point `Protect` at false only
+for a cluster that is meant to be torn down.
+
+### Outputs
+
+`Cluster` (`*eks.Cluster`), `KeyARN`, `ClusterRoleARN`, `ClusterRoleName`,
+`NodeRoleARN`, `NodeRoleName` (`pulumi.StringOutput`). The component exports no
+stack output of its own: the caller names those.
+
 ## Other provider components
 
 None yet. Each provider's page lands here with its inputs, its children and

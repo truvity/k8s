@@ -4,6 +4,28 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/ekscluster`: an EKS Auto Mode cluster as a component,
+  `truvity:k8s/aws:EksCluster`. The cluster, the KMS key its secrets are
+  encrypted with (rotation always on, 365 days by default) and its alias, the
+  cluster role and the node role with their managed policies (the caller
+  passes the ARNs) and the node role's inline policies, and the control-plane
+  log group (90 days by default). The shape is fixed: API authentication mode,
+  private-only endpoint unless `PublicEndpoint`, no bootstrap creator-admin,
+  no self-managed add-ons, EKS-managed compute, load balancing and block
+  storage. The cluster comes back as `Cluster` for the access entries, rules
+  and add-ons the caller attaches. Trust documents default to the EKS and EC2
+  services and `ClusterTrustPolicy` / `NodeTrustPolicy` replace them
+  verbatim. It refuses a missing provider, name, version, subnet or service
+  CIDR, a service CIDR that is not IPv4, an empty or repeated subnet, policy
+  or inline policy, no cluster policy, one name for both roles, an unknown log
+  type, a key rotation period outside 90 to 2560 days and a naming hook that
+  returns an empty or repeated name, all reported at once. Every child's name
+  comes from a caller-supplied hook. The cluster, the key and both roles are
+  protected unless `Protect` points at false. `LegacyTopLevel` adopts loose
+  resources by alias.
+
 ## v0.5.0
 
 - `pkg/aws/podidentity`: an EKS Pod Identity role as a component,
