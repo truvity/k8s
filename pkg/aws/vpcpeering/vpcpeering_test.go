@@ -66,7 +66,7 @@ func base() *vpcpeering.Args {
 	return &vpcpeering.Args{
 		RequesterVPCID:    pulumi.String("vpc-req"),
 		AccepterVPCID:     pulumi.String("vpc-acc"),
-		AccepterAccountID: "222222222222",
+		AccepterAccountID: "acct-accepter",
 		RequesterCIDR:     "10.64.0.0/16",
 		AccepterCIDR:      "10.65.0.0/16",
 		RequesterIPv6CIDR: pulumi.String("2600:1f18::/56"),
@@ -474,7 +474,7 @@ func TestConnectionInputs(t *testing.T) {
 
 	c := find(t, res.regs, "aws:ec2/vpcPeeringConnection:VpcPeeringConnection", "peering-connection")
 
-	for k, want := range map[string]string{"peerOwnerId": "222222222222", "peerRegion": "eu-west-1", "peerVpcId": "vpc-acc", "vpcId": "vpc-req"} {
+	for k, want := range map[string]string{"peerOwnerId": "acct-accepter", "peerRegion": "eu-west-1", "peerVpcId": "vpc-acc", "vpcId": "vpc-req"} {
 		if got := c.inputs[resource.PropertyKey(k)].StringValue(); got != want {
 			t.Errorf("connection %s = %q, want %q", k, got, want)
 		}
