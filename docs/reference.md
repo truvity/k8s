@@ -289,6 +289,147 @@ false only for a peering that is meant to be torn down.
 `ConnectionID` (`pulumi.StringOutput`). The component exports no stack output
 of its own: the caller names those.
 
+## `pkg/aws/vpc`
+
+`truvity:k8s/aws:Vpc` deploys one VPC: the VPC, its subnets and route tables,
+the gateways, NAT, IPv6, hardened defaults, gateway endpoints and flow logs.
+The caller states the layout; the component adds what every such VPC needs.
+It takes one AWS provider in `Args.Provider`, never from `pulumi.Providers`.
+
+```go
+v, err := vpc.New(ctx, "net", &vpc.Args{
+	Provider:          provider,
+	Region:            "us-east-1",
+	CIDR:              "10.0.0.0/16",
+	AvailabilityZones: []string{"us-east-1a", "us-east-1b"},
+	Subnets: []vpc.Subnet{
+		{Name: "public", Type: vpc.Public, IPv6Index: 0, CIDRs: map[string]string{
+			"us-east-1a": "10.0.0.0/24", "us-east-1b": "10.0.1.0/24"}},
+		{Name: "app", Type: vpc.Private, IPv6Index: 4, CIDRs: map[string]string{
+			"us-east-1a": "10.0.4.0/24", "us-east-1b": "10.0.5.0/24"}},
+	},
+	Names: func(c vpc.Child) string { /* the names your stack already uses */ },
+})
+// v.VPCID, v.SubnetIDs["app"]["us-east-1a"], ...: export them under the names you choose.
+```
+
+### `Args`
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `Provider` | required | The AWS provider every child uses. |
+| `Region` | required with endpoints | For the endpoints' service names, `com.amazonaws.<region>.<service>`. |
+| `CIDR` | required | The VPC's IPv4 CIDR, `/16` to `/28`. |
+| `DisableIPv6` | IPv6 on | On: an Amazon-provided `/56`, a `/64` per subnet and zone with addresses assigned on creation, `::/0` to the internet gateway in the public route table and to an egress-only gateway in each private one. |
+| `AvailabilityZones` | required | The zones the VPC spans; every subnet has one CIDR in each, and each gets a private route table. |
+| `Subnets` | required | `Name`, `Type` (`vpc.Public` or `vpc.Private`), `CIDRs` (zone to IPv4 CIDR, inside `CIDR`, no overlap), `IPv6Index` (first `/64` index in the `/56`; the subnet's zones, sorted, take it and the following ones), `Tags`. |
+| `NAT` | `vpc.NATSingle` | `NATSingle`: one gateway in the first zone, every private route table routes to it. `NATPerZone`: a gateway per zone, each private route table routes to its own. `NATNone`: no gateway and no IPv4 default route. Only when there is a private subnet. |
+| `NATSubnet` | first public subnet | The public subnet the NAT gateways sit in. |
+| `GatewayEndpoints` | `s3` and `dynamodb` | Nil means both, a non-nil empty slice none. Attached to the public route table and every private one. |
+| `KeepDefaultSecurityGroup` | false | Leave the default security group alone. Otherwise it is emptied. |
+| `KeepDefaultNACL` | false | Leave the default network ACL alone. Otherwise the component owns it (below). |
+| `DefaultNACLHTTPSIngress` | none | Up to six IPv4 CIDRs allowed to reach port 443, as rules 114 to 119. For peered VPCs. |
+| `FlowLogs` | on | `Disable`; `LogGroupName` (`/vpc/flow-logs/<component>`), `RoleName` (`<component>-flow-logs`), `RetentionDays` (365), `TrafficType` (`ALL`), `AggregationSeconds` (60), `PermissionsBoundaryARN` (none). |
+| `Tags` | none | On every child that takes tags. |
+| `ChildTags` | none | `func(Child) map[string]string`, extra tags per child, such as `Name`. |
+| `Names` | `DefaultName` | Naming hook, `func(Child) string`. |
+| `LegacyTopLevel` | false | Adopt loose resources by alias. |
+| `Protect` | true | `*bool`. |
+
+A child's tags, in increasing precedence: `Name` (the child's `DefaultName`),
+the component's structural tags (`LogicalSubnet`, `Type` and
+`AvailabilityZone` on subnets; `Type` and, on private tables,
+`AvailabilityZone` on route tables), `Tags`, `ChildTags` and, on a subnet,
+`Subnet.Tags`.
+
+`Args.Validate()` (called by the constructor before anything is registered)
+returns one error joining every problem: a missing provider, a bad, non-IPv4
+or wrongly sized CIDR, no zones, a repeated or empty zone, no subnets, a
+subnet with no name, a repeated name or a bad type, a subnet that has no CIDR
+in a listed zone or has one in an unlisted zone (the zone count must match),
+subnet CIDRs outside the VPC or overlapping, IPv6 indexes that overlap or do
+not fit the `/56`, a bad NAT mode, a NAT with no public subnet to sit in, a
+`NATSubnet` that is unknown, private or set with `NATNone`, an unknown or
+repeated endpoint service, a missing region while there are endpoints, more
+than six HTTPS sources or a bad one, bad flow-log settings, and a naming
+hook that returns an empty name or the same name twice for children of one
+Pulumi type. (A subnet and its route table association are different types,
+so a hook may give them one name, as an existing state often does.)
+
+### Children
+
+`Names` receives a `Child` (`Component`, `Kind`, `Subnet`, `AZ`, `Service`)
+and returns the logical name; the defaults below use the component name
+`<c>`. Names are API.
+
+| Child | Type | Default name | Present when |
+| --- | --- | --- | --- |
+| VPC | `aws:ec2/vpc:Vpc` | `<c>-vpc` | always (protected) |
+| default security group | `aws:ec2/defaultSecurityGroup:DefaultSecurityGroup` | `<c>-default-sg` | not `KeepDefaultSecurityGroup` |
+| default network ACL | `aws:ec2/defaultNetworkAcl:DefaultNetworkAcl` | `<c>-default-nacl` | not `KeepDefaultNACL` |
+| internet gateway | `aws:ec2/internetGateway:InternetGateway` | `<c>-igw` | a public subnet exists |
+| public route table | `aws:ec2/routeTable:RouteTable` | `<c>-public-rt` | a public subnet exists |
+| public routes | `aws:ec2/route:Route` | `<c>-public-route-ipv4`, `<c>-public-route-ipv6` | a public subnet exists (IPv6 route with IPv6) |
+| egress-only gateway | `aws:ec2/egressOnlyInternetGateway:EgressOnlyInternetGateway` | `<c>-eoigw` | a private subnet exists and IPv6 is on |
+| private route table | `aws:ec2/routeTable:RouteTable` | `<c>-private-rt-<az>` | per zone, when a private subnet exists |
+| private IPv6 route | `aws:ec2/route:Route` | `<c>-private-route-ipv6-<az>` | per zone, with IPv6 |
+| subnet | `aws:ec2/subnet:Subnet` | `<c>-subnet-<subnet>-<az>` | per subnet and zone (protected) |
+| association | `aws:ec2/routeTableAssociation:RouteTableAssociation` | `<c>-subnet-<subnet>-<az>-assoc` | per subnet and zone |
+| NAT address | `aws:ec2/eip:Eip` | `<c>-nat-eip-<az>` | one (first zone) with `NATSingle`, one per zone with `NATPerZone` |
+| NAT gateway | `aws:ec2/natGateway:NatGateway` | `<c>-nat-<az>` | same |
+| NAT route | `aws:ec2/route:Route` | `<c>-nat-route-<az>` | per zone's private route table |
+| gateway endpoint | `aws:ec2/vpcEndpoint:VpcEndpoint` | `<c>-<service>-endpoint` | per entry of `GatewayEndpoints` |
+| flow log group | `aws:cloudwatch/logGroup:LogGroup` | `<c>-flow-log-group` | not `FlowLogs.Disable` |
+| flow log role | `aws:iam/role:Role` | `<c>-flow-log-role` | same |
+| flow log policy | `aws:iam/rolePolicy:RolePolicy` | `<c>-flow-log-policy` | same; write access to the log group only |
+| flow log | `aws:ec2/flowLog:FlowLog` | `<c>-flow-log` | same |
+
+Every child uses `Args.Provider`.
+
+### The default network ACL
+
+With `KeepDefaultNACL` unset the component manages the default ACL with a
+`DefaultNetworkAcl`, which **replaces the ACL's whole rule list on every
+apply**. The component is therefore its sole owner: an `ec2.NetworkAclRule`
+created elsewhere against that ACL is deleted by the next apply while its
+own stack's state still claims it. Admit extra traffic with
+`DefaultNACLHTTPSIngress`, or set `KeepDefaultNACL` and own the ACL yourself.
+
+Inbound, in order: all traffic from the VPC (100, IPv6 101); ephemeral TCP
+return traffic (110 to 113); HTTPS from `DefaultNACLHTTPSIngress` (114 to
+119); DNS UDP return (120, 121); NTP return (130); ephemeral UDP return (140
+to 143). Outbound: all traffic to the VPC (100, 101); HTTPS (110, 111); DNS
+over UDP and TCP (120 to 123); NTP (130); ephemeral TCP (140 to 143) and UDP
+(150 to 153). The ephemeral ranges skip port 3389, so no rule admits an admin
+port from anywhere. Everything else is denied by the ACL's implicit last
+rule. IPv6 rules appear only with IPv6.
+
+### Aliases
+
+With `LegacyTopLevel` every child carries
+`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
+hook gives it, the same type, no parent. The AWS SDK declares no aliases of
+its own on these types today (ADR 0003 item 6); a test fails when an upgrade
+adds one the component does not mirror.
+
+### Protection
+
+The VPC and every subnet are protected unless `Protect` points at false:
+replacing either destroys everything that lives in them, so a preview that
+would delete or replace one fails instead. No other child is protected; they
+are rebuilt from the program. Point `Protect` at false only for a VPC that is
+meant to be torn down.
+
+### Outputs
+
+`VPCID`, `IPv6CIDR`, `InternetGatewayID`, `EgressOnlyGatewayID`,
+`PublicRouteTableID`, `FlowLogID` (`pulumi.StringOutput`; an empty-string
+output for what the args did not ask for), `CIDR` (the string given), and the
+maps `PrivateRouteTableIDs` (zone), `SubnetIDs` (subnet, zone),
+`NATGatewayIDs` and `NATEIPIDs` (the zone each sits in) and
+`GatewayEndpointIDs` (service). The component exports no stack output of its
+own: the caller names those.
+
 ## Other provider components
 
 None yet. Each provider's page lands here with its inputs, its children and

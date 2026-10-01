@@ -17,11 +17,12 @@ capabilities.
 | `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component, unreleased |
 | `pkg/aws/backupbucket` — a versioned, KMS-encrypted cross-account backup bucket with version deletion denied, optional Object Lock and cross-region replica, `truvity:k8s/aws:BackupBucket` | Pulumi component, unreleased |
 | `pkg/aws/vpcpeering` — a cross-account, cross-region VPC peering with its routes, DNS-resolution options and private-zone associations, `truvity:k8s/aws:VpcPeering` | Pulumi component, unreleased |
+| `pkg/aws/vpc` — a VPC with its subnets, route tables, gateways, NAT, IPv6, hardened defaults, gateway endpoints and flow logs, `truvity:k8s/aws:Vpc` | Pulumi component, unreleased |
 
 The provider packages (EKS first) are not in `v0.1.0`; they arrive one
 reviewed extraction at a time and are listed in the [CHANGELOG](CHANGELOG.md).
 The extracted components so far, the pull-through cache, the backup
-bucket and the VPC peering, are unreleased.
+bucket, the VPC peering and the VPC, are unreleased.
 
 ## Who it is for
 
