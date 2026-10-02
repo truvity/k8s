@@ -6,7 +6,7 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
-- `charts/volume-snapshot-crds` (the CSI external-snapshotter CRDs) and `charts/cilium-crds` (the Cilium CRDs) move here from `truvity/ocictl` and are released with `cluster-baseline` at the tag's version (`oci://ghcr.io/truvity/charts/<name>`). The rendered CRDs are byte-identical to the charts published from `truvity/ocictl` (external-snapshotter 8.6.0, Cilium 1.20.1); only the chart version scheme changes, from the upstream version to this repository's. The CRDs are generated from each `crdctl.yaml` by `just crds` (crdctl from a pinned `truvity/ocictl` release) and committed; `just crds-check` fails when they drift from the pinned upstream.
+- `charts/volume-snapshot-crds` (the CSI external-snapshotter CRDs) and `charts/cilium-crds` (the Cilium CRDs) move here from `truvity/ocictl` and are published from here (`oci://ghcr.io/truvity/charts/<name>`) at the UPSTREAM version they mirror, as they were from `truvity/ocictl`: `8.6.0` and `1.20.1` today, both already in the registry, so the first release here publishes nothing for them. A release publishes a chart only when its version is not in the registry yet, and never overwrites one. The rendered CRDs are byte-identical to the ocictl charts. The CRDs are generated from each `crdctl.yaml` by `just crds` (crdctl from a pinned `truvity/ocictl` release) and committed; `just crds-check` fails when they drift from the pinned upstream.
 
 ## v0.8.0
 

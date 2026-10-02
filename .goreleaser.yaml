@@ -28,5 +28,6 @@ release:
     ## k8s {{ .Tag }}
 
     Go module: `go get github.com/truvity/k8s@{{ .Tag }}`.
-    Charts, version `{{ .Version }}`: `oci://ghcr.io/truvity/charts/cluster-baseline`
-    and the mirrored CRD charts `volume-snapshot-crds` and `cilium-crds`.
+    Chart, version `{{ .Version }}`: `oci://ghcr.io/truvity/charts/cluster-baseline`.
+    The mirrored CRD charts `volume-snapshot-crds` and `cilium-crds` are
+    published at the upstream version they mirror, once, by the `crd-charts` job.
