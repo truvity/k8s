@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   recipes:
-    uses: truvity/ci-workflows/.github/workflows/check.yaml@929cbec783b5c9c60ab849ef2f52b13a53689783 # v3.17.0
+    uses: truvity/ci-workflows/.github/workflows/check.yaml@822f94031ee2c91b76da8d5071bfb3d1b6af27b7 # v3.19.0
     with:
       # Strict: the component contract (C1-C12) is judged, shown in the job
       # summary, and a failed rule fails the job. `vuln` is not here: it runs in security.yaml, on a
