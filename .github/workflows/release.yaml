@@ -24,4 +24,4 @@ jobs:
       packages: write
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@822f94031ee2c91b76da8d5071bfb3d1b6af27b7 # v3.19.0
     with:
-      charts: '["cluster-baseline"]'
+      charts: '["cluster-baseline","volume-snapshot-crds","cilium-crds"]'
