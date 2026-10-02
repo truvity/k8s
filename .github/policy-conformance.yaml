@@ -1,0 +1,6 @@
+# Named exceptions to the component contract's checkable rules. See
+# https://github.com/truvity/policy/blob/master/docs/contracts/component.md#exemptions
+exempt:
+  C1:
+    reason: mirror charts of third-party projects' CRDs; each version is the upstream version it mirrors (crdctl.yaml pinned_version, checked by crd-charts-lint), published once and never overwritten, not stamped from this repository's tag
+    charts: [volume-snapshot-crds, cilium-crds]
