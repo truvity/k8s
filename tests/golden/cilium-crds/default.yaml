@@ -514,9 +514,10 @@ spec:
     served: true
     storage: false
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1080,9 +1081,10 @@ spec:
     storage: false
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1320,9 +1322,10 @@ spec:
     served: true
     storage: false
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2026,9 +2029,10 @@ spec:
     storage: false
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2686,9 +2690,10 @@ spec:
     storage: false
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2801,9 +2806,10 @@ spec:
         type: object
     served: true
     storage: false
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3001,9 +3007,10 @@ spec:
     served: true
     storage: true
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -9557,9 +9564,10 @@ spec:
     storage: true
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10035,9 +10043,10 @@ spec:
     served: true
     storage: true
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10530,9 +10539,10 @@ spec:
     served: true
     storage: true
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10730,9 +10740,10 @@ spec:
     served: true
     storage: true
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10808,9 +10819,10 @@ spec:
     storage: true
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -11248,9 +11260,10 @@ spec:
     storage: false
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -11583,9 +11596,10 @@ spec:
     served: true
     storage: true
     subresources: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -18137,9 +18151,10 @@ spec:
     storage: true
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -18255,9 +18270,10 @@ spec:
         type: object
     served: true
     storage: true
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -19104,9 +19120,10 @@ spec:
     storage: true
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -19176,9 +19193,10 @@ spec:
         type: object
     served: true
     storage: true
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -19310,9 +19328,10 @@ spec:
         type: object
     served: true
     storage: true
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -19635,9 +19654,10 @@ spec:
     storage: true
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -19900,9 +19920,10 @@ spec:
     storage: true
     subresources:
       status: {}
+
+
 ---
 # Source: cilium-crds/templates/crds.yaml
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
