@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `charts/volume-snapshot-crds` (the CSI external-snapshotter CRDs) and `charts/cilium-crds` (the Cilium CRDs) move here from `truvity/ocictl` and are released with `cluster-baseline` at the tag's version (`oci://ghcr.io/truvity/charts/<name>`). The rendered CRDs are byte-identical to the charts published from `truvity/ocictl` (external-snapshotter 8.6.0, Cilium 1.20.1); only the chart version scheme changes, from the upstream version to this repository's. The CRDs are generated from each `crdctl.yaml` by `just crds` (crdctl from a pinned `truvity/ocictl` release) and committed; `just crds-check` fails when they drift from the pinned upstream.
+
 ## v0.8.0
 
 - `charts/cluster-baseline`: the Pod Security Admission baseline as a Helm
