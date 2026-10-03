@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.11.0
+
 - `charts/tenancy`: renders each tenant's `Namespace`, with its Pod Security
   labels and deletion protection, where the tenant's profile (or the tenant)
   carries a `namespace` map; a tenant with `namespace: false` is a namespace
