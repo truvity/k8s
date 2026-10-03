@@ -1,0 +1,94 @@
+{{- /*
+One Karpenter NodePool per entry of nodePools, referencing the pool's own
+NodeClass, a shared one (nodeClassName), or Auto Mode's built-in `default`.
+Node size is deliberately unconfigured: Karpenter derives it from pending
+pods; `categories` bounds the families it may pick.
+
+A pool MAY cap per-node vCPUs (maxInstanceCpu): on a pool whose pods carry
+do-not-disrupt, the shape Karpenter picks is held until expireAfter, so an
+unbounded pick becomes a standing bill.
+
+One disruption budget keeps consolidation from moving more than one node at a
+time per pool, so a consolidation storm cannot drain a pool at once.
+*/ -}}
+{{- $d := .Values.poolDefaults }}
+{{- $seen := dict }}
+{{- range .Values.nodePools }}
+{{- if hasKey $seen .name }}{{ fail (printf "NodePool %s is defined twice" .name) }}{{ end }}
+{{- $_ := set $seen .name true }}
+{{- if and .nodeClass .nodeClassName }}{{ fail (printf "NodePool %s sets both nodeClass and nodeClassName" .name) }}{{ end }}
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: {{ .name }}
+  {{- if $.Values.protect }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  {{- end }}
+spec:
+  {{- if .weight }}
+  weight: {{ .weight | int64 }}
+  {{- end }}
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        {{- /* Changing this on a live pool DRIFTS its nodes: Karpenter
+               replaces them one at a time (budget below), and a node
+               holding a do-not-disrupt pod waits for it to finish or
+               for expireAfter, whichever comes first. */}}
+        name: {{ if .nodeClass }}{{ .nodeClass.name }}{{ else if .nodeClassName }}{{ .nodeClassName }}{{ else }}default{{ end }}
+      expireAfter: {{ .expireAfter | default $d.expireAfter }}
+      terminationGracePeriod: {{ .terminationGracePeriod | default $d.terminationGracePeriod }}
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: {{ toJson (required (printf "NodePool %s: archs is required" .name) .archs) }}
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: {{ toJson (required (printf "NodePool %s: capacityTypes is required" .name) .capacityTypes) }}
+        - key: eks.amazonaws.com/instance-category
+          operator: In
+          values: {{ toJson (required (printf "NodePool %s: categories is required" .name) .categories) }}
+      {{- if .maxInstanceCpu }}
+        {{- /* Inclusive ceiling: Lt is exclusive, so emit N+1. */}}
+        - key: eks.amazonaws.com/instance-cpu
+          operator: Lt
+          values: ["{{ add (.maxInstanceCpu | int64) 1 }}"]
+      {{- end }}
+      {{- if .zones }}
+        {{- /* Zone pin: for a pool whose traffic is to something zonal,
+               since cross-zone bytes are billed both ways. */}}
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: {{ toJson .zones }}
+      {{- end }}
+      {{- if .taints }}
+      taints:
+        {{- range .taints }}
+        - key: {{ .key }}
+          value: {{ .value | quote }}
+          effect: {{ .effect }}
+        {{- end }}
+      {{- end }}
+  {{- if .cpuLimit }}
+  limits:
+    cpu: {{ .cpuLimit | int64 }}
+  {{- end }}
+  disruption:
+    # WhenEmpty reclaims empty nodes and never moves a live workload for
+    # packing (recycling happens via expireAfter).
+    consolidationPolicy: {{ .consolidationPolicy | default $d.consolidationPolicy }}
+    consolidateAfter: {{ $d.consolidateAfter }}
+    budgets:
+      {{- if .fastEmptyReclaim }}
+      # All empties at once. Underutilized and drift consolidation stay
+      # serialized below: the storm guard is about moving LIVE pods, which an
+      # empty node by definition has none of.
+      - reasons: [Empty]
+        nodes: "100%"
+      {{- end }}
+      - nodes: "1"
+{{- end }}

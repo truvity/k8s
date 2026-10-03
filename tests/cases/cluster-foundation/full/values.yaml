@@ -1,0 +1,48 @@
+# Every kind: a reasoned exemption, literal labels, sync waves, a binding per
+# subject kind, a default StorageClass and the EKS Auto Mode switch.
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes: [warn, audit, enforce]
+namespaces:
+  example-app:
+    syncWave: 10
+  node-agents:
+    level: privileged
+    reason: "runs host-level agents; cannot meet baseline"
+    syncWave: 10
+    labels:
+      example.com/tier: platform
+    annotations:
+      example.com/owner: platform-team
+  scratch:
+    protect: false
+clusterRoleBindings:
+  example-admins:
+    clusterRole: cluster-admin
+    syncWave: 15
+    subjects:
+      - {kind: Group, name: "example-cluster:admin"}
+  example-readers:
+    clusterRole: view
+    subjects:
+      - {kind: Group, name: "example-cluster:viewer"}
+      - {kind: User, name: "reader@example.com"}
+      - {kind: ServiceAccount, name: reporter, namespace: example-app}
+storageClasses:
+  fast:
+    provisioner: ebs.csi.eks.amazonaws.com
+    isDefault: true
+    volumeBindingMode: WaitForFirstConsumer
+    allowVolumeExpansion: true
+    parameters:
+      type: gp3
+      encrypted: "true"
+  archive:
+    provisioner: ebs.csi.eks.amazonaws.com
+    reclaimPolicy: Retain
+    protect: false
+eksAuto:
+  networkPolicyController:
+    enabled: true
+    syncWave: 5

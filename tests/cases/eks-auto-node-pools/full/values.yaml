@@ -1,0 +1,50 @@
+clusterName: example-cluster
+subnetSelectorTags:
+  example.com/subnet-tier: nodes
+  kubernetes.io/cluster/example-cluster: shared
+podSubnetSelectorTags:
+  example.com/subnet-tier: pods
+  kubernetes.io/cluster/example-cluster: shared
+nodePools:
+  # A pool with a class of its own: bigger disk, pod IPs from the pod subnets.
+  - name: ci
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [r]
+    taints:
+      - {key: ci, value: "true", effect: NoSchedule}
+    cpuLimit: 224
+    maxInstanceCpu: 4
+    expireAfter: 48h0m0s
+    terminationGracePeriod: 2h0m0s
+    fastEmptyReclaim: true
+    zones: [zone-a]
+    nodeClass:
+      name: ci
+      role: example-node-role
+      podSubnets: true
+      ephemeralStorage: {size: 200Gi, iops: 3000, throughput: 125}
+  # Pools on a shared class.
+  - name: durable
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [t, m]
+    consolidationPolicy: WhenEmpty
+    taints:
+      - {key: durable, value: "true", effect: NoSchedule}
+    nodeClassName: standard
+  - name: general
+    weight: 10
+    archs: [arm64, amd64]
+    capacityTypes: [spot, on-demand]
+    categories: [m, r]
+    nodeClassName: standard
+  # A pool on the built-in `default`.
+  - name: plain
+    archs: [amd64]
+    capacityTypes: [on-demand]
+    categories: [m]
+nodeClasses:
+  - name: standard
+    role: example-node-role
+    ephemeralStorage: {size: 80Gi, iops: 3000, throughput: 125}

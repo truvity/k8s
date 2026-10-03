@@ -1,0 +1,3 @@
+clusterName: example-cluster
+nodeClasses:
+  - {name: standard, role: r, ephemeralStorage: {size: 80Gi, iops: 3000, throughput: 125}}

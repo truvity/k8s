@@ -1,0 +1,26 @@
+{{- /* One StorageClass per entry of `storageClasses`, in name order. */ -}}
+{{- $root := . -}}
+{{- range $name := (keys (.Values.storageClasses | default dict) | sortAlpha) }}
+{{- $entry := index $root.Values.storageClasses $name }}
+{{- $computed := dict -}}
+{{- if $entry.isDefault -}}{{- $_ := set $computed "storageclass.kubernetes.io/is-default-class" "true" -}}{{- end }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  {{- include "cluster-foundation.metadata" (dict "root" $root "name" $name "entry" $entry "computed" $computed "where" (printf "storageClasses.%s" $name)) | nindent 2 }}
+provisioner: {{ $entry.provisioner }}
+{{- with $entry.reclaimPolicy }}
+reclaimPolicy: {{ . }}
+{{- end }}
+{{- with $entry.volumeBindingMode }}
+volumeBindingMode: {{ . }}
+{{- end }}
+{{- if hasKey $entry "allowVolumeExpansion" }}
+allowVolumeExpansion: {{ $entry.allowVolumeExpansion }}
+{{- end }}
+{{- with $entry.parameters }}
+parameters:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,7 @@
+# A pool on Auto Mode's built-in `default` class: no class is rendered, so no
+# cluster name or subnet tags are needed.
+nodePools:
+  - name: general
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [m]

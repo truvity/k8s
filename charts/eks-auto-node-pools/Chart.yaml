@@ -1,0 +1,26 @@
+apiVersion: v2
+name: eks-auto-node-pools
+description: >-
+  Karpenter NodePools, and the NodeClasses they need, for an EKS Auto Mode
+  cluster, as data. A pool names its architectures, capacity types, instance
+  categories and taints; one disruption budget per pool keeps a consolidation
+  from moving more than one node at a time. Subnet and security-group tags,
+  roles and sizes are values: nothing here belongs to an estate.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag (truvity/ci-workflows
+# release-public.yaml).
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/k8s
+sources:
+  - https://github.com/truvity/k8s
+keywords:
+  - eks
+  - auto-mode
+  - karpenter
+  - nodepool
+  - nodeclass
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

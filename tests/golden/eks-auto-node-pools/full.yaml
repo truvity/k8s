@@ -1,0 +1,220 @@
+---
+# Source: eks-auto-node-pools/templates/node-classes.yaml
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  role: example-node-role
+  subnetSelectorTerms:
+    - tags:
+        example.com/subnet-tier: nodes
+        kubernetes.io/cluster/example-cluster: shared
+  securityGroupSelectorTerms:
+    - tags:
+        "aws:eks:cluster-name": example-cluster
+  podSubnetSelectorTerms:
+    - tags:
+        example.com/subnet-tier: pods
+        kubernetes.io/cluster/example-cluster: shared
+  podSecurityGroupSelectorTerms:
+    - tags:
+        "aws:eks:cluster-name": example-cluster
+  networkPolicy: DefaultAllow
+  networkPolicyEventLogs: Disabled
+  snatPolicy: Random
+  ephemeralStorage:
+    size: 200Gi
+    iops: 3000
+    throughput: 125
+
+---
+# Source: eks-auto-node-pools/templates/node-classes.yaml
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: standard
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  role: example-node-role
+  subnetSelectorTerms:
+    - tags:
+        example.com/subnet-tier: nodes
+        kubernetes.io/cluster/example-cluster: shared
+  securityGroupSelectorTerms:
+    - tags:
+        "aws:eks:cluster-name": example-cluster
+  networkPolicy: DefaultAllow
+  networkPolicyEventLogs: Disabled
+  snatPolicy: Random
+  ephemeralStorage:
+    size: 80Gi
+    iops: 3000
+    throughput: 125
+
+---
+# Source: eks-auto-node-pools/templates/node-pools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: ci
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: ci
+      expireAfter: 48h0m0s
+      terminationGracePeriod: 2h0m0s
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: eks.amazonaws.com/instance-category
+          operator: In
+          values: ["r"]
+        - key: eks.amazonaws.com/instance-cpu
+          operator: Lt
+          values: ["5"]
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: ["zone-a"]
+      taints:
+        - key: ci
+          value: "true"
+          effect: NoSchedule
+  limits:
+    cpu: 224
+  disruption:
+    # WhenEmpty reclaims empty nodes and never moves a live workload for
+    # packing (recycling happens via expireAfter).
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+    budgets:
+      # All empties at once. Underutilized and drift consolidation stay
+      # serialized below: the storm guard is about moving LIVE pods, which an
+      # empty node by definition has none of.
+      - reasons: [Empty]
+        nodes: "100%"
+      - nodes: "1"
+
+---
+# Source: eks-auto-node-pools/templates/node-pools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: durable
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: standard
+      expireAfter: 336h
+      terminationGracePeriod: 24h0m0s
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: eks.amazonaws.com/instance-category
+          operator: In
+          values: ["t","m"]
+      taints:
+        - key: durable
+          value: "true"
+          effect: NoSchedule
+  disruption:
+    # WhenEmpty reclaims empty nodes and never moves a live workload for
+    # packing (recycling happens via expireAfter).
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m
+    budgets:
+      - nodes: "1"
+
+---
+# Source: eks-auto-node-pools/templates/node-pools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: general
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  weight: 10
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: standard
+      expireAfter: 336h
+      terminationGracePeriod: 24h0m0s
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64","amd64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot","on-demand"]
+        - key: eks.amazonaws.com/instance-category
+          operator: In
+          values: ["m","r"]
+  disruption:
+    # WhenEmpty reclaims empty nodes and never moves a live workload for
+    # packing (recycling happens via expireAfter).
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+    budgets:
+      - nodes: "1"
+
+---
+# Source: eks-auto-node-pools/templates/node-pools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: plain
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: default
+      expireAfter: 336h
+      terminationGracePeriod: 24h0m0s
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: eks.amazonaws.com/instance-category
+          operator: In
+          values: ["m"]
+  disruption:
+    # WhenEmpty reclaims empty nodes and never moves a live workload for
+    # packing (recycling happens via expireAfter).
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+    budgets:
+      - nodes: "1"

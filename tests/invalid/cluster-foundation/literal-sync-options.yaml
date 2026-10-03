@@ -1,0 +1,5 @@
+# The protection annotation is computed; a literal one would shadow it.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+namespaces:
+  example-app:
+    annotations: {argocd.argoproj.io/sync-options: Prune=true}

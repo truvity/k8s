@@ -830,3 +830,71 @@ leave new pods unschedulable. An entry may carry its own `protect`.
   default or by switch-flip. Namespaces move to `restricted` one at a time.
 - Fixing workloads so that they meet `restricted` rather than exempting them
   is the policy, and is each workload's change, not this chart's.
+
+## `charts/cluster-foundation`
+
+The objects a cluster needs before any workload, as data: Namespaces with
+their Pod Security labels and deletion protection, ClusterRoleBindings,
+StorageClasses and, on EKS Auto Mode, the NetworkPolicy controller switch.
+Install a pinned version from `oci://ghcr.io/truvity/charts/cluster-foundation`.
+
+It differs from `cluster-baseline` on purpose. `cluster-baseline` renders
+labels-only Namespaces for a namespace some other tool owns; this chart is for
+the tool that *is* the owner and renders the whole object (name, labels,
+annotations), so it must not be applied by two Applications at once (they
+would take turns dropping each other's labels).
+
+Nothing is defaulted to an estate. Every list is empty, and `podSecurity.level`,
+`podSecurity.version` and `podSecurity.modes` are required as soon as a
+namespace is listed.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `podSecurity.level` | required | The level a namespace gets: `privileged`, `baseline`, `restricted`. |
+| `podSecurity.version` | required | `latest` or a Kubernetes minor (`v1.34`), on every mode. Pin it. |
+| `podSecurity.modes` | required | Any of `warn`, `audit`, `enforce`; each renders `<mode>` and `<mode>-version`. |
+| `podSecurity.unenforced` | `false` | Without `enforce` in `modes` the render fails unless this says so. |
+| `podSecurity.reasonAnnotation` | `cluster-baseline/psa-reason` | Where an exemption's reason is recorded. |
+| `protect` | `true` | Every object carries `argocd.argoproj.io/sync-options: Prune=false,Delete=false`. |
+| `helmKeep` | `false` | Also `helm.sh/resource-policy: keep` on protected objects. |
+| `namespaces.<name>` | `{}` | `level` (needs a `reason`), `reason`, `syncWave`, `protect`, literal `labels` and `annotations`. |
+| `clusterRoleBindings.<name>` | none | `clusterRole`, `subjects` (`Group`, `User`, `ServiceAccount` with a `namespace`), `syncWave`, `protect`. |
+| `storageClasses.<name>` | none | `provisioner`, `isDefault`, `reclaimPolicy`, `volumeBindingMode`, `allowVolumeExpansion`, `parameters`, `syncWave`, `protect`. |
+| `eksAuto.networkPolicyController` | off | `enabled`, `syncWave`, `protect`: renders ConfigMap `amazon-vpc-cni` in `kube-system`. |
+
+A literal label or annotation may not set a key the chart computes (the
+`pod-security.kubernetes.io/*` labels, sync-wave, sync-options and the reason
+annotation); the render refuses it.
+
+### Why the NetworkPolicy switch is here
+
+EKS Auto Mode ships the NetworkPolicy machinery, but the controller is off
+until the ConfigMap exists: without it every NetworkPolicy in the cluster is
+silently ignored. Enabling it changes nothing until a policy selects a pod.
+Deleting it turns every policy off, which is why it is protected like a Namespace.
+
+## `charts/eks-auto-node-pools`
+
+Karpenter NodePools, and the NodeClasses they need, for EKS Auto Mode. Install
+a pinned version from `oci://ghcr.io/truvity/charts/eks-auto-node-pools`. A
+NodePool change rolls nodes (a changed class or requirement drifts every node
+of the pool, one at a time); deleting a NodePool drains every node it owns.
+Both are why the objects are protected by default and why Argo CD should sync
+them with pruning off.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `clusterName` | required with a class | The EKS cluster name; the security group is selected by `aws:eks:cluster-name`. |
+| `subnetSelectorTags` | required with a class | Tags that select the node subnets. |
+| `podSubnetSelectorTags` | required with `podSubnets` | Tags that select the pod subnets. |
+| `poolDefaults` | `336h`, `24h0m0s`, `WhenEmptyOrUnderutilized`, `5m` | `expireAfter`, `terminationGracePeriod`, `consolidationPolicy`, `consolidateAfter`; a pool may override the first three. |
+| `classDefaults` | `DefaultAllow`, `Disabled`, `Random` | `networkPolicy`, `networkPolicyEventLogs`, `snatPolicy`. |
+| `protect` | `true` | `argocd.argoproj.io/sync-options: Prune=false,Delete=false` on every object. |
+| `nodePools[]` | none | `name`, `archs`, `capacityTypes`, `categories` required; `weight`, `taints`, `cpuLimit`, `maxInstanceCpu`, `zones`, `fastEmptyReclaim`, `nodeClassName` or `nodeClass`. |
+| `nodeClasses[]` | none | `name`, `role`, `ephemeralStorage` required; `podSubnets`. Shared by pools through `nodeClassName`. |
+
+A pool with neither `nodeClass` nor `nodeClassName` uses Auto Mode's built-in
+`default` class, which this chart never renders. Each pool has one disruption
+budget of one node, so consolidation cannot move more than one node at a time;
+`fastEmptyReclaim` adds a budget that lets every empty node go at once.
+

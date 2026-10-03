@@ -1,0 +1,8 @@
+# The smallest render: pinned PSA table, two namespaces at the defaults.
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes: [warn, audit, enforce]
+namespaces:
+  example-app: {}
+  example-system: {}
