@@ -48,8 +48,11 @@ scheme; it chooses none of them.
 
 It deliberately does not pick your names, your address ranges, your
 permission boundaries or your accounts, does not install workloads into the
-cluster. The one chart, `cluster-baseline`, labels namespaces and nothing
-else; see [the reference](docs/reference.md#chartscluster-baseline).
+cluster. The charts render cluster objects and never workloads:
+`cluster-baseline` labels namespaces someone else owns, `cluster-foundation`
+renders the foundation objects (namespaces, role bindings, storage classes)
+and `eks-auto-node-pools` the Karpenter pools; see
+[the reference](docs/reference.md#chartscluster-baseline).
 
 ## The model
 
