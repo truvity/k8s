@@ -1,0 +1,4 @@
+podIdentities:
+  clusterName: c
+  associations:
+    reports: {roleARN: "arn:example:iam::placeholder:role/r"}

@@ -1,0 +1,94 @@
+---
+# Source: tenancy/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: team-a
+  labels:
+    example.com/tier: team
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+    helm.sh/resource-policy: keep
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - podSelector: {}
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway-system
+  egress:
+    - to:
+      - podSelector: {}
+    - ports:
+      - port: 53
+        protocol: UDP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/16
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: team-a
+  labels:
+    example.com/tier: team
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+    helm.sh/resource-policy: keep
+spec:
+  hard:
+    requests.cpu: "4"
+
+---
+# Source: tenancy/templates/clusterroles.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tenant-crds
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "14"
+    helm.sh/resource-policy: keep
+rules:
+  - apiGroups:
+    - example.com
+    resources:
+    - widgets
+    verbs:
+    - get
+    - list
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: owners
+  namespace: team-a
+  labels:
+    example.com/tier: team
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+    helm.sh/resource-policy: keep
+subjects:
+  - kind: Group
+    name: "team-a"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io

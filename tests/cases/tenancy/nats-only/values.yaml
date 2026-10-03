@@ -1,0 +1,15 @@
+# A tenant that is only a NATS account: the namespace is someone else's, so
+# the profile carries no policy, quota or RBAC.
+protect: false
+nats:
+  servers: ["nats://nats.nats.svc.cluster.example:4222"]
+profiles:
+  account:
+    labels:
+      nats: {app.kubernetes.io/name: nack, app.kubernetes.io/part-of: nats}
+tenants:
+  shop:
+    profile: account
+    nats: true
+    labels:
+      nats: {example.com/project: shop}

@@ -1,0 +1,7 @@
+profiles:
+  team: {}
+podIdentities:
+  associations:
+    reports: {roleARN: "arn:example:iam::placeholder:role/r", associationNamespace: identity-system}
+tenants:
+  team-a: {profile: team, podIdentities: [reports]}

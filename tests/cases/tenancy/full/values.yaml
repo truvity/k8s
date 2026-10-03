@@ -1,0 +1,129 @@
+# Every feature: two profiles, a rule only one of them gets, quota and limit
+# range, a ClusterRole that aggregates into admin, Roles and bindings of every
+# subject kind, a NATS account, pod identities, per-feature labels and the
+# three protection modes.
+protect: false
+syncWaves: {clusterRoles: 14, networkPolicy: 15, quota: 15, rbac: 15, nats: 20, podIdentities: 20}
+networkPolicy:
+  name: tenant-baseline
+  intraNamespace: true
+  ingress:
+    - description: operators reach the tenant's databases
+      from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: db-operator}}
+    - description: CI runners poll Services directly
+      profiles: [ci]
+      from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: runners}}
+    - description: the tailnet
+      from:
+        - namespaceSelector: {matchLabels: {example.com/router: "true"}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: router}}
+        - ipBlock: {cidr: 10.0.0.0/22}
+        - ipBlock: {cidr: 100.64.0.0/10}
+  egress:
+    - description: NATS
+      to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: nats}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: nats}}
+      ports: [{port: 4222, protocol: TCP}]
+    - description: the internet over HTTPS, not the metadata endpoint
+      to:
+        - ipBlock: {cidr: 0.0.0.0/0, except: [169.254.169.254/32]}
+      ports: [{port: 443, protocol: TCP}]
+    - description: DNS
+      to:
+        - ipBlock: {cidr: 172.20.0.0/16}
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+profiles:
+  person:
+    labels:
+      default: {example.com/layer: tenancy, example.com/tier: person}
+      nats: {app.kubernetes.io/name: nack, example.com/tier: person}
+    networkPolicy: true
+    quota:
+      name: tenant-quota
+      hard: {requests.cpu: "8", requests.memory: 16Gi, persistentvolumeclaims: "10"}
+    limitRange:
+      name: tenant-defaults
+      limits:
+        - type: Container
+          defaultRequest: {cpu: 50m, memory: 64Mi}
+          default: {cpu: "1", memory: 512Mi}
+  ci:
+    labels:
+      default: {example.com/layer: tenancy, example.com/tier: ci}
+    networkPolicy: true
+    protect: {rbac: prune-only}
+    quota:
+      name: tenant-quota
+      hard: {requests.cpu: "16", requests.memory: 32Gi}
+  product:
+    labels:
+      default: {example.com/layer: tenancy, example.com/tier: product}
+    networkPolicy: true
+    protect: {networkPolicy: prune-only, rbac: true}
+clusterRoles:
+  tenant-crds:
+    aggregateTo: [admin]
+    syncWave: 14
+    labels: {example.com/layer: tenancy}
+    protect: true
+    rules:
+      - apiGroups: [postgresql.example.com]
+        resources: [clusters, backups]
+        verbs: [get, list, watch, create, update, patch, delete]
+      - apiGroups: [postgresql.example.com]
+        resources: [clusters/status]
+        verbs: [get, list, watch]
+nats:
+  servers: ["nats://nats.nats.svc.cluster.example:4222"]
+podIdentities:
+  clusterName: example-cluster
+  associations:
+    reports:
+      roleARN: "arn:example:iam::placeholder:role/example-reports"
+      associationNamespace: identity-system
+    signing:
+      roleARN: "arn:example:iam::placeholder:role/example-signing"
+      associationNamespace: identity-system
+tenants:
+  person-ada:
+    profile: person
+    nats: true
+    podIdentities: [reports, signing]
+    roleBindings:
+      owner:
+        clusterRole: admin
+        subjects:
+          - {kind: Group, name: "person:ada"}
+          - {kind: User, name: "ada@example.com"}
+  ci-widgets:
+    profile: ci
+    nats: true
+    podIdentities: [reports]
+    roleBindings:
+      deployer:
+        clusterRole: edit
+        labels: {}
+        subjects: [{kind: User, name: "ci:example/widgets"}]
+      crds:
+        clusterRole: tenant-crds
+        labels: {}
+        subjects: [{kind: User, name: "ci:example/widgets"}]
+  shop:
+    profile: product
+    roles:
+      read-certs:
+        rules:
+          - {apiGroups: [cert-manager.io], resources: [certificaterequests], verbs: [create]}
+    roleBindings:
+      read-certs:
+        role: read-certs
+        protect: false
+        subjects: [{kind: Group, name: "system:serviceaccounts:shop"}]
+      deployer:
+        clusterRole: edit
+        subjects:
+          - {kind: Group, name: "example-cluster:shop:deployer"}
+          - {kind: ServiceAccount, name: deployer, namespace: shop}

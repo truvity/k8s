@@ -1,0 +1,4 @@
+clusterRoles:
+  crds:
+    aggregateTo: [cluster-admin]
+    rules: [{apiGroups: [example.com], resources: [widgets], verbs: [get]}]

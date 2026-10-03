@@ -1,0 +1,15 @@
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: team-a
+  labels:
+    example.com/tier: team
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi

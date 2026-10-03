@@ -1,0 +1,7 @@
+# Caught by the template, not the schema: the profile must exist.
+profiles:
+  team:
+    quota: {name: tenant-quota, hard: {requests.cpu: "4"}}
+
+tenants:
+  team-a: {profile: guests}

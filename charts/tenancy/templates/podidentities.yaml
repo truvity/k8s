@@ -1,0 +1,37 @@
+{{- /*
+For each name a tenant lists in `podIdentities`: a ServiceAccount of that name
+in the tenant's namespace and the ACK PodIdentityAssociation <namespace>-<name>
+in the association's own namespace, out of the tenant's reach.
+*/ -}}
+{{- $root := . -}}
+{{- $pi := .Values.podIdentities -}}
+{{- range $ns := (keys (.Values.tenants | default dict) | sortAlpha) }}
+{{- $t := index $root.Values.tenants $ns }}
+{{- if $t.podIdentities }}
+{{- if not $pi.clusterName }}{{ fail (printf "podIdentities.clusterName is required: tenant %s lists podIdentities" $ns) }}{{ end }}
+{{- $p := include "tenancy.profile" (dict "root" $root "name" $ns "tenant" $t) | fromYaml }}
+{{- $labels := include "tenancy.labels" (dict "profile" $p "tenant" $t "feature" "podIdentities") | fromYaml }}
+{{- $mode := include "tenancy.mode" (dict "root" $root "profile" $p "feature" "podIdentities") }}
+{{- range $name := $t.podIdentities }}
+{{- if not (hasKey $pi.associations $name) }}
+{{- fail (printf "tenants.%s.podIdentities names %q, which is not in podIdentities.associations (have: %s)" $ns $name (join ", " (keys $pi.associations | sortAlpha))) }}
+{{- end }}
+{{- $a := index $pi.associations $name }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $name "namespace" $ns "labels" $labels "wave" $root.Values.syncWaves.podIdentities "mode" $mode) | nindent 2 }}
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" (printf "%s-%s" $ns $name) "namespace" $a.associationNamespace "labels" $labels "wave" $root.Values.syncWaves.podIdentities "mode" $mode) | nindent 2 }}
+spec:
+  clusterName: {{ $pi.clusterName }}
+  namespace: {{ $ns }}
+  serviceAccount: {{ $name }}
+  roleARN: {{ $a.roleARN }}
+{{- end }}
+{{- end }}
+{{- end }}

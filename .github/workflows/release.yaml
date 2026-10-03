@@ -24,7 +24,7 @@ jobs:
       packages: write
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@30b989fdd77b99af4be1a4b04e6353aa58aa3923 # v3.21.0
     with:
-      charts: '["cluster-baseline","cluster-foundation","eks-auto-node-pools"]'
+      charts: '["cluster-baseline","cluster-foundation","eks-auto-node-pools","tenancy"]'
 
   # The CRD mirror charts (volume-snapshot-crds cilium-crds) are NOT in the `charts` list above: the
   # shared workflow stamps the tag onto every chart it is given, and these

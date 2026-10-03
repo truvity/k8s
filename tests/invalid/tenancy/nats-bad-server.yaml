@@ -1,0 +1,1 @@
+nats: {servers: ["http://nats:4222"]}

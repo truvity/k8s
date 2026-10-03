@@ -1,0 +1,40 @@
+{{- /*
+One NetworkPolicy per tenant whose profile sets `networkPolicy: true`: every
+pod selected, both policy types listed (default-deny both ways), and the rules
+of `networkPolicy` that apply to the tenant's profile, in the order given.
+*/ -}}
+{{- $root := . -}}
+{{- $np := .Values.networkPolicy -}}
+{{- range $ns := (keys (.Values.tenants | default dict) | sortAlpha) }}
+{{- $t := index $root.Values.tenants $ns }}
+{{- $p := include "tenancy.profile" (dict "root" $root "name" $ns "tenant" $t) | fromYaml }}
+{{- if $p.networkPolicy }}
+{{- if not $np.name }}{{ fail (printf "networkPolicy.name is required: tenant %s is on profile %s, which sets networkPolicy: true" $ns $t.profile) }}{{ end }}
+{{- $ingress := list }}
+{{- $egress := list }}
+{{- if $np.intraNamespace }}
+{{- $ingress = append $ingress (dict "from" (list (dict "podSelector" (dict)))) }}
+{{- $egress = append $egress (dict "to" (list (dict "podSelector" (dict)))) }}
+{{- end }}
+{{- range $r := $np.ingress }}
+{{- if or (not (hasKey $r "profiles")) (has $t.profile $r.profiles) }}{{ $ingress = append $ingress (omit $r "profiles" "description") }}{{ end }}
+{{- end }}
+{{- range $r := $np.egress }}
+{{- if or (not (hasKey $r "profiles")) (has $t.profile $r.profiles) }}{{ $egress = append $egress (omit $r "profiles" "description") }}{{ end }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $np.name "namespace" $ns "labels" (include "tenancy.labels" (dict "profile" $p "tenant" $t "feature" "networkPolicy") | fromYaml) "wave" $root.Values.syncWaves.networkPolicy "mode" (include "tenancy.mode" (dict "root" $root "profile" $p "feature" "networkPolicy"))) | nindent 2 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- toYaml $ingress | nindent 4 }}
+  egress:
+    {{- toYaml $egress | nindent 4 }}
+{{- end }}
+{{- end }}

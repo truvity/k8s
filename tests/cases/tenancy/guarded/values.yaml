@@ -1,0 +1,33 @@
+# Protection on (the default) with nothing overriding it: every object carries
+# Prune=false,Delete=false, and helmKeep adds the Helm resource policy.
+helmKeep: true
+syncWaves: {clusterRoles: 14, networkPolicy: 15, quota: 15, rbac: 15}
+networkPolicy:
+  name: tenant-baseline
+  ingress:
+    - description: the gateway
+      from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway-system}}
+  egress:
+    - to: [{ipBlock: {cidr: 10.0.0.0/16}}]
+      ports: [{port: 53, protocol: UDP}]
+profiles:
+  team:
+    labels:
+      default: {example.com/tier: team}
+    networkPolicy: true
+    quota:
+      name: tenant-quota
+      hard: {requests.cpu: "4"}
+clusterRoles:
+  tenant-crds:
+    aggregateTo: [admin]
+    rules:
+      - {apiGroups: [example.com], resources: [widgets], verbs: [get, list]}
+tenants:
+  team-a:
+    profile: team
+    roleBindings:
+      owners:
+        clusterRole: admin
+        subjects: [{kind: Group, name: "team-a"}]

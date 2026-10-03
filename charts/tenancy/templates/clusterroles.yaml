@@ -1,0 +1,20 @@
+{{- /*
+One ClusterRole per entry of `clusterRoles`, in name order. `aggregateTo` adds
+the aggregate-to-<role> labels, so the rules join that built-in role.
+*/ -}}
+{{- $root := . -}}
+{{- range $name := (keys (.Values.clusterRoles | default dict) | sortAlpha) }}
+{{- $e := index $root.Values.clusterRoles $name }}
+{{- $labels := dict }}
+{{- range $k, $v := ($e.labels | default dict) }}{{ $_ := set $labels $k $v }}{{ end }}
+{{- range $r := ($e.aggregateTo | default list) }}{{ $_ := set $labels (printf "rbac.authorization.k8s.io/aggregate-to-%s" $r) "true" }}{{ end }}
+{{- $wave := $root.Values.syncWaves.clusterRoles }}
+{{- if hasKey $e "syncWave" }}{{ $wave = $e.syncWave }}{{ end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $name "labels" $labels "wave" $wave "mode" (include "tenancy.mode" (dict "root" $root "entry" $e))) | nindent 2 }}
+rules:
+  {{- toYaml $e.rules | nindent 2 }}
+{{- end }}

@@ -24,6 +24,7 @@ capabilities.
 | `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
 | `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
 | `charts/eks-auto-node-pools` — Karpenter NodePools and NodeClasses for EKS Auto Mode, one disruption budget per pool, subnet tags and roles as values | Helm chart, `oci://ghcr.io/truvity/charts/eks-auto-node-pools`, unreleased |
+| `charts/tenancy` — per-tenant NetworkPolicy, quota, RBAC, NATS account and Pod Identity around a namespace someone else renders, one profile per tier, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/tenancy`, unreleased |
 | `charts/volume-snapshot-crds` — the CSI external-snapshotter CustomResourceDefinitions, mirrored verbatim at the upstream version pinned in `crdctl.yaml` | Helm chart, `oci://ghcr.io/truvity/charts/volume-snapshot-crds` |
 | `charts/cilium-crds` — the Cilium CustomResourceDefinitions, mirrored verbatim at the upstream version pinned in `crdctl.yaml` | Helm chart, `oci://ghcr.io/truvity/charts/cilium-crds` |
 
@@ -50,8 +51,9 @@ It deliberately does not pick your names, your address ranges, your
 permission boundaries or your accounts, does not install workloads into the
 cluster. The charts render cluster objects and never workloads:
 `cluster-baseline` labels namespaces someone else owns, `cluster-foundation`
-renders the foundation objects (namespaces, role bindings, storage classes)
-and `eks-auto-node-pools` the Karpenter pools; see
+renders the foundation objects (namespaces, role bindings, storage classes),
+`eks-auto-node-pools` the Karpenter pools and `tenancy` what each tenant namespace
+needs around it; see
 [the reference](docs/reference.md#chartscluster-baseline).
 
 ## The model

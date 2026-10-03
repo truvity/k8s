@@ -1,0 +1,11 @@
+# The smallest render: one profile with a quota, one tenant on it.
+profiles:
+  team:
+    labels:
+      default: {example.com/tier: team}
+    quota:
+      name: tenant-quota
+      hard: {requests.cpu: "4", requests.memory: 8Gi}
+tenants:
+  team-a:
+    profile: team

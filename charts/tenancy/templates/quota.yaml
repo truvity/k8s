@@ -1,0 +1,30 @@
+{{- /*
+A ResourceQuota and a LimitRange per tenant whose profile names them.
+*/ -}}
+{{- $root := . -}}
+{{- range $ns := (keys (.Values.tenants | default dict) | sortAlpha) }}
+{{- $t := index $root.Values.tenants $ns }}
+{{- $p := include "tenancy.profile" (dict "root" $root "name" $ns "tenant" $t) | fromYaml }}
+{{- $labels := include "tenancy.labels" (dict "profile" $p "tenant" $t "feature" "quota") | fromYaml }}
+{{- $mode := include "tenancy.mode" (dict "root" $root "profile" $p "feature" "quota") }}
+{{- with $p.quota }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" .name "namespace" $ns "labels" $labels "wave" $root.Values.syncWaves.quota "mode" $mode) | nindent 2 }}
+spec:
+  hard:
+    {{- toYaml .hard | nindent 4 }}
+{{- end }}
+{{- with $p.limitRange }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" .name "namespace" $ns "labels" $labels "wave" $root.Values.syncWaves.quota "mode" $mode) | nindent 2 }}
+spec:
+  limits:
+    {{- toYaml .limits | nindent 4 }}
+{{- end }}
+{{- end }}

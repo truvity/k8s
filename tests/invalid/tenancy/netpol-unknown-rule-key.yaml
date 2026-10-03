@@ -1,0 +1,5 @@
+networkPolicy:
+  name: tenant-baseline
+  egress:
+    - to: [{podSelector: {}}]
+      comment: nope

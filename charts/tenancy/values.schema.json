@@ -1,0 +1,296 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tenancy values",
+  "description": "An unknown key is an error, not a silent no-op: a typo in `protect` or in a feature name would otherwise leave a tenant unprotected or without a policy and the rollout would look finished.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it."
+    },
+    "protect": { "$ref": "#/definitions/protect" },
+    "helmKeep": { "type": "boolean" },
+    "syncWaves": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clusterRoles": { "$ref": "#/definitions/syncWave" },
+        "networkPolicy": { "$ref": "#/definitions/syncWave" },
+        "quota": { "$ref": "#/definitions/syncWave" },
+        "rbac": { "$ref": "#/definitions/syncWave" },
+        "nats": { "$ref": "#/definitions/syncWave" },
+        "podIdentities": { "$ref": "#/definitions/syncWave" }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/identifier" },
+      "additionalProperties": { "$ref": "#/definitions/profile" }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?)?$" },
+        "intraNamespace": { "type": "boolean" },
+        "ingress": { "type": "array", "items": { "$ref": "#/definitions/ingressRule" } },
+        "egress": { "type": "array", "items": { "$ref": "#/definitions/egressRule" } }
+      }
+    },
+    "tenants": {
+      "type": "object",
+      "description": "Tenants by namespace name. The name must be a DNS label.",
+      "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
+      "additionalProperties": { "$ref": "#/definitions/tenant" }
+    },
+    "clusterRoles": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/objectName" },
+      "additionalProperties": { "$ref": "#/definitions/clusterRole" }
+    },
+    "nats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "servers": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(nats|tls)://.+" }
+        },
+        "serviceAccount": { "$ref": "#/definitions/objectName" },
+        "tokenSecret": { "$ref": "#/definitions/objectName" },
+        "tokenKey": { "type": "string", "minLength": 1 }
+      }
+    },
+    "podIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clusterName": { "type": "string" },
+        "associations": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/objectName" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["roleARN", "associationNamespace"],
+            "properties": {
+              "roleARN": { "type": "string", "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$" },
+              "associationNamespace": { "$ref": "#/definitions/identifier" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "identifier": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
+    "objectName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$" },
+    "syncWave": { "type": ["integer", "null"] },
+    "protect": {
+      "description": "true: Prune=false,Delete=false. \"prune-only\": Prune=false. false: no sync-options annotation.",
+      "oneOf": [
+        { "type": "boolean" },
+        { "const": "prune-only" }
+      ]
+    },
+    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+    "labelsByFeature": {
+      "type": "object",
+      "description": "Labels per feature; `default` for a feature that has no map of its own.",
+      "additionalProperties": false,
+      "properties": {
+        "default": { "$ref": "#/definitions/stringMap" },
+        "networkPolicy": { "$ref": "#/definitions/stringMap" },
+        "quota": { "$ref": "#/definitions/stringMap" },
+        "rbac": { "$ref": "#/definitions/stringMap" },
+        "nats": { "$ref": "#/definitions/stringMap" },
+        "podIdentities": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "quantity": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(m|k|Ki|Mi|Gi|Ti|Pi|Ei|M|G|T|P|E)?$" },
+    "quantityMap": { "type": "object", "additionalProperties": { "$ref": "#/definitions/quantity" } },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "labels": { "$ref": "#/definitions/labelsByFeature" },
+        "networkPolicy": { "type": "boolean" },
+        "protect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "networkPolicy": { "$ref": "#/definitions/protect" },
+            "quota": { "$ref": "#/definitions/protect" },
+            "rbac": { "$ref": "#/definitions/protect" },
+            "nats": { "$ref": "#/definitions/protect" },
+            "podIdentities": { "$ref": "#/definitions/protect" }
+          }
+        },
+        "quota": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "hard"],
+          "properties": {
+            "name": { "$ref": "#/definitions/objectName" },
+            "hard": { "allOf": [{ "$ref": "#/definitions/quantityMap" }], "minProperties": 1 }
+          }
+        },
+        "limitRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "limits"],
+          "properties": {
+            "name": { "$ref": "#/definitions/objectName" },
+            "limits": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type"],
+                "properties": {
+                  "type": { "enum": ["Container", "Pod", "PersistentVolumeClaim"] },
+                  "default": { "$ref": "#/definitions/quantityMap" },
+                  "defaultRequest": { "$ref": "#/definitions/quantityMap" },
+                  "min": { "$ref": "#/definitions/quantityMap" },
+                  "max": { "$ref": "#/definitions/quantityMap" },
+                  "maxLimitRequestRatio": { "$ref": "#/definitions/quantityMap" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "peer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "podSelector": { "type": "object" },
+        "namespaceSelector": { "type": "object" },
+        "ipBlock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cidr"],
+          "properties": {
+            "cidr": { "type": "string", "pattern": "^[0-9a-fA-F.:]+/[0-9]{1,3}$" },
+            "except": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-fA-F.:]+/[0-9]{1,3}$" } }
+          }
+        }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["port"],
+        "properties": {
+          "port": { "type": ["integer", "string"] },
+          "endPort": { "type": "integer" },
+          "protocol": { "enum": ["TCP", "UDP", "SCTP"] }
+        }
+      }
+    },
+    "ingressRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from"],
+      "properties": {
+        "description": { "type": "string" },
+        "profiles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/definitions/identifier" } },
+        "from": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/peer" } },
+        "ports": { "$ref": "#/definitions/ports" }
+      }
+    },
+    "egressRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["to"],
+      "properties": {
+        "description": { "type": "string" },
+        "profiles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/definitions/identifier" } },
+        "to": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/peer" } },
+        "ports": { "$ref": "#/definitions/ports" }
+      }
+    },
+    "policyRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiGroups", "resources", "verbs"],
+      "properties": {
+        "apiGroups": { "type": "array", "items": { "type": "string" } },
+        "resources": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "resourceNames": { "type": "array", "items": { "type": "string" } },
+        "verbs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": { "enum": ["Group", "User", "ServiceAccount"] },
+        "name": { "type": "string", "minLength": 1 },
+        "namespace": { "$ref": "#/definitions/identifier" }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules"],
+      "properties": {
+        "rules": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/policyRule" } },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "protect": { "$ref": "#/definitions/protect" }
+      }
+    },
+    "roleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subjects"],
+      "properties": {
+        "clusterRole": { "$ref": "#/definitions/objectName" },
+        "role": { "$ref": "#/definitions/objectName" },
+        "subjects": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/subject" } },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "protect": { "$ref": "#/definitions/protect" }
+      }
+    },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile"],
+      "properties": {
+        "profile": { "$ref": "#/definitions/identifier" },
+        "labels": { "$ref": "#/definitions/labelsByFeature" },
+        "nats": { "type": "boolean" },
+        "podIdentities": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/objectName" } },
+        "roles": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/objectName" },
+          "additionalProperties": { "$ref": "#/definitions/role" }
+        },
+        "roleBindings": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/objectName" },
+          "additionalProperties": { "$ref": "#/definitions/roleBinding" }
+        }
+      }
+    },
+    "clusterRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules"],
+      "properties": {
+        "rules": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/policyRule" } },
+        "aggregateTo": { "type": "array", "uniqueItems": true, "items": { "enum": ["admin", "edit", "view"] } },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "syncWave": { "$ref": "#/definitions/syncWave" },
+        "protect": { "$ref": "#/definitions/protect" }
+      }
+    }
+  }
+}

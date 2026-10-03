@@ -1,0 +1,5 @@
+# nats.servers is required as soon as a tenant has an account.
+profiles:
+  team: {}
+tenants:
+  team-a: {profile: team, nats: true}

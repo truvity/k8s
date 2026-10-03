@@ -1,0 +1,5 @@
+# A profile that asks for the policy needs the policy's name.
+profiles:
+  team: {networkPolicy: true}
+tenants:
+  team-a: {profile: team}

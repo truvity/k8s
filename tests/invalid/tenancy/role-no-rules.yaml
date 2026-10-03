@@ -1,0 +1,9 @@
+profiles:
+  team:
+    quota: {name: tenant-quota, hard: {requests.cpu: "4"}}
+
+tenants:
+  team-a:
+    profile: team
+    roles:
+      r: {rules: []}
