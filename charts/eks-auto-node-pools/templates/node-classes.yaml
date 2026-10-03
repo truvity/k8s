@@ -1,0 +1,77 @@
+{{- /*
+A NodeClass for every shared class (nodeClasses) and for every pool that owns
+one (nodePools[].nodeClass). Pools with neither use Auto Mode's built-in
+`default`, which this chart never renders or touches: the service owns it.
+
+Why a pool needs its own: allocatable ephemeral storage is a property of the
+NodeClass, not of the instance, so a pool whose pods request disk is packed by
+the disk however big the node is.
+
+Everything except the volume mirrors `default`:
+
+  role     the cluster's Auto Mode node role, by name. Not a new role: EKS
+           created that role's EC2 access entry with the cluster, and a class
+           on any other role needs an access entry of its own before a node
+           can join.
+  subnets  subnetSelectorTags, the caller's.
+  sg       the EKS-created cluster security group, selected by
+           aws:eks:cluster-name (a tag in the aws: namespace, which only AWS
+           can write, so nothing else can ever match it).
+  pods     OPTIONAL (podSubnets): pod IPs come from podSubnetSelectorTags,
+           with the same cluster security group (EKS requires pod security
+           group selectors with pod subnet selectors). Only NEW nodes: a
+           running node keeps its ENIs.
+
+Sync-wave -1: a class is applied before the pools that name it. A pool whose
+class does not exist yet provisions nothing until it does.
+
+Reference: https://docs.aws.amazon.com/eks/latest/userguide/create-node-class.html
+*/ -}}
+{{- $classes := list }}
+{{- range .Values.nodePools }}
+{{- with .nodeClass }}{{ $classes = append $classes . }}{{ end }}
+{{- end }}
+{{- range .Values.nodeClasses }}{{ $classes = append $classes . }}{{ end }}
+{{- if $classes }}
+{{- if not .Values.clusterName }}{{ fail "clusterName is required when a NodeClass is rendered: the cluster security group is selected by it" }}{{ end }}
+{{- if not .Values.subnetSelectorTags }}{{ fail "subnetSelectorTags is required when a NodeClass is rendered: the chart cannot know how the VPC tags its subnets" }}{{ end }}
+{{- end }}
+{{- $seen := dict }}
+{{- range $classes }}
+{{- if hasKey $seen .name }}{{ fail (printf "NodeClass %s is defined twice" .name) }}{{ end }}
+{{- $_ := set $seen .name true }}
+---
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: {{ .name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    {{- if $.Values.protect }}
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    {{- end }}
+spec:
+  role: {{ required (printf "NodeClass %s: role (the cluster's Auto Mode node role) is required" .name) .role }}
+  subnetSelectorTerms:
+    - tags:
+        {{- toYaml $.Values.subnetSelectorTags | nindent 8 }}
+  securityGroupSelectorTerms:
+    - tags:
+        "aws:eks:cluster-name": {{ $.Values.clusterName }}
+{{- if .podSubnets }}
+{{- if not $.Values.podSubnetSelectorTags }}{{ fail (printf "NodeClass %s sets podSubnets, which needs podSubnetSelectorTags" .name) }}{{ end }}
+  podSubnetSelectorTerms:
+    - tags:
+        {{- toYaml $.Values.podSubnetSelectorTags | nindent 8 }}
+  podSecurityGroupSelectorTerms:
+    - tags:
+        "aws:eks:cluster-name": {{ $.Values.clusterName }}
+{{- end }}
+  networkPolicy: {{ $.Values.classDefaults.networkPolicy }}
+  networkPolicyEventLogs: {{ $.Values.classDefaults.networkPolicyEventLogs }}
+  snatPolicy: {{ $.Values.classDefaults.snatPolicy }}
+  ephemeralStorage:
+    size: {{ .ephemeralStorage.size }}
+    iops: {{ .ephemeralStorage.iops | int64 }}
+    throughput: {{ .ephemeralStorage.throughput | int64 }}
+{{- end }}

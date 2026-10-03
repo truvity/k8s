@@ -1,0 +1,9 @@
+clusterName: example-cluster
+subnetSelectorTags: {example.com/subnet-tier: nodes}
+nodePools:
+  - name: general
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [m]
+    nodeClassName: standard
+    nodeClass: {name: own, role: r, ephemeralStorage: {size: 80Gi, iops: 3000, throughput: 125}}

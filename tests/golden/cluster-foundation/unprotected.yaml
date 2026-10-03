@@ -1,0 +1,44 @@
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-app
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-kept
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-foundation/templates/role-bindings.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: example-readers
+subjects:
+  - kind: Group
+    name: example-cluster:viewer
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io

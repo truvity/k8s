@@ -1,0 +1,11 @@
+{{- with .Values.eksAuto.networkPolicyController }}
+{{- if .enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  {{- include "cluster-foundation.metadata" (dict "root" $ "name" "amazon-vpc-cni" "namespace" "kube-system" "entry" . "where" "eksAuto.networkPolicyController") | nindent 2 }}
+data:
+  enable-network-policy-controller: "true"
+{{- end }}
+{{- end }}

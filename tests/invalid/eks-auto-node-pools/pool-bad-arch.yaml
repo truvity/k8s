@@ -1,0 +1,2 @@
+nodePools:
+  - {name: general, archs: [riscv], capacityTypes: [on-demand], categories: [m]}

@@ -1,0 +1,22 @@
+# protect off: what a stack renders until it adds the guard. Tuned defaults.
+protect: false
+clusterName: example-cluster
+subnetSelectorTags:
+  example.com/subnet-tier: nodes
+poolDefaults:
+  expireAfter: 168h
+  terminationGracePeriod: 1h0m0s
+  consolidationPolicy: WhenEmpty
+  consolidateAfter: 10m
+classDefaults:
+  networkPolicy: DefaultDeny
+nodePools:
+  - name: general
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [m]
+    nodeClassName: standard
+nodeClasses:
+  - name: standard
+    role: example-node-role
+    ephemeralStorage: {size: 80Gi, iops: 3000, throughput: 125}

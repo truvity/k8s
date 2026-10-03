@@ -1,0 +1,2 @@
+storageClasses:
+  fast: {isDefault: true}

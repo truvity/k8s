@@ -1,0 +1,2 @@
+nodePools:
+  - {name: general, archs: [arm64], capacityTypes: [reserved], categories: [m]}

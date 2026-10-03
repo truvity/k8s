@@ -1,0 +1,129 @@
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-app
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "10"
+
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-agents
+  labels:
+    example.com/tier: platform
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "10"
+    cluster-baseline/psa-reason: runs host-level agents; cannot meet baseline
+    example.com/owner: platform-team
+
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scratch
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+
+---
+# Source: cluster-foundation/templates/eks-auto.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: amazon-vpc-cni
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "5"
+data:
+  enable-network-policy-controller: "true"
+
+---
+# Source: cluster-foundation/templates/storage-classes.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: archive
+provisioner: ebs.csi.eks.amazonaws.com
+reclaimPolicy: Retain
+
+---
+# Source: cluster-foundation/templates/storage-classes.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.eks.amazonaws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  encrypted: "true"
+  type: gp3
+
+---
+# Source: cluster-foundation/templates/role-bindings.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: example-admins
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+subjects:
+  - kind: Group
+    name: example-cluster:admin
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: cluster-foundation/templates/role-bindings.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: example-readers
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+subjects:
+  - kind: Group
+    name: example-cluster:viewer
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: reader@example.com
+    apiGroup: rbac.authorization.k8s.io
+  - kind: ServiceAccount
+    name: reporter
+    namespace: example-app
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io

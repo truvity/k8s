@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cluster-foundation values",
+  "description": "An unknown key is an error, not a silent no-op: a typo in a mode or in `protect` would otherwise leave a namespace unlabelled or unprotected and the rollout would look finished.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it."
+    },
+    "podSecurity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["", "privileged", "baseline", "restricted"] },
+        "version": {
+          "type": "string",
+          "pattern": "^(|latest|v1\\.[0-9]+)$"
+        },
+        "modes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["warn", "audit", "enforce"] }
+        },
+        "unenforced": { "type": "boolean" },
+        "reasonAnnotation": { "$ref": "#/definitions/annotationKey" }
+      }
+    },
+    "protect": { "type": "boolean" },
+    "helmKeep": { "type": "boolean" },
+    "namespaces": {
+      "type": "object",
+      "description": "Namespaces by name. The name must be a DNS label.",
+      "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
+      "additionalProperties": { "$ref": "#/definitions/namespace" }
+    },
+    "clusterRoleBindings": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/objectNamePattern" },
+      "additionalProperties": { "$ref": "#/definitions/clusterRoleBinding" }
+    },
+    "storageClasses": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/objectNamePattern" },
+      "additionalProperties": { "$ref": "#/definitions/storageClass" }
+    },
+    "eksAuto": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "networkPolicyController": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "syncWave": { "$ref": "#/definitions/syncWave" },
+            "protect": { "type": ["boolean", "null"] }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "objectNamePattern": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$" },
+    "annotationKey": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
+    },
+    "syncWave": { "type": ["integer", "null"] },
+    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["privileged", "baseline", "restricted"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "syncWave": { "$ref": "#/definitions/syncWave" },
+        "protect": { "type": ["boolean", "null"], "description": "Overrides the chart's protect for this namespace." },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "clusterRoleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clusterRole", "subjects"],
+      "properties": {
+        "clusterRole": { "type": "string", "minLength": 1 },
+        "subjects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "name"],
+            "properties": {
+              "kind": { "enum": ["Group", "User", "ServiceAccount"] },
+              "name": { "type": "string", "minLength": 1 },
+              "namespace": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "syncWave": { "$ref": "#/definitions/syncWave" },
+        "protect": { "type": ["boolean", "null"] },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "storageClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provisioner"],
+      "properties": {
+        "provisioner": { "type": "string", "minLength": 1 },
+        "isDefault": { "type": "boolean" },
+        "reclaimPolicy": { "enum": ["Delete", "Retain"] },
+        "volumeBindingMode": { "enum": ["Immediate", "WaitForFirstConsumer"] },
+        "allowVolumeExpansion": { "type": "boolean" },
+        "parameters": { "$ref": "#/definitions/stringMap" },
+        "syncWave": { "$ref": "#/definitions/syncWave" },
+        "protect": { "type": ["boolean", "null"] },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      }
+    }
+  }
+}

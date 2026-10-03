@@ -1,0 +1,16 @@
+# protect off: no object carries the sync-options annotation, except the one
+# entry that asks for it. This is what a stack renders until it adds the guard.
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes: [warn, audit, enforce]
+protect: false
+namespaces:
+  example-app: {}
+  example-kept:
+    protect: true
+clusterRoleBindings:
+  example-readers:
+    clusterRole: view
+    subjects:
+      - {kind: Group, name: "example-cluster:viewer"}

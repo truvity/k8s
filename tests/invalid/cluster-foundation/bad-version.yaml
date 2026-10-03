@@ -1,0 +1,2 @@
+podSecurity: {level: restricted, version: "1.34", modes: [warn, audit, enforce]}
+namespaces: {example-app: {}}

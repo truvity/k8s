@@ -1,0 +1,71 @@
+# Nothing here names an estate. The lists are empty; the tags that find the
+# cluster's subnets are the caller's; the numbers below are the documented
+# defaults of Karpenter and EKS Auto Mode, restated so a pool says what it
+# gets and a changed upstream default cannot split the pools silently.
+
+# The EKS cluster's name. Required when a NodeClass is rendered: the security
+# group of the cluster is found by the tag aws:eks:cluster-name, which only
+# AWS can write.
+clusterName: ""
+
+# The tags that select the subnets nodes are placed in (and, for a class with
+# `podSubnets`, the subnets pod IPs come from). Required when a NodeClass is
+# rendered; the chart cannot know how your VPC tags its subnets.
+#
+#   subnetSelectorTags:    {example.com/subnet-tier: nodes, kubernetes.io/cluster/example-cluster: shared}
+#   podSubnetSelectorTags: {example.com/subnet-tier: pods,  kubernetes.io/cluster/example-cluster: shared}
+subnetSelectorTags: {}
+podSubnetSelectorTags: {}
+
+# Applied to every pool that does not set its own.
+poolDefaults:
+  # Auto Mode caps expireAfter + terminationGracePeriod at 21 days.
+  expireAfter: 336h
+  # How long a drain that a do-not-disrupt pod holds up may hold the pool's
+  # disruption budget.
+  terminationGracePeriod: 24h0m0s
+  # WhenEmptyOrUnderutilized or WhenEmpty.
+  consolidationPolicy: WhenEmptyOrUnderutilized
+  consolidateAfter: 5m
+
+# Applied to every NodeClass: Auto Mode's documented defaults.
+classDefaults:
+  networkPolicy: DefaultAllow
+  networkPolicyEventLogs: Disabled
+  snatPolicy: Random
+
+# Argo CD protection: deleting a NodePool drains every node it owns, and a
+# deleted NodeClass strands its pools. On, every object carries
+# argocd.argoproj.io/sync-options: Prune=false,Delete=false.
+protect: true
+
+# One entry per pool.
+#
+#   nodePools:
+#     - name: general                      # required
+#       archs: [arm64]                     # required: arm64, amd64
+#       capacityTypes: [on-demand]         # required: on-demand, spot
+#       categories: [m]                    # required: instance categories
+#       weight: 10                         # optional
+#       taints:                            # optional
+#         - {key: dedicated, value: "true", effect: NoSchedule}
+#       cpuLimit: 64                       # optional: pool-wide vCPU cap
+#       maxInstanceCpu: 8                  # optional: per-node vCPU ceiling
+#       zones: [zone-a]                    # optional: pin to zones
+#       expireAfter / terminationGracePeriod / consolidationPolicy
+#                                          # optional: replace poolDefaults
+#       fastEmptyReclaim: false            # optional: reclaim ALL empty nodes at once
+#       nodeClassName: standard            # a class from nodeClasses; or
+#       nodeClass: {...}                   # a class of this pool's own (below);
+#                                          # neither: Auto Mode's built-in `default`
+nodePools: []
+
+# Classes shared by pools (by nodeClassName), each rendered once. A pool's own
+# `nodeClass` has the same shape.
+#
+#   nodeClasses:
+#     - name: standard
+#       role: example-node-role            # required: the cluster's Auto Mode node role, by name
+#       podSubnets: false                  # pod IPs from podSubnetSelectorTags
+#       ephemeralStorage: {size: 80Gi, iops: 3000, throughput: 125}   # required
+nodeClasses: []

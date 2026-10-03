@@ -1,0 +1,44 @@
+{{- /*
+One Namespace per entry of `namespaces`, with its Pod Security labels (every
+mode in podSecurity.modes, at the entry's level and the pinned version) and
+the protection annotation. Rendered in name order.
+*/ -}}
+{{- $root := . -}}
+{{- $psa := .Values.podSecurity -}}
+{{- $names := keys (.Values.namespaces | default dict) | sortAlpha -}}
+{{- if $names }}
+{{- if not $psa.level }}{{ fail "podSecurity.level is required when namespaces are listed: say which level a namespace gets by default" }}{{ end }}
+{{- if not $psa.version }}{{ fail "podSecurity.version is required when namespaces are listed: pin a Kubernetes minor (\"v1.34\") or say \"latest\" on purpose" }}{{ end }}
+{{- if not $psa.modes }}{{ fail "podSecurity.modes is required when namespaces are listed: a subset of warn, audit, enforce" }}{{ end }}
+{{- if and (not (has "enforce" $psa.modes)) (not $psa.unenforced) }}
+{{- fail "podSecurity.modes has no enforce: that renders namespaces that enforce nothing. Add enforce, or set podSecurity.unenforced: true to say it is on purpose" }}
+{{- end }}
+{{- end }}
+{{- range $name := $names }}
+{{- $entry := index $root.Values.namespaces $name | default dict -}}
+{{- $level := $psa.level -}}
+{{- if $entry.level -}}
+{{- if and (ne $entry.level $psa.level) (not $entry.reason) -}}
+{{- fail (printf "namespaces.%s has level %s, not the default %s, and no reason; say why, so the exemption can be reviewed and retired" $name $entry.level $psa.level) -}}
+{{- end -}}
+{{- $level = $entry.level -}}
+{{- end -}}
+{{- $labels := dict -}}
+{{- range $mode := $psa.modes -}}
+{{- $_ := set $labels (printf "pod-security.kubernetes.io/%s" $mode) $level -}}
+{{- $_ := set $labels (printf "pod-security.kubernetes.io/%s-version" $mode) $psa.version -}}
+{{- end -}}
+{{- range $k, $v := ($entry.labels | default dict) -}}
+{{- if hasPrefix "pod-security.kubernetes.io/" $k -}}
+{{- fail (printf "namespaces.%s.labels sets %s: Pod Security labels come from podSecurity and the entry's level" $name $k) -}}
+{{- end -}}
+{{- $_ := set $labels $k $v -}}
+{{- end -}}
+{{- $computed := dict -}}
+{{- if $entry.reason -}}{{- $_ := set $computed $psa.reasonAnnotation $entry.reason -}}{{- end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  {{- include "cluster-foundation.metadata" (dict "root" $root "name" $name "entry" $entry "labels" $labels "computed" $computed "where" (printf "namespaces.%s" $name)) | nindent 2 }}
+{{- end }}

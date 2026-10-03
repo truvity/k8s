@@ -1,0 +1,4 @@
+clusterRoleBindings:
+  example-readers:
+    clusterRole: view
+    subjects: [{kind: ServiceAccount, name: reporter}]

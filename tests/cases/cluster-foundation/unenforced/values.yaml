@@ -1,0 +1,8 @@
+# Warn and audit only, on purpose: `unenforced` is the line that says so.
+podSecurity:
+  level: baseline
+  version: latest
+  modes: [warn, audit]
+  unenforced: true
+namespaces:
+  example-app: {}

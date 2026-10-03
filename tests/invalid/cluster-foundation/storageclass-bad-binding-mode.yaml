@@ -1,0 +1,2 @@
+storageClasses:
+  fast: {provisioner: x.csi, volumeBindingMode: Eventually}

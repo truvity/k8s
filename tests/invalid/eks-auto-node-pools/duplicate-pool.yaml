@@ -1,0 +1,3 @@
+nodePools:
+  - {name: general, archs: [arm64], capacityTypes: [on-demand], categories: [m]}
+  - {name: general, archs: [amd64], capacityTypes: [on-demand], categories: [m]}

@@ -1,0 +1,2 @@
+nodePools:
+  - {name: general, capacityTypes: [on-demand], categories: [m]}

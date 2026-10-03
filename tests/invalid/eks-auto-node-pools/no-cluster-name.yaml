@@ -1,0 +1,3 @@
+subnetSelectorTags: {example.com/subnet-tier: nodes}
+nodeClasses:
+  - {name: standard, role: r, ephemeralStorage: {size: 80Gi, iops: 3000, throughput: 125}}

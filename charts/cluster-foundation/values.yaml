@@ -1,0 +1,87 @@
+# Nothing here names an estate. Every list is empty and every setting that
+# decides what a namespace may run (level, version, modes) must be said by the
+# caller: the render refuses to guess.
+
+# --- Pod Security Admission ---------------------------------------------------
+podSecurity:
+  # The level a namespace gets unless its entry says otherwise. One of
+  # privileged, baseline, restricted. Required when a namespace is listed.
+  level: ""
+  # The Pod Security Standards version, "latest" or a Kubernetes minor such as
+  # "v1.34". Required when a namespace is listed, and applied to every mode:
+  # with "latest" a cluster upgrade can tighten what an enforced namespace
+  # admits, so pin the minor.
+  version: ""
+  # The label kinds every namespace carries, from warn, audit, enforce.
+  # Required when a namespace is listed. A list without `enforce` renders a
+  # cluster that enforces nothing; the render refuses it unless `unenforced`
+  # says so on purpose.
+  modes: []
+  unenforced: false
+  # The annotation that carries a namespace's exemption reason, so the reason
+  # is visible with `kubectl get ns -o yaml` and not only in git. The same
+  # key the cluster-baseline chart writes.
+  reasonAnnotation: cluster-baseline/psa-reason
+
+# --- Deletion protection ------------------------------------------------------
+# Default for every object this chart renders; an entry may override it with
+# its own `protect`. On, an object carries
+#   argocd.argoproj.io/sync-options: Prune=false,Delete=false
+# so Argo CD neither prunes it when it leaves a render nor deletes it with its
+# Application. Deleting a Namespace deletes everything in it, which is why it
+# is on by default. Off renders no annotation of that kind.
+protect: true
+# Also render helm.sh/resource-policy: keep on protected objects, for a Helm
+# release that may be uninstalled.
+helmKeep: false
+
+# --- Namespaces ---------------------------------------------------------------
+# By name. Each entry:
+#
+#   namespaces:
+#     team-a: {}                           # the defaults above
+#     node-agents:
+#       level: privileged
+#       reason: "runs host-level agents; cannot meet baseline"
+#       syncWave: 10                       # optional: argocd sync-wave
+#       labels: {example.com/tier: platform}
+#       annotations: {example.com/owner: platform}
+#       protect: false                     # optional: this one only
+#
+# `level` replaces the default level and must carry a `reason`, which the
+# render refuses to omit. `labels` and `annotations` are literal and may not
+# set a key this chart computes (pod-security.kubernetes.io/*, the sync-wave,
+# sync-options and reason keys).
+namespaces: {}
+
+# --- ClusterRoleBindings ------------------------------------------------------
+#   clusterRoleBindings:
+#     example-viewers:
+#       clusterRole: view
+#       subjects:
+#         - {kind: Group, name: "example-cluster:viewer"}
+#       syncWave: 15
+clusterRoleBindings: {}
+
+# --- StorageClasses -----------------------------------------------------------
+#   storageClasses:
+#     fast:
+#       provisioner: ebs.csi.eks.amazonaws.com
+#       isDefault: true
+#       volumeBindingMode: WaitForFirstConsumer
+#       allowVolumeExpansion: true
+#       parameters: {type: gp3, encrypted: "true"}
+storageClasses: {}
+
+# --- EKS Auto Mode ------------------------------------------------------------
+eksAuto:
+  # EKS Auto Mode ships the NetworkPolicy machinery, but its controller stays
+  # off until the ConfigMap `amazon-vpc-cni` in kube-system says
+  # enable-network-policy-controller: "true"; until then every NetworkPolicy
+  # in the cluster is silently ignored. Off by default: switching it on
+  # changes nothing for pods until a policy selects them, but it is the line
+  # between "policies exist" and "policies apply".
+  networkPolicyController:
+    enabled: false
+    syncWave: null
+    protect: null

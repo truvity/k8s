@@ -6,6 +6,31 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/cluster-foundation`: the objects a cluster needs before any workload,
+  as data, published to `oci://ghcr.io/truvity/charts/cluster-foundation` from
+  the next tag. `namespaces` renders one whole `Namespace` per entry with its
+  Pod Security labels (level, version and every mode are required values; an
+  entry that departs from the default level must carry a `reason`; a mode list
+  without `enforce` is refused unless `podSecurity.unenforced` says it is on
+  purpose) and `argocd.argoproj.io/sync-options: Prune=false,Delete=false`
+  (`protect`, on by default, overridable per entry). `clusterRoleBindings` binds
+  groups, users or service accounts to a ClusterRole. `storageClasses` renders
+  StorageClasses, one of them optionally the default. `eksAuto.networkPolicyController`
+  renders the `amazon-vpc-cni` ConfigMap that turns the EKS Auto Mode
+  NetworkPolicy controller on. It is for the tool that OWNS a namespace;
+  `cluster-baseline` stays the labels-only chart for namespaces someone else
+  owns. Nothing is defaulted to an estate: every list is empty.
+- `charts/eks-auto-node-pools`: Karpenter `NodePool`s and the EKS Auto Mode
+  `NodeClass`es they need, published to
+  `oci://ghcr.io/truvity/charts/eks-auto-node-pools` from the next tag. Pools
+  take architectures, capacity types, instance categories, taints, limits, zone
+  pins and expiry; one disruption budget per pool keeps consolidation to a node
+  at a time. Subnet tags, the node role and the cluster name are values; the
+  built-in `default` class is never rendered. `protect` (on by default) marks
+  every object so Argo CD neither prunes nor deletes it.
+  `just lint` and `just test` cover both charts (schema, 18 and 15 refused
+  fixtures, goldens).
+
 ## v0.9.0
 
 - `charts/volume-snapshot-crds` (the CSI external-snapshotter CRDs) and `charts/cilium-crds` (the Cilium CRDs) move here from `truvity/ocictl` and are published from here (`oci://ghcr.io/truvity/charts/<name>`) at the UPSTREAM version they mirror, as they were from `truvity/ocictl`: `8.6.0` and `1.20.1` today, both already in the registry, so the first release here publishes nothing for them. A release publishes a chart only when its version is not in the registry yet, and never overwrites one. The rendered CRDs are byte-identical to the ocictl charts. The CRDs are generated from each `crdctl.yaml` by `just crds` (crdctl from a pinned `truvity/ocictl` release) and committed; `just crds-check` fails when they drift from the pinned upstream.

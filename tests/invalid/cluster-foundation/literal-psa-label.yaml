@@ -1,0 +1,5 @@
+# A Pod Security label comes from podSecurity, never from a literal label.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+namespaces:
+  example-app:
+    labels: {pod-security.kubernetes.io/enforce: privileged}

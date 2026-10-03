@@ -1,0 +1,2 @@
+clusterRoleBindings:
+  example-readers: {clusterRole: view}

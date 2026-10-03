@@ -1,0 +1,24 @@
+{{- /* One ClusterRoleBinding per entry of `clusterRoleBindings`, in name order. */ -}}
+{{- $root := . -}}
+{{- range $name := (keys (.Values.clusterRoleBindings | default dict) | sortAlpha) }}
+{{- $entry := index $root.Values.clusterRoleBindings $name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  {{- include "cluster-foundation.metadata" (dict "root" $root "name" $name "entry" $entry "where" (printf "clusterRoleBindings.%s" $name)) | nindent 2 }}
+subjects:
+  {{- range $entry.subjects }}
+  - kind: {{ .kind }}
+    name: {{ .name }}
+    {{- if eq .kind "ServiceAccount" }}
+    namespace: {{ required (printf "clusterRoleBindings.%s: a ServiceAccount subject needs a namespace" $name) .namespace }}
+    {{- else }}
+    apiGroup: rbac.authorization.k8s.io
+    {{- end }}
+  {{- end }}
+roleRef:
+  kind: ClusterRole
+  name: {{ $entry.clusterRole }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
