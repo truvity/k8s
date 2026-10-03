@@ -1,0 +1,113 @@
+---
+# Source: tenancy/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci
+  labels:
+    example.com/tier: ci
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "10"
+
+---
+# Source: tenancy/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-legacy
+  labels:
+    example.com/tier: ci
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/sync-wave: "5"
+    example.com/owner: ci
+    example.com/psa-reason: the legacy agent cannot meet restricted yet
+
+---
+# Source: tenancy/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: person-a
+  labels:
+    example.com/tenant: "true"
+    example.com/tier: person
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+
+---
+# Source: tenancy/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: person-b
+  labels:
+    example.com/tenant: "true"
+    example.com/tier: person
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: ci
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  hard:
+    requests.cpu: "16"
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: ci-legacy
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  hard:
+    requests.cpu: "16"
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: shared
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  hard:
+    requests.cpu: "16"

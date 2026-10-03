@@ -1,0 +1,4 @@
+# Pod Security labels come from podSecurity, never from labels.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+profiles: {team: {namespace: {}, labels: {namespace: {pod-security.kubernetes.io/enforce: privileged}}}}
+tenants: {team-a: {profile: team}}

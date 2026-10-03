@@ -94,3 +94,23 @@ annotations:
   {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+The Namespace a tenant asks for, merged: the profile's `namespace` map with the
+tenant's over it. `render` is true when there is a Namespace to render: a
+`namespace` map on the profile or on the tenant, and no `namespace: false` on
+the tenant. Rendered as YAML (read it back with fromYaml).
+
+Called as: include "tenancy.namespaceSpec" (dict "profile" $p "tenant" $t) | fromYaml
+*/}}
+{{- define "tenancy.namespaceSpec" -}}
+{{- $pn := (.profile | default dict).namespace -}}
+{{- $tn := (.tenant | default dict).namespace -}}
+{{- if and (not (kindIs "bool" $tn)) (or (kindIs "map" $pn) (kindIs "map" $tn)) -}}
+{{- $merged := mergeOverwrite (deepCopy ($pn | default dict)) (deepCopy ($tn | default dict)) -}}
+{{- $_ := set $merged "render" true -}}
+{{- toYaml $merged -}}
+{{- else -}}
+render: false
+{{- end -}}
+{{- end -}}

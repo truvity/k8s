@@ -904,17 +904,19 @@ budget of one node, so consolidation cannot move more than one node at a time;
 The per-tenant plumbing of a shared cluster, as data. Install a pinned version
 from `oci://ghcr.io/truvity/charts/tenancy`.
 
-A tenant is a namespace that already exists. This chart renders what each one
-needs around it and never the Namespace itself: the Namespace, with its Pod
-Security labels and deletion protection, is `cluster-foundation`'s object, and
-two Applications owning one Namespace take turns dropping each other's labels
-(`just lint` fails if a golden renders one). Feed both charts from the same
-list of tenants.
+A tenant is a namespace. This chart renders what each one needs around it and,
+when the tenant's profile (or the tenant) carries a `namespace` map, the
+Namespace itself, with its Pod Security labels and deletion protection. A
+namespace someone else renders is a tenant with `namespace: false`, or a
+profile with no `namespace`: never render one Namespace from two Applications,
+they take turns dropping each other's labels. `cluster-foundation` keeps the
+cluster's own (system) namespaces.
 
 What it renders, per tenant, in the tenant's own namespace unless noted:
 
 | Feature | Objects |
 | --- | --- |
+| `namespace` | The `Namespace` (cluster-scoped), with its Pod Security labels and protection; only where asked for (below). |
 | `networkPolicy` | One `NetworkPolicy` that selects every pod and lists both policy types: default-deny both ways, plus the ordered `networkPolicy.ingress` and `.egress` rules that apply to the tenant's profile. |
 | `quota` | A `ResourceQuota` and a `LimitRange`, from the profile. |
 | `rbac` | Namespaced `Role`s and `RoleBinding`s (to a `ClusterRole` or to one of the tenant's own `Role`s), from the tenant. |
@@ -930,15 +932,16 @@ refused.
 
 | Value | Default | Meaning |
 | --- | --- | --- |
-| `profiles.<p>` | none | What tenants of one tier share: `labels` (per feature, `default` for the rest), `networkPolicy` (bool), `quota` (`name`, `hard`), `limitRange` (`name`, `limits`), `protect` (per feature). |
-| `tenants.<namespace>` | none | `profile` (required), `labels` (merged over the profile's), `nats` (bool), `podIdentities` (names), `roles`, `roleBindings`. |
+| `profiles.<p>` | none | What tenants of one tier share: `labels` (per feature, `default` for the rest), `networkPolicy` (bool), `quota` (`name`, `hard`), `limitRange` (`name`, `limits`), `namespace` (below), `protect` (per feature). |
+| `tenants.<namespace>` | none | `profile` (required), `labels` (merged over the profile's), `namespace` (`false`, or a map merged over the profile's), `nats` (bool), `podIdentities` (names), `roles`, `roleBindings`. |
 | `networkPolicy` | no name | `name`, `intraNamespace` (default `true`: the first rule both ways), `ingress[]` (`from`, `ports`), `egress[]` (`to`, `ports`). A rule may carry `profiles: [..]` to apply to those tiers only and `description`, neither of which is rendered. Peers are `podSelector`, `namespaceSelector` and `ipBlock`. |
 | `clusterRoles.<name>` | none | `rules` (required), `aggregateTo` (`admin`, `edit`, `view`), `labels`, `syncWave`, `protect`. |
 | `nats` | none | `servers` (required with a NATS tenant), `serviceAccount` (`nack`), `tokenSecret` (`nack-nats-token`), `tokenKey` (`token`). |
 | `podIdentities` | none | `clusterName` and `associations.<name>`: `roleARN`, `associationNamespace` (both required). |
 | `protect` | `true` | See below. |
 | `helmKeep` | `false` | Also `helm.sh/resource-policy: keep` on protected objects. |
-| `syncWaves` | all `null` | `argocd.argoproj.io/sync-wave` per feature: `clusterRoles`, `networkPolicy`, `quota`, `rbac`, `nats`, `podIdentities`. |
+| `syncWaves` | all `null` | `argocd.argoproj.io/sync-wave` per feature: `clusterRoles`, `networkPolicy`, `quota`, `rbac`, `nats`, `podIdentities`, `namespaces`. |
+| `podSecurity` | none | `level`, `version` and `modes` of the Namespaces, required once one is rendered; `unenforced` (default modes without `enforce` on purpose); `reasonAnnotation` (the annotation key that carries a `reason`; required when one is used). |
 
 ### Protection
 
@@ -949,6 +952,26 @@ value is the default; a profile overrides it per feature
 (`profiles.<p>.protect.networkPolicy`), and a role, a binding or a ClusterRole
 per entry. A tenant that leaves a list is rarely a decision to delete what
 sits in its namespace, so removal is meant to be a manual act.
+
+### Namespaces
+
+A `namespace` map on a profile asks for one Namespace per tenant of the profile
+(`{}` is enough); one on a tenant is merged over the profile's, and
+`namespace: false` on a tenant opts out. Keys, all optional: `level` and
+`reason`, `modes`, `unenforced`, `syncWave`, `protect`, `annotations`. The
+Namespace carries `pod-security.kubernetes.io/<mode>` and `<mode>-version` for
+every mode of the entry's `modes`, else `podSecurity.modes`, at the entry's
+`level`, else `podSecurity.level`, and `podSecurity.version`; the labels of the
+`namespace` feature (a label under `pod-security.kubernetes.io/` is refused);
+the reason as an annotation; `argocd.argoproj.io/sync-options` per `protect`
+(the `namespace` feature: a profile may turn it off for tiers whose namespaces
+stay deletable on purpose).
+
+Refused rather than guessed: a level other than the default without a `reason`;
+no modes anywhere; `modes` outside warn, audit and enforce, repeated, or empty;
+a list of modes without `enforce` unless `unenforced: true` (on the entry or
+profile, or `podSecurity.unenforced`) says the warn-first rollout is on
+purpose.
 
 ### Labels
 

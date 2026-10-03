@@ -1,0 +1,3 @@
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+profiles: {team: {namespace: {modes: [warn, warn]}}}
+tenants: {team-a: {profile: team}}

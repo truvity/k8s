@@ -1,7 +1,7 @@
-# A tenant cannot ask for its Namespace: that is cluster-foundation's object.
+# A key the chart does not know is refused, not ignored.
 profiles:
   team:
     quota: {name: tenant-quota, hard: {requests.cpu: "4"}}
 
 tenants:
-  team-a: {profile: team, namespace: {}}
+  team-a: {profile: team, bogus: {}}

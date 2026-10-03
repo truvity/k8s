@@ -2,7 +2,8 @@ apiVersion: v2
 name: tenancy
 description: >-
   The per-tenant plumbing of a shared cluster, as data. For each tenant
-  namespace (the Namespace itself belongs to cluster-foundation): a baseline
+  namespace: the Namespace itself with its Pod Security labels (level, version and
+  modes per profile or tenant; a warn-first rollout must say so), a baseline
   NetworkPolicy, a ResourceQuota and LimitRange, RoleBindings and namespaced
   Roles, a NATS account (the NACK ServiceAccount, its token Secret and the
   Account), and EKS Pod Identity ServiceAccounts with their associations;

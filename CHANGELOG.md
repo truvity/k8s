@@ -6,6 +6,23 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/tenancy`: renders each tenant's `Namespace`, with its Pod Security
+  labels and deletion protection, where the tenant's profile (or the tenant)
+  carries a `namespace` map; a tenant with `namespace: false` is a namespace
+  someone else renders. `podSecurity` (`level`, `version`, `modes`) is required
+  once one is rendered; a `namespace` may say its own `level` (a different one
+  needs a `reason`, carried in the annotation `podSecurity.reasonAnnotation` names) and `modes` (a subset of `warn`, `audit`, `enforce`, no
+  repeats, at least one). A list of modes without `enforce` is a warn-first
+  rollout and is refused unless `unenforced: true` (on the entry or profile, or
+  `podSecurity.unenforced`) says it is on purpose. `protect` has a `namespace`
+  feature (profile or entry), and `syncWaves.namespaces` orders them. Nothing
+  changes for a values file that does not use it. This supersedes the
+  per-namespace `modes` proposed for `cluster-foundation`: the tenant
+  namespaces move here, and `cluster-foundation` keeps the cluster's own.
+  `just lint` no longer forbids a Namespace in the tenancy goldens; one golden
+  case (profiles that enforce, warn-first and opt out) and 16 refused fixtures
+  cover it. `Chart.yaml`, `values.yaml` and `docs/reference.md` describe it.
+
 ## v0.10.0
 
 - `charts/cluster-foundation`: the objects a cluster needs before any workload,

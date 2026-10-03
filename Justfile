@@ -44,13 +44,6 @@ lint:
       done
       echo "$chart: schema and $(ls tests/invalid/"$chart"/*.yaml | wc -l | tr -d ' ') negative fixtures OK"
     done
-    # The tenancy chart never renders a Namespace: a tenant's namespace is
-    # cluster-foundation's object, and two Applications owning one Namespace
-    # take turns dropping each other's labels.
-    if grep -lq '^kind: Namespace$' tests/golden/tenancy/*.yaml; then
-      echo "tenancy: a golden renders a Namespace" >&2
-      exit 1
-    fi
 
 # The CRD mirror charts ({{ crd-charts }}): upstream CRDs vendored verbatim
 # as charts/<chart>/templates/crds.yaml, generated from charts/<chart>/crdctl.yaml

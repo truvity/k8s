@@ -1,0 +1,4 @@
+# A Namespace whose modes have no enforce is a warn-first rollout and must say so.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+profiles: {team: {namespace: {modes: [warn, audit]}}}
+tenants: {team-a: {profile: team}}

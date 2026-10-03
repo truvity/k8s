@@ -1,0 +1,4 @@
+# Default modes without enforce, and nobody says it is on purpose.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit]}
+profiles: {team: {namespace: {}}}
+tenants: {team-a: {profile: team}}
