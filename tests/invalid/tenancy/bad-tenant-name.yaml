@@ -1,0 +1,6 @@
+profiles:
+  team:
+    quota: {name: tenant-quota, hard: {requests.cpu: "4"}}
+
+tenants:
+  Team_A: {profile: team}

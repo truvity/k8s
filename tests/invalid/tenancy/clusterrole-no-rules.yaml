@@ -1,0 +1,2 @@
+clusterRoles:
+  crds: {aggregateTo: [admin]}

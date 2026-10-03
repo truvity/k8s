@@ -1,0 +1,40 @@
+{{- /*
+A NATS account per tenant with `nats: true`: the ServiceAccount NACK presents,
+the long-lived token Secret of that account and the NACK Account custom
+resource that points at the Secret, named after the namespace.
+*/ -}}
+{{- $root := . -}}
+{{- $nats := .Values.nats -}}
+{{- range $ns := (keys (.Values.tenants | default dict) | sortAlpha) }}
+{{- $t := index $root.Values.tenants $ns }}
+{{- if $t.nats }}
+{{- if not $nats.servers }}{{ fail (printf "nats.servers is required: tenant %s has nats: true" $ns) }}{{ end }}
+{{- $p := include "tenancy.profile" (dict "root" $root "name" $ns "tenant" $t) | fromYaml }}
+{{- $labels := include "tenancy.labels" (dict "profile" $p "tenant" $t "feature" "nats") | fromYaml }}
+{{- $mode := include "tenancy.mode" (dict "root" $root "profile" $p "feature" "nats") }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $nats.serviceAccount "namespace" $ns "labels" $labels "wave" $root.Values.syncWaves.nats "mode" $mode) | nindent 2 }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $nats.tokenSecret "namespace" $ns "labels" $labels "wave" $root.Values.syncWaves.nats "mode" $mode "annotations" (dict "kubernetes.io/service-account.name" $nats.serviceAccount)) | nindent 2 }}
+type: kubernetes.io/service-account-token
+---
+apiVersion: jetstream.nats.io/v1beta2
+kind: Account
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $ns "namespace" $ns "labels" $labels "wave" $root.Values.syncWaves.nats "mode" $mode) | nindent 2 }}
+spec:
+  name: {{ $ns }}
+  servers:
+    {{- toYaml $nats.servers | nindent 4 }}
+  token:
+    secret:
+      name: {{ $nats.tokenSecret }}
+    token: {{ $nats.tokenKey }}
+{{- end }}
+{{- end }}

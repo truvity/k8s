@@ -1,0 +1,11 @@
+profiles:
+  team:
+    quota: {name: tenant-quota, hard: {requests.cpu: "4"}}
+
+tenants:
+  team-a:
+    profile: team
+    roles:
+      r: {rules: [{apiGroups: [""], resources: [pods], verbs: [get]}]}
+    roleBindings:
+      owners: {clusterRole: admin, role: r, subjects: [{kind: Group, name: g}]}

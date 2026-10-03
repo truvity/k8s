@@ -1,0 +1,4 @@
+networkPolicy:
+  name: tenant-baseline
+  egress:
+    - to: [{ipBlock: {cidr: anywhere}}]

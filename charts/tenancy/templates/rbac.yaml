@@ -1,0 +1,42 @@
+{{- /*
+The namespaced Roles and RoleBindings of each tenant, in name order. A binding
+names a ClusterRole (`clusterRole`) or a Role of the same tenant (`role`).
+*/ -}}
+{{- $root := . -}}
+{{- range $ns := (keys (.Values.tenants | default dict) | sortAlpha) }}
+{{- $t := index $root.Values.tenants $ns }}
+{{- $p := include "tenancy.profile" (dict "root" $root "name" $ns "tenant" $t) | fromYaml }}
+{{- $labels := include "tenancy.labels" (dict "profile" $p "tenant" $t "feature" "rbac") | fromYaml }}
+{{- $roles := $t.roles | default dict }}
+{{- range $name := (keys $roles | sortAlpha) }}
+{{- $e := index $roles $name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $name "namespace" $ns "labels" (ternary $e.labels $labels (hasKey $e "labels")) "wave" $root.Values.syncWaves.rbac "mode" (include "tenancy.mode" (dict "root" $root "profile" $p "feature" "rbac" "entry" $e))) | nindent 2 }}
+rules:
+  {{- toYaml $e.rules | nindent 2 }}
+{{- end }}
+{{- $bindings := $t.roleBindings | default dict }}
+{{- range $name := (keys $bindings | sortAlpha) }}
+{{- $e := index $bindings $name }}
+{{- $where := printf "tenants.%s.roleBindings.%s" $ns $name }}
+{{- if and $e.role (not (hasKey $roles $e.role)) }}
+{{- fail (printf "%s binds role %q, which is not in tenants.%s.roles; name a ClusterRole with `clusterRole` instead" $where $e.role $ns) }}
+{{- end }}
+{{- if and $e.role $e.clusterRole }}{{ fail (printf "%s names both role and clusterRole" $where) }}{{ end }}
+{{- if not (or $e.role $e.clusterRole) }}{{ fail (printf "%s names neither role nor clusterRole" $where) }}{{ end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $name "namespace" $ns "labels" (ternary $e.labels $labels (hasKey $e "labels")) "wave" $root.Values.syncWaves.rbac "mode" (include "tenancy.mode" (dict "root" $root "profile" $p "feature" "rbac" "entry" $e))) | nindent 2 }}
+subjects:
+  {{- include "tenancy.subjects" (dict "subjects" $e.subjects "where" $where) | trim | nindent 2 }}
+roleRef:
+  kind: {{ if $e.role }}Role{{ else }}ClusterRole{{ end }}
+  name: {{ default $e.clusterRole $e.role }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+{{- end }}

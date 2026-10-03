@@ -1,0 +1,5 @@
+profiles:
+  team: {}
+podIdentities: {clusterName: c, associations: {}}
+tenants:
+  team-a: {profile: team, podIdentities: [reports]}

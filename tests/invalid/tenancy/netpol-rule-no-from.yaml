@@ -1,0 +1,4 @@
+networkPolicy:
+  name: tenant-baseline
+  ingress:
+    - to: [{podSelector: {}}]

@@ -30,6 +30,22 @@ them, and for anything breaking, what to do.
   every object so Argo CD neither prunes nor deletes it.
   `just lint` and `just test` cover both charts (schema, 18 and 15 refused
   fixtures, goldens).
+- `charts/tenancy`: the per-tenant plumbing of a shared cluster, published to
+  `oci://ghcr.io/truvity/charts/tenancy` from the next tag. For each listed
+  tenant namespace it renders a baseline `NetworkPolicy` (default-deny both
+  ways plus ordered rules that may be limited to some profiles), a
+  `ResourceQuota` and `LimitRange`, namespaced `Role`s and `RoleBinding`s, a
+  NATS account (the NACK `ServiceAccount`, its token `Secret` and the `Account`)
+  and `ServiceAccount`s with their EKS `PodIdentityAssociation`s, which live in
+  a namespace the tenant cannot edit; and cluster-wide `ClusterRole`s that can
+  aggregate into `admin`, `edit` or `view`. Tenants share a profile (tier) that
+  carries the policy, quota, labels and per-feature protection. It never
+  renders a Namespace: that is `cluster-foundation`'s object. `protect`
+  (`true`, `"prune-only"` or `false`, per feature and per entry) controls the
+  Argo CD `sync-options`. A tenant that names a missing profile, a binding to a
+  Role the tenant does not have, NATS without servers or a pod identity that is
+  not declared is refused. Nothing is defaulted to an estate. `just lint` and
+  `just test` cover it (schema, 37 refused fixtures, goldens).
 
 ## v0.9.0
 

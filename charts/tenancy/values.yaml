@@ -1,0 +1,166 @@
+# Nothing here names an estate. Every map is empty: the render produces
+# nothing until a tenant is listed, and a tenant is refused unless the profile
+# it names exists.
+#
+# This chart never renders a Namespace. The Namespace of a tenant, with its Pod
+# Security labels and deletion protection, belongs to cluster-foundation (the
+# tool that owns a namespace renders the whole object). Install the two side
+# by side, from the same list of tenants, in separate Applications.
+
+# --- Deletion protection ------------------------------------------------------
+# Default for every object this chart renders. A profile may say otherwise per
+# feature (`profiles.<p>.protect.<feature>`), and a role, a binding or a
+# ClusterRole per entry (`protect`). One of
+#   true         argocd.argoproj.io/sync-options: Prune=false,Delete=false
+#   "prune-only" argocd.argoproj.io/sync-options: Prune=false
+#   false        no annotation of that kind
+# Argo CD neither prunes a protected object when it leaves a render nor deletes
+# it with its Application. Removing a tenant is then a manual act, which is the
+# point: a tenant leaving a list is rarely a decision to delete its namespace.
+protect: true
+# Also render helm.sh/resource-policy: keep on protected objects, for a Helm
+# release that may be uninstalled.
+helmKeep: false
+
+# --- Sync waves ---------------------------------------------------------------
+# argocd.argoproj.io/sync-wave per feature; null renders none.
+syncWaves:
+  clusterRoles: null
+  networkPolicy: null
+  quota: null
+  rbac: null
+  nats: null
+  podIdentities: null
+
+# --- Profiles -----------------------------------------------------------------
+# What tenants of one tier have in common. Each tenant names one.
+#
+#   profiles:
+#     team:
+#       labels:                       # per feature; `default` for any feature not named
+#         default: {example.com/tier: team}
+#         nats: {app.kubernetes.io/name: nack, example.com/tier: team}
+#       networkPolicy: true           # render `networkPolicy` rules for this tier
+#       protect: {networkPolicy: prune-only}
+#       quota:
+#         name: tenant-quota
+#         hard: {requests.cpu: "8", requests.memory: 16Gi}
+#       limitRange:
+#         name: tenant-defaults
+#         limits:
+#           - type: Container
+#             defaultRequest: {cpu: 50m, memory: 64Mi}
+#             default: {cpu: "1", memory: 512Mi}
+#
+# The features are networkPolicy, quota (ResourceQuota and LimitRange), rbac
+# (Roles and RoleBindings), nats and podIdentities.
+profiles: {}
+
+# --- Baseline NetworkPolicy ---------------------------------------------------
+# One NetworkPolicy per tenant whose profile sets `networkPolicy: true`. It
+# selects every pod and lists both policy types, so the namespace is
+# default-deny both ways and the rules below are the contract that is let
+# through. Policies are additive: whatever a tenant's own install adds is
+# unioned with this.
+#
+#   networkPolicy:
+#     name: tenant-baseline
+#     intraNamespace: true            # first rule both ways: pods of the namespace
+#     ingress:
+#       - description: operators
+#         from:
+#           - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: operators}}
+#       - description: CI runners reach services directly
+#         profiles: [ci]              # only tenants of these profiles; omit for all
+#         from:
+#           - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: runners}}
+#     egress:
+#       - description: cluster DNS
+#         to:
+#           - ipBlock: {cidr: 10.0.0.0/16}
+#         ports:
+#           - {port: 53, protocol: UDP}
+#           - {port: 53, protocol: TCP}
+#
+# A rule is a NetworkPolicy ingress rule (`from`) or egress rule (`to`) with
+# optional `ports`, plus the two keys of this chart, `description` and
+# `profiles`, which are not rendered. Rules render in the order given.
+networkPolicy:
+  name: ""
+  intraNamespace: true
+  ingress: []
+  egress: []
+
+# --- Tenants ------------------------------------------------------------------
+# By namespace name. Each entry:
+#
+#   tenants:
+#     team-a:
+#       profile: team                 # required
+#       labels:                       # merged over the profile's, per feature
+#         nats: {example.com/project: team-a}
+#       nats: true                    # a NATS account named after the namespace
+#       podIdentities: [reports]      # names under `podIdentities.associations`
+#       roles:
+#         read-certs:
+#           rules:
+#             - {apiGroups: [cert-manager.io], resources: [certificaterequests], verbs: [create]}
+#       roleBindings:
+#         owners:
+#           clusterRole: admin        # or `role: read-certs` for a Role of this namespace
+#           protect: prune-only       # optional: this one only
+#           labels: {}                # optional: replaces the feature labels
+#           subjects:
+#             - {kind: Group, name: "team-a"}
+#             - {kind: User, name: "a@example.com"}
+#             - {kind: ServiceAccount, name: ci, namespace: team-a}
+#
+# A tenant is a namespace that already exists; render its Namespace with
+# cluster-foundation.
+tenants: {}
+
+# --- ClusterRoles -------------------------------------------------------------
+# For rights a built-in aggregated role does not carry, typically on the CRDs
+# of operators. `aggregateTo` adds the rbac.authorization.k8s.io/aggregate-to-<role>
+# label, so the rules reach everyone bound to that built-in role (admin, edit,
+# view); a tenant bound by RoleBinding to the ClusterRole itself gets them in
+# its own namespace only.
+#
+#   clusterRoles:
+#     tenant-crds:
+#       aggregateTo: [admin]
+#       syncWave: 14
+#       labels: {example.com/layer: tenancy}
+#       rules:
+#         - {apiGroups: [postgresql.cnpg.io], resources: [clusters], verbs: [get, list, watch, create, update, patch, delete]}
+clusterRoles: {}
+
+# --- NATS accounts ------------------------------------------------------------
+# For a tenant with `nats: true`: the ServiceAccount NACK presents, a
+# long-lived token Secret for it and the NACK Account custom resource that
+# references the Secret, all in the tenant's namespace, the Account named after
+# it. The broker's auth callout maps the namespace to the account of the same
+# name; that mapping is the broker's, not this chart's.
+nats:
+  # Required once a tenant has `nats: true`: the URLs NACK dials.
+  servers: []
+  serviceAccount: nack
+  tokenSecret: nack-nats-token
+  tokenKey: token
+
+# --- EKS Pod Identity ---------------------------------------------------------
+# For each name a tenant lists in `podIdentities`: a ServiceAccount of that
+# name in the tenant's namespace, and an ACK PodIdentityAssociation, named
+# <namespace>-<name>, in `associationNamespace`: NOT the tenant's namespace,
+# because a tenant that can edit its own namespace could otherwise delete the
+# association and lose its credentials.
+#
+#   podIdentities:
+#     clusterName: my-cluster
+#     associations:
+#       reports:
+#         roleARN: "<the IAM role ARN>"
+#         associationNamespace: identity-system
+podIdentities:
+  clusterName: ""
+  associations: {}

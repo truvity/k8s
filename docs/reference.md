@@ -898,3 +898,69 @@ A pool with neither `nodeClass` nor `nodeClassName` uses Auto Mode's built-in
 budget of one node, so consolidation cannot move more than one node at a time;
 `fastEmptyReclaim` adds a budget that lets every empty node go at once.
 
+
+## `charts/tenancy`
+
+The per-tenant plumbing of a shared cluster, as data. Install a pinned version
+from `oci://ghcr.io/truvity/charts/tenancy`.
+
+A tenant is a namespace that already exists. This chart renders what each one
+needs around it and never the Namespace itself: the Namespace, with its Pod
+Security labels and deletion protection, is `cluster-foundation`'s object, and
+two Applications owning one Namespace take turns dropping each other's labels
+(`just lint` fails if a golden renders one). Feed both charts from the same
+list of tenants.
+
+What it renders, per tenant, in the tenant's own namespace unless noted:
+
+| Feature | Objects |
+| --- | --- |
+| `networkPolicy` | One `NetworkPolicy` that selects every pod and lists both policy types: default-deny both ways, plus the ordered `networkPolicy.ingress` and `.egress` rules that apply to the tenant's profile. |
+| `quota` | A `ResourceQuota` and a `LimitRange`, from the profile. |
+| `rbac` | Namespaced `Role`s and `RoleBinding`s (to a `ClusterRole` or to one of the tenant's own `Role`s), from the tenant. |
+| `nats` | The NACK `ServiceAccount`, its long-lived token `Secret` and the `Account` (`jetstream.nats.io`), named after the namespace. |
+| `podIdentities` | A `ServiceAccount` and an ACK `PodIdentityAssociation` named `<namespace>-<name>`, created in a namespace of its own so a tenant that can edit its namespace cannot delete its credentials. |
+
+And cluster-wide: `clusterRoles`, optionally aggregated into `admin`, `edit` or
+`view`, for the rights a built-in role does not carry (the CRDs of operators).
+
+Nothing is defaulted to an estate. Every map is empty, so nothing renders until
+a tenant is listed, and a tenant naming a profile that does not exist is
+refused.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `profiles.<p>` | none | What tenants of one tier share: `labels` (per feature, `default` for the rest), `networkPolicy` (bool), `quota` (`name`, `hard`), `limitRange` (`name`, `limits`), `protect` (per feature). |
+| `tenants.<namespace>` | none | `profile` (required), `labels` (merged over the profile's), `nats` (bool), `podIdentities` (names), `roles`, `roleBindings`. |
+| `networkPolicy` | no name | `name`, `intraNamespace` (default `true`: the first rule both ways), `ingress[]` (`from`, `ports`), `egress[]` (`to`, `ports`). A rule may carry `profiles: [..]` to apply to those tiers only and `description`, neither of which is rendered. Peers are `podSelector`, `namespaceSelector` and `ipBlock`. |
+| `clusterRoles.<name>` | none | `rules` (required), `aggregateTo` (`admin`, `edit`, `view`), `labels`, `syncWave`, `protect`. |
+| `nats` | none | `servers` (required with a NATS tenant), `serviceAccount` (`nack`), `tokenSecret` (`nack-nats-token`), `tokenKey` (`token`). |
+| `podIdentities` | none | `clusterName` and `associations.<name>`: `roleARN`, `associationNamespace` (both required). |
+| `protect` | `true` | See below. |
+| `helmKeep` | `false` | Also `helm.sh/resource-policy: keep` on protected objects. |
+| `syncWaves` | all `null` | `argocd.argoproj.io/sync-wave` per feature: `clusterRoles`, `networkPolicy`, `quota`, `rbac`, `nats`, `podIdentities`. |
+
+### Protection
+
+`protect` says what Argo CD may do to an object that leaves a render: `true`
+renders `argocd.argoproj.io/sync-options: Prune=false,Delete=false`,
+`"prune-only"` renders `Prune=false`, `false` renders nothing. The chart's
+value is the default; a profile overrides it per feature
+(`profiles.<p>.protect.networkPolicy`), and a role, a binding or a ClusterRole
+per entry. A tenant that leaves a list is rarely a decision to delete what
+sits in its namespace, so removal is meant to be a manual act.
+
+### Labels
+
+A profile's `labels` are keyed by feature. For an object of a tenant, each of
+the profile and the tenant contributes its map for that feature, or its
+`default` map when it has none for it, and the tenant's is merged over the
+profile's. A `role` or `roleBinding` that sets `labels` uses exactly those.
+
+### NATS
+
+The Account lives with the tenant because it is per-tenant plumbing with the
+tenant's lifecycle: it is created and removed with the namespace, in it, and
+needs the namespace's token Secret. The broker side (the accounts the broker
+knows, the auth callout that maps a namespace to the account of the same name)
+belongs with the broker; the contract between them is that name.

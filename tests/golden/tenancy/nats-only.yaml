@@ -1,0 +1,46 @@
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nack
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: nack
+    app.kubernetes.io/part-of: nats
+    example.com/project: shop
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nack-nats-token
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: nack
+    app.kubernetes.io/part-of: nats
+    example.com/project: shop
+  annotations:
+    kubernetes.io/service-account.name: nack
+type: kubernetes.io/service-account-token
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: jetstream.nats.io/v1beta2
+kind: Account
+metadata:
+  name: shop
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: nack
+    app.kubernetes.io/part-of: nats
+    example.com/project: shop
+spec:
+  name: shop
+  servers:
+    - nats://nats.nats.svc.cluster.example:4222
+  token:
+    secret:
+      name: nack-nats-token
+    token: token

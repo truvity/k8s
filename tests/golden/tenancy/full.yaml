@@ -1,0 +1,611 @@
+---
+# Source: tenancy/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: ci-widgets
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - podSelector: {}
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: db-operator
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: runners
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/router: "true"
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: router
+      - ipBlock:
+          cidr: 10.0.0.0/22
+      - ipBlock:
+          cidr: 100.64.0.0/10
+  egress:
+    - to:
+      - podSelector: {}
+    - ports:
+      - port: 4222
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: nats
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: nats
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+          - 169.254.169.254/32
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 172.20.0.0/16
+
+---
+# Source: tenancy/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: person-ada
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - podSelector: {}
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: db-operator
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/router: "true"
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: router
+      - ipBlock:
+          cidr: 10.0.0.0/22
+      - ipBlock:
+          cidr: 100.64.0.0/10
+  egress:
+    - to:
+      - podSelector: {}
+    - ports:
+      - port: 4222
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: nats
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: nats
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+          - 169.254.169.254/32
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 172.20.0.0/16
+
+---
+# Source: tenancy/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: shop
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: product
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - podSelector: {}
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: db-operator
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/router: "true"
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: router
+      - ipBlock:
+          cidr: 10.0.0.0/22
+      - ipBlock:
+          cidr: 100.64.0.0/10
+  egress:
+    - to:
+      - podSelector: {}
+    - ports:
+      - port: 4222
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: nats
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: nats
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+          - 169.254.169.254/32
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 172.20.0.0/16
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: ci-widgets
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: person-ada
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  hard:
+    persistentvolumeclaims: "10"
+    requests.cpu: "8"
+    requests.memory: 16Gi
+
+---
+# Source: tenancy/templates/quota.yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tenant-defaults
+  namespace: person-ada
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  limits:
+    - default:
+        cpu: "1"
+        memory: 512Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      type: Container
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nack
+  namespace: ci-widgets
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nack
+  namespace: person-ada
+  labels:
+    app.kubernetes.io/name: nack
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+
+---
+# Source: tenancy/templates/podidentities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reports
+  namespace: ci-widgets
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+
+---
+# Source: tenancy/templates/podidentities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reports
+  namespace: person-ada
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+
+---
+# Source: tenancy/templates/podidentities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: signing
+  namespace: person-ada
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nack-nats-token
+  namespace: ci-widgets
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    kubernetes.io/service-account.name: nack
+type: kubernetes.io/service-account-token
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nack-nats-token
+  namespace: person-ada
+  labels:
+    app.kubernetes.io/name: nack
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    kubernetes.io/service-account.name: nack
+type: kubernetes.io/service-account-token
+
+---
+# Source: tenancy/templates/clusterroles.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tenant-crds
+  labels:
+    example.com/layer: tenancy
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "14"
+rules:
+  - apiGroups:
+    - postgresql.example.com
+    resources:
+    - clusters
+    - backups
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+  - apiGroups:
+    - postgresql.example.com
+    resources:
+    - clusters/status
+    verbs:
+    - get
+    - list
+    - watch
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: read-certs
+  namespace: shop
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: product
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+rules:
+  - apiGroups:
+    - cert-manager.io
+    resources:
+    - certificaterequests
+    verbs:
+    - create
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: crds
+  namespace: ci-widgets
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/sync-wave: "15"
+subjects:
+  - kind: User
+    name: "ci:example/widgets"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: tenant-crds
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: ci-widgets
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+    argocd.argoproj.io/sync-wave: "15"
+subjects:
+  - kind: User
+    name: "ci:example/widgets"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: owner
+  namespace: person-ada
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+subjects:
+  - kind: Group
+    name: "person:ada"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: User
+    name: "ada@example.com"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: shop
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: product
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "15"
+subjects:
+  - kind: Group
+    name: "example-cluster:shop:deployer"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: ServiceAccount
+    name: "deployer"
+    namespace: shop
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: tenancy/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-certs
+  namespace: shop
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: product
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+subjects:
+  - kind: Group
+    name: "system:serviceaccounts:shop"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: read-certs
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: jetstream.nats.io/v1beta2
+kind: Account
+metadata:
+  name: ci-widgets
+  namespace: ci-widgets
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  name: ci-widgets
+  servers:
+    - nats://nats.nats.svc.cluster.example:4222
+  token:
+    secret:
+      name: nack-nats-token
+    token: token
+
+---
+# Source: tenancy/templates/nats.yaml
+apiVersion: jetstream.nats.io/v1beta2
+kind: Account
+metadata:
+  name: person-ada
+  namespace: person-ada
+  labels:
+    app.kubernetes.io/name: nack
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  name: person-ada
+  servers:
+    - nats://nats.nats.svc.cluster.example:4222
+  token:
+    secret:
+      name: nack-nats-token
+    token: token
+
+---
+# Source: tenancy/templates/podidentities.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: ci-widgets-reports
+  namespace: identity-system
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: ci
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  clusterName: example-cluster
+  namespace: ci-widgets
+  serviceAccount: reports
+  roleARN: arn:example:iam::placeholder:role/example-reports
+
+---
+# Source: tenancy/templates/podidentities.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: person-ada-reports
+  namespace: identity-system
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  clusterName: example-cluster
+  namespace: person-ada
+  serviceAccount: reports
+  roleARN: arn:example:iam::placeholder:role/example-reports
+
+---
+# Source: tenancy/templates/podidentities.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: person-ada-signing
+  namespace: identity-system
+  labels:
+    example.com/layer: tenancy
+    example.com/tier: person
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  clusterName: example-cluster
+  namespace: person-ada
+  serviceAccount: signing
+  roleARN: arn:example:iam::placeholder:role/example-signing
