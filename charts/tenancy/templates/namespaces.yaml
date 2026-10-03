@@ -1,0 +1,61 @@
+{{- /*
+One Namespace per tenant whose profile (or the tenant itself) asks for one: a
+`namespace` map on the profile, or on the tenant, which is merged over the
+profile's. `namespace: false` on a tenant opts out (the namespace is someone
+else's). The Namespace carries its Pod Security labels (every mode of the
+entry's `modes`, else the profile's, else podSecurity.modes, at the entry's
+level and the pinned version), the labels of the `namespace` feature and the
+protection annotation.
+*/ -}}
+{{- $root := . -}}
+{{- $psa := .Values.podSecurity | default dict -}}
+{{- range $ns := (keys (.Values.tenants | default dict) | sortAlpha) }}
+{{- $t := index $root.Values.tenants $ns }}
+{{- $p := include "tenancy.profile" (dict "root" $root "name" $ns "tenant" $t) | fromYaml }}
+{{- $e := include "tenancy.namespaceSpec" (dict "profile" $p "tenant" $t) | fromYaml }}
+{{- if $e.render }}
+{{- if not $psa.level }}{{ fail (printf "podSecurity.level is required: tenants.%s renders a Namespace; say which level a namespace gets by default" $ns) }}{{ end }}
+{{- if not $psa.version }}{{ fail (printf "podSecurity.version is required: tenants.%s renders a Namespace; pin a Kubernetes minor (\"v1.34\") or say \"latest\" on purpose" $ns) }}{{ end }}
+{{- $level := $psa.level -}}
+{{- if $e.level -}}
+{{- if and (ne $e.level $psa.level) (not $e.reason) -}}
+{{- fail (printf "tenants.%s has level %s, not the default %s, and no reason; say why, so the exemption can be reviewed and retired" $ns $e.level $psa.level) -}}
+{{- end -}}
+{{- $level = $e.level -}}
+{{- end -}}
+{{- $modes := $e.modes | default $psa.modes -}}
+{{- if not $modes }}{{ fail (printf "tenants.%s has no Pod Security modes: set namespace.modes or podSecurity.modes (a subset of warn, audit, enforce)" $ns) }}{{ end }}
+{{- if and (not (has "enforce" $modes)) (not $e.unenforced) (not $psa.unenforced) }}
+{{- fail (printf "tenants.%s renders a Namespace whose modes have no enforce: that is a warn-first rollout and it must say so. Add enforce, or set namespace.unenforced: true (or podSecurity.unenforced: true) to say it is on purpose" $ns) }}
+{{- end }}
+{{- $labels := include "tenancy.labels" (dict "profile" $p "tenant" $t "feature" "namespace") | fromYaml }}
+{{- range $k, $v := $labels -}}
+{{- if hasPrefix "pod-security.kubernetes.io/" $k -}}
+{{- fail (printf "tenants.%s: the namespace labels set %s: Pod Security labels come from podSecurity and the entry's level and modes" $ns $k) -}}
+{{- end -}}
+{{- end -}}
+{{- range $mode := $modes -}}
+{{- $_ := set $labels (printf "pod-security.kubernetes.io/%s" $mode) $level -}}
+{{- $_ := set $labels (printf "pod-security.kubernetes.io/%s-version" $mode) $psa.version -}}
+{{- end -}}
+{{- $annotations := dict -}}
+{{- range $k, $v := ($e.annotations | default dict) -}}
+{{- if or (hasPrefix "argocd.argoproj.io/sync-" $k) (eq $k ($psa.reasonAnnotation | default "")) -}}
+{{- fail (printf "tenants.%s: the namespace annotations set %s, which this chart computes" $ns $k) -}}
+{{- end -}}
+{{- $_ := set $annotations $k $v -}}
+{{- end -}}
+{{- if $e.reason -}}
+{{- if not $psa.reasonAnnotation }}{{ fail (printf "podSecurity.reasonAnnotation is required: tenants.%s has a namespace reason, and the annotation key that carries it is yours to name" $ns) }}{{ end -}}
+{{- $_ := set $annotations $psa.reasonAnnotation $e.reason -}}
+{{- end -}}
+{{- $mode := include "tenancy.mode" (dict "root" $root "profile" $p "feature" "namespace" "entry" $e) -}}
+{{- $wave := $root.Values.syncWaves.namespaces -}}
+{{- if hasKey $e "syncWave" -}}{{- $wave = $e.syncWave -}}{{- end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  {{- include "tenancy.metadata" (dict "root" $root "name" $ns "labels" $labels "wave" $wave "mode" $mode "annotations" $annotations) | nindent 2 }}
+{{- end }}
+{{- end }}

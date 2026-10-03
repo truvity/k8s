@@ -2,10 +2,12 @@
 # nothing until a tenant is listed, and a tenant is refused unless the profile
 # it names exists.
 #
-# This chart never renders a Namespace. The Namespace of a tenant, with its Pod
-# Security labels and deletion protection, belongs to cluster-foundation (the
-# tool that owns a namespace renders the whole object). Install the two side
-# by side, from the same list of tenants, in separate Applications.
+# A tenant's Namespace, with its Pod Security labels and deletion protection,
+# is rendered here when the tenant's profile (or the tenant) asks for one with a
+# `namespace` map (see "Namespaces" below). A namespace someone else owns is a
+# tenant with `namespace: false`, or a profile with no `namespace`. Do not
+# render the same Namespace from two Applications: they take turns dropping
+# each other's labels.
 
 # --- Deletion protection ------------------------------------------------------
 # Default for every object this chart renders. A profile may say otherwise per
@@ -22,6 +24,28 @@ protect: true
 # release that may be uninstalled.
 helmKeep: false
 
+# --- Pod Security -------------------------------------------------------------
+# What the Namespaces this chart renders carry. Required once a tenant asks for
+# one: the render refuses to guess.
+podSecurity:
+  # The level a Namespace gets unless its `namespace.level` says otherwise (one
+  # of privileged, baseline, restricted); a different level needs a `reason`.
+  level: ""
+  # The Pod Security Standards version, "latest" or a Kubernetes minor such as
+  # "v1.34", applied to every mode. Pin the minor: with "latest" a cluster
+  # upgrade can tighten what an enforced namespace admits.
+  version: ""
+  # The label kinds every Namespace carries unless its `namespace.modes` says
+  # its own: a subset of warn, audit, enforce. A list without `enforce` is a
+  # warn-first rollout and is refused unless `unenforced` (here, or on the
+  # profile's or tenant's `namespace`) says it is on purpose.
+  modes: []
+  unenforced: false
+  # The annotation key that carries an exemption's reason, so it is visible
+  # with `kubectl get ns -o yaml` and not only in git. Required once a
+  # Namespace has a `reason`: the key is yours to name.
+  reasonAnnotation: ""
+
 # --- Sync waves ---------------------------------------------------------------
 # argocd.argoproj.io/sync-wave per feature; null renders none.
 syncWaves:
@@ -31,6 +55,7 @@ syncWaves:
   rbac: null
   nats: null
   podIdentities: null
+  namespaces: null
 
 # --- Profiles -----------------------------------------------------------------
 # What tenants of one tier have in common. Each tenant names one.
@@ -53,7 +78,24 @@ syncWaves:
 #             default: {cpu: "1", memory: 512Mi}
 #
 # The features are networkPolicy, quota (ResourceQuota and LimitRange), rbac
-# (Roles and RoleBindings), nats and podIdentities.
+# (Roles and RoleBindings), nats, podIdentities and namespace (the Namespace).
+#
+# Namespaces: a profile that carries a `namespace` map (it may be empty, `{}`)
+# renders one Namespace per tenant of the profile, and so does a tenant that
+# carries its own. The map's keys, all optional: `level` and `reason` (a level
+# other than podSecurity.level needs a reason), `modes` (replaces
+# podSecurity.modes for these Namespaces), `unenforced: true` (required when
+# the modes have no enforce: a warn-first rollout says so on purpose),
+# `syncWave`, `protect` (true, "prune-only" or false: this one only) and
+# `annotations`. Labels come from the `namespace` feature of `labels`.
+#   profiles:
+#     person:
+#       namespace: {modes: [warn, audit], unenforced: true}   # warn-first
+#       labels: {namespace: {example.com/tier: person}}
+#       protect: {namespace: false}                          # deletable
+#   tenants:
+#     team-a: {profile: team, namespace: {level: baseline, reason: "legacy agent"}}
+#     shared: {profile: team, namespace: false}  # someone else's namespace
 profiles: {}
 
 # --- Baseline NetworkPolicy ---------------------------------------------------
@@ -115,8 +157,9 @@ networkPolicy:
 #             - {kind: User, name: "a@example.com"}
 #             - {kind: ServiceAccount, name: ci, namespace: team-a}
 #
-# A tenant is a namespace that already exists; render its Namespace with
-# cluster-foundation.
+# A tenant's Namespace is rendered when its profile or the tenant asks for one
+# (`namespace`, see the profiles); otherwise it is a namespace that already
+# exists.
 tenants: {}
 
 # --- ClusterRoles -------------------------------------------------------------

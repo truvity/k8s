@@ -1,0 +1,46 @@
+# The Namespaces: a profile asks for one per tenant with a `namespace` map. The
+# person profile rolls out warn-first (modes without enforce, said on purpose)
+# and stays deletable; the ci profile enforces and is protected; a tenant can
+# depart from its profile's level with a reason, name its own modes, or opt out
+# because the namespace is someone else's.
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes: [warn, audit, enforce]
+  reasonAnnotation: example.com/psa-reason
+syncWaves: {namespaces: 10, quota: 15}
+profiles:
+  person:
+    namespace: {modes: [warn, audit], unenforced: true}
+    labels:
+      default: {example.com/tier: person}
+      namespace: {example.com/tier: person, example.com/tenant: "true"}
+    protect: {namespace: false}
+  ci:
+    namespace: {}
+    labels:
+      namespace: {example.com/tier: ci}
+    quota: {name: tenant-quota, hard: {requests.cpu: "16"}}
+  nats-only:
+    labels:
+      nats: {app.kubernetes.io/name: nack}
+tenants:
+  person-a: {profile: person}
+  person-b:
+    profile: person
+    namespace: {modes: [warn, audit, enforce]}
+  ci:
+    profile: ci
+  ci-legacy:
+    profile: ci
+    namespace:
+      level: baseline
+      reason: "the legacy agent cannot meet restricted yet"
+      protect: prune-only
+      syncWave: 5
+      annotations: {example.com/owner: ci}
+  shared:
+    profile: ci
+    namespace: false
+  elsewhere:
+    profile: nats-only

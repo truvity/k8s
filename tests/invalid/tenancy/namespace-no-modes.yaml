@@ -1,0 +1,4 @@
+# No default modes and no modes of its own: nothing says what it gets.
+podSecurity: {level: restricted, version: v1.34}
+profiles: {team: {namespace: {}}}
+tenants: {team-a: {profile: team}}

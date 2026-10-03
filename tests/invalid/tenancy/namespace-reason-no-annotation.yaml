@@ -1,0 +1,4 @@
+# A reason needs the annotation key that carries it: the chart names none.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+profiles: {team: {namespace: {}}}
+tenants: {team-a: {profile: team, namespace: {level: privileged, reason: why}}}

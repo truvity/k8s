@@ -1,0 +1,4 @@
+# A tenant opts out with false or says its own map; true says nothing.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+profiles: {team: {namespace: {}}}
+tenants: {team-a: {profile: team, namespace: true}}

@@ -20,7 +20,20 @@
         "quota": { "$ref": "#/definitions/syncWave" },
         "rbac": { "$ref": "#/definitions/syncWave" },
         "nats": { "$ref": "#/definitions/syncWave" },
-        "podIdentities": { "$ref": "#/definitions/syncWave" }
+        "podIdentities": { "$ref": "#/definitions/syncWave" },
+        "namespaces": { "$ref": "#/definitions/syncWave" }
+      }
+    },
+    "podSecurity": {
+      "type": "object",
+      "description": "The Pod Security labels of the Namespaces this chart renders: required once a tenant asks for one.",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["", "privileged", "baseline", "restricted"] },
+        "version": { "type": "string", "pattern": "^(|latest|v[0-9]+\\.[0-9]+)$" },
+        "modes": { "type": "array", "uniqueItems": true, "items": { "enum": ["warn", "audit", "enforce"] } },
+        "unenforced": { "type": "boolean", "description": "Says on purpose that the default modes have no enforce." },
+        "reasonAnnotation": { "type": "string" }
       }
     },
     "profiles": {
@@ -105,7 +118,24 @@
         "quota": { "$ref": "#/definitions/stringMap" },
         "rbac": { "$ref": "#/definitions/stringMap" },
         "nats": { "$ref": "#/definitions/stringMap" },
-        "podIdentities": { "$ref": "#/definitions/stringMap" }
+        "podIdentities": { "$ref": "#/definitions/stringMap" },
+        "namespace": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "psaLevel": { "enum": ["privileged", "baseline", "restricted"] },
+    "psaModes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["warn", "audit", "enforce"] } },
+    "namespace": {
+      "type": "object",
+      "description": "The Namespace of a tenant. Its presence on a profile (or a tenant) is what asks for one.",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "$ref": "#/definitions/psaLevel" },
+        "reason": { "type": "string", "minLength": 1 },
+        "modes": { "$ref": "#/definitions/psaModes" },
+        "unenforced": { "type": "boolean", "description": "Says on purpose that this namespace's modes have no enforce (a warn-first rollout)." },
+        "syncWave": { "$ref": "#/definitions/syncWave" },
+        "protect": { "$ref": "#/definitions/protect" },
+        "annotations": { "$ref": "#/definitions/stringMap" }
       }
     },
     "quantity": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(m|k|Ki|Mi|Gi|Ti|Pi|Ei|M|G|T|P|E)?$" },
@@ -124,9 +154,11 @@
             "quota": { "$ref": "#/definitions/protect" },
             "rbac": { "$ref": "#/definitions/protect" },
             "nats": { "$ref": "#/definitions/protect" },
-            "podIdentities": { "$ref": "#/definitions/protect" }
+            "podIdentities": { "$ref": "#/definitions/protect" },
+            "namespace": { "$ref": "#/definitions/protect" }
           }
         },
+        "namespace": { "$ref": "#/definitions/namespace" },
         "quota": {
           "type": "object",
           "additionalProperties": false,
@@ -266,6 +298,7 @@
       "properties": {
         "profile": { "$ref": "#/definitions/identifier" },
         "labels": { "$ref": "#/definitions/labelsByFeature" },
+        "namespace": { "oneOf": [{ "const": false }, { "$ref": "#/definitions/namespace" }], "description": "false: the namespace is someone else's; a map: this tenant's Namespace, merged over the profile's." },
         "nats": { "type": "boolean" },
         "podIdentities": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/objectName" } },
         "roles": {
