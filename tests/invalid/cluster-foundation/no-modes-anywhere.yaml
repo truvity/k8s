@@ -1,0 +1,3 @@
+# No default modes and an entry without its own: nothing says what it gets.
+podSecurity: {level: restricted, version: v1.34}
+namespaces: {team-a: {modes: [warn, audit, enforce]}, team-b: {}}

@@ -1,0 +1,56 @@
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: enforced-app
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-a
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-b
+  labels:
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-foundation/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-c
+  labels:
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    cluster-baseline/psa-reason: runs a legacy agent that cannot meet restricted yet

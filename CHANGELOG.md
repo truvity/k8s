@@ -6,6 +6,19 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/cluster-foundation`: a namespace may say its own Pod Security `modes`
+  (a subset of `warn`, `audit`, `enforce`, no repeats, at least one), replacing
+  `podSecurity.modes` for that entry only, so a namespace can be rolled out
+  warn-first while the others enforce. Nothing changes for a values file that
+  does not use it: the labels, the goldens and every refusal are as before.
+  `podSecurity.modes` is now required only while a listed namespace has no
+  `modes` of its own. A list without `enforce` stays a refusal: the default
+  modes still need `podSecurity.unenforced: true`, and an entry's own modes
+  need that entry's `unenforced: true` (or the cluster's) to say it is on
+  purpose. `just lint` and `just test` cover it (one golden case for a
+  warn-first rollout, one for entries that carry all their modes themselves,
+  five refused fixtures).
+
 ## v0.10.0
 
 - `charts/cluster-foundation`: the objects a cluster needs before any workload,

@@ -13,9 +13,9 @@ podSecurity:
   # admits, so pin the minor.
   version: ""
   # The label kinds every namespace carries, from warn, audit, enforce.
-  # Required when a namespace is listed. A list without `enforce` renders a
-  # cluster that enforces nothing; the render refuses it unless `unenforced`
-  # says so on purpose.
+  # Required when a listed namespace has no `modes` of its own. A list without
+  # `enforce` renders a cluster that enforces nothing; the render refuses it
+  # unless `unenforced` says so on purpose.
   modes: []
   unenforced: false
   # The annotation that carries a namespace's exemption reason, so the reason
@@ -43,15 +43,22 @@ helmKeep: false
 #     node-agents:
 #       level: privileged
 #       reason: "runs host-level agents; cannot meet baseline"
+#       modes: [warn, audit]               # optional: this one only (warn-first rollout)
+#       unenforced: true                   # required with modes that have no enforce
 #       syncWave: 10                       # optional: argocd sync-wave
 #       labels: {example.com/tier: platform}
 #       annotations: {example.com/owner: platform}
 #       protect: false                     # optional: this one only
 #
 # `level` replaces the default level and must carry a `reason`, which the
-# render refuses to omit. `labels` and `annotations` are literal and may not
-# set a key this chart computes (pod-security.kubernetes.io/*, the sync-wave,
-# sync-options and reason keys).
+# render refuses to omit. `modes` replaces the default modes (a subset of warn,
+# audit, enforce) for this namespace only, so a namespace can be rolled out
+# warn-first while the others enforce; a list without `enforce` is refused
+# unless the entry's own `unenforced: true` (or `podSecurity.unenforced`) says
+# so on purpose, as for the default.
+# `labels` and `annotations` are literal and may not set a key this chart
+# computes (pod-security.kubernetes.io/*, the sync-wave, sync-options and
+# reason keys).
 namespaces: {}
 
 # --- ClusterRoleBindings ------------------------------------------------------

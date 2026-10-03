@@ -1,0 +1,2 @@
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+namespaces: {team-a: {modes: [warn, deny]}}

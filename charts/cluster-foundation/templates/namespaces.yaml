@@ -1,7 +1,7 @@
 {{- /*
 One Namespace per entry of `namespaces`, with its Pod Security labels (every
-mode in podSecurity.modes, at the entry's level and the pinned version) and
-the protection annotation. Rendered in name order.
+mode of the entry's `modes`, else of podSecurity.modes, at the entry's level and
+the pinned version) and the protection annotation. Rendered in name order.
 */ -}}
 {{- $root := . -}}
 {{- $psa := .Values.podSecurity -}}
@@ -9,9 +9,19 @@ the protection annotation. Rendered in name order.
 {{- if $names }}
 {{- if not $psa.level }}{{ fail "podSecurity.level is required when namespaces are listed: say which level a namespace gets by default" }}{{ end }}
 {{- if not $psa.version }}{{ fail "podSecurity.version is required when namespaces are listed: pin a Kubernetes minor (\"v1.34\") or say \"latest\" on purpose" }}{{ end }}
-{{- if not $psa.modes }}{{ fail "podSecurity.modes is required when namespaces are listed: a subset of warn, audit, enforce" }}{{ end }}
-{{- if and (not (has "enforce" $psa.modes)) (not $psa.unenforced) }}
+{{- /* podSecurity.modes is the default of every entry that does not say its own. */ -}}
+{{- range $name := $names }}
+{{- $entry := index $root.Values.namespaces $name | default dict }}
+{{- $modes := $entry.modes | default $psa.modes }}
+{{- if not $modes }}{{ fail (printf "podSecurity.modes is required when a listed namespace (%s) has no modes of its own: a subset of warn, audit, enforce" $name) }}{{ end }}
+{{- if and (not (has "enforce" $modes)) (not $psa.unenforced) }}
+{{- if not $entry.modes }}
 {{- fail "podSecurity.modes has no enforce: that renders namespaces that enforce nothing. Add enforce, or set podSecurity.unenforced: true to say it is on purpose" }}
+{{- end }}
+{{- if not $entry.unenforced }}
+{{- fail (printf "namespaces.%s.modes has no enforce: that renders a namespace that enforces nothing. Add enforce, or set namespaces.%s.unenforced: true (or podSecurity.unenforced: true) to say it is on purpose" $name $name) }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- range $name := $names }}
@@ -24,7 +34,7 @@ the protection annotation. Rendered in name order.
 {{- $level = $entry.level -}}
 {{- end -}}
 {{- $labels := dict -}}
-{{- range $mode := $psa.modes -}}
+{{- range $mode := ($entry.modes | default $psa.modes) -}}
 {{- $_ := set $labels (printf "pod-security.kubernetes.io/%s" $mode) $level -}}
 {{- $_ := set $labels (printf "pod-security.kubernetes.io/%s-version" $mode) $psa.version -}}
 {{- end -}}

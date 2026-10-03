@@ -1,0 +1,3 @@
+# An empty list is not "the default": leave the key out.
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+namespaces: {team-a: {modes: []}}

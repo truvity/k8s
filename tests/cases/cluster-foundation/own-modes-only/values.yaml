@@ -1,0 +1,9 @@
+# No default modes at all: every entry says its own, so nothing is left to guess.
+podSecurity:
+  level: restricted
+  version: v1.34
+namespaces:
+  team-a:
+    modes: [warn, audit, enforce]
+  team-b:
+    modes: [warn, audit, enforce]

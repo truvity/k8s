@@ -1,0 +1,21 @@
+# One namespace rolled out warn-first while the others enforce: `modes` on an
+# entry replaces the default modes for that entry only. Every other entry keeps
+# the default, so the cluster as a whole still enforces; an entry whose own modes
+# have no enforce says so on purpose with `unenforced: true`.
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes: [warn, audit, enforce]
+namespaces:
+  enforced-app: {}
+  team-a:
+    modes: [warn, audit]
+    unenforced: true
+  team-b:
+    modes: [warn]
+    unenforced: true
+  team-c:
+    level: baseline
+    reason: "runs a legacy agent that cannot meet restricted yet"
+    modes: [warn, audit]
+    unenforced: true

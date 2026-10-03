@@ -1,0 +1,4 @@
+# A namespace whose own modes have no enforce renders a namespace that enforces
+# nothing; the cluster must say so on purpose (podSecurity.unenforced).
+podSecurity: {level: restricted, version: v1.34, modes: [warn, audit, enforce]}
+namespaces: {team-a: {modes: [warn, audit]}}
