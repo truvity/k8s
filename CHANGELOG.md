@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.10.0
+
 - `charts/cluster-foundation`: the objects a cluster needs before any workload,
   as data, published to `oci://ghcr.io/truvity/charts/cluster-foundation` from
   the next tag. `namespaces` renders one whole `Namespace` per entry with its
