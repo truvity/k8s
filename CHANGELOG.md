@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.12.0
+
 - `pkg/aws/ackfactory`: the AWS identity of the ACK controllers, lifted from a
   cluster program: `IAM` and `EKS` (the roles of the controllers that mint IAM
   roles and Pod Identity associations), `Services` (the s3, kms and dynamodb
