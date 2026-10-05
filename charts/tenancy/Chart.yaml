@@ -1,6 +1,8 @@
 apiVersion: v2
 name: tenancy
 description: >-
+  DEPRECATED, see docs/decisions/0004-tenancy-deprecation.md: tenancy is
+  becoming guidelines, thin values and a per-tenant identity ServiceAccount.
   The per-tenant plumbing of a shared cluster, as data. For each tenant
   namespace: the Namespace itself with its Pod Security labels (level, version and
   modes per profile or tenant; a warn-first rollout must say so), a baseline
@@ -11,6 +13,9 @@ description: >-
   share a profile (tier) that carries the policy, quota and labels; every
   name, label, role and CIDR is a value, and nothing here belongs to an estate.
 type: application
+# Helm prints a deprecation notice when the chart is installed or pulled.
+# Nothing is removed: the window is in docs/decisions/0004-tenancy-deprecation.md.
+deprecated: true
 # Placeholder: the git tag is the sole version authority. The release
 # workflow stamps both fields from the tag (truvity/ci-workflows
 # release-public.yaml).
