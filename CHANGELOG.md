@@ -6,6 +6,16 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/ackfactory`: the AWS identity of the ACK controllers, lifted from a
+  cluster program: `IAM` and `EKS` (the roles of the controllers that mint IAM
+  roles and Pod Identity associations), `Services` (the s3, kms and dynamodb
+  controllers' roles, adopting a live policy, role or association through a
+  `Lookup` the caller implements, so no cloud SDK is added) and `ProjectRoles`
+  (one capability role per project, under a boundary the caller names). Plain
+  functions, not a component: the same resources under the same logical names,
+  so a stack that registered them itself previews no change. Cluster,
+  account, region, partition, boundary names and projects are inputs.
+
 ## v0.11.0
 
 - `charts/tenancy`: renders each tenant's `Namespace`, with its Pod Security

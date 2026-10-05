@@ -709,6 +709,54 @@ cluster that is meant to be torn down.
 `ProviderConfig` (`*eks.IdentityProviderConfig`). The component exports no stack
 output of its own: the caller names those.
 
+## `pkg/aws/ackfactory`
+
+The AWS identity of the ACK controllers, as plain functions (not a
+component: they register the resources the program they were lifted from
+registered, under the same logical names, so adopting them changes no URN).
+The cluster, its account, region and partition, the permissions boundary names
+and the projects are inputs.
+
+```go
+c := ackfactory.Cluster{Name: "c1", AccountID: accountID, Region: region}
+o := ackfactory.Options{Provider: provider, ClusterName: cluster.Name, Boundary: "ack-boundary"}
+
+_, err := ackfactory.IAM(ctx, c, o, true)   // c1-ack-iam; true: may assume the project roles
+_, err = ackfactory.EKS(ctx, c, o)          // c1-ack-eks
+err = ackfactory.Services(ctx, c, ackfactory.ServicesOptions{Options: o, Lookup: lookup})
+err = ackfactory.ProjectRoles(ctx, c, ackfactory.ProjectRolesOptions{Boundary: "deploy-boundary"}, projects)
+```
+
+| Function | Registers |
+| --- | --- |
+| `IAM` | A `podidentity` component `ack-iam-<cluster>`: role `<cluster>-ack-iam` (IAM management inside the account, Pod Identity association calls, and with `withProjectAssume` the project roles) and its association for `ack-iam/ack-iam-controller`. |
+| `EKS` | A `podidentity` component `ack-eks-<cluster>`: role `<cluster>-ack-eks` and its association for `ack-eks/ack-eks-controller`. |
+| `Services` | One `podidentity` component `ack-svc/<cluster>-ack-<svc>` per service (default `s3`, `kms`, `dynamodb`): managed policy, role, attachment and association for `ack-<svc>/ack-<svc>-controller`. A policy, role or association that is live is adopted (`Lookup`) instead of created. |
+| `ProjectRoles` | Per project a role `<cluster>-ack-project-<name>` and its policy `<cluster>-ack-project-<name>-policy`, resources scoped to the project name, assumed by the controllers. |
+
+### Inputs
+
+`Cluster`: `Name`, `AccountID`, `Region` required; `Partition` defaults to the
+commercial one. `Options`: `Provider`, `ClusterName` and `Boundary` (the NAME of
+the permissions boundary of the controller roles, not its ARN) are required.
+`ProjectRolesOptions.Boundary` is the project roles' boundary: it should require
+the project and cluster tags on `iam:CreateRole` and entrap what the roles
+create. Every refusal is reported before anything is registered.
+
+### `Lookup`
+
+`Services` asks the caller what already exists (`PolicyExists`, `RoleExists`,
+`AssociationID`), so the package carries no cloud SDK. A failed association
+lookup must be an error: read as "none" it would turn an adoption into a
+colliding create. A policy's description is immutable in IAM; `Service.Description`
+must equal the live one when adopting.
+
+### Aliases
+
+Every Pod Identity role is registered with `LegacyTopLevel`, so a stack that
+registered the same names directly is a no-change preview. The roles and policies
+of `ProjectRoles` are registered directly under the stack, as they always were.
+
 ## Other provider components
 
 None yet. Each provider's page lands here with its inputs, its children and

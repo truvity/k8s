@@ -21,6 +21,7 @@ capabilities.
 | `pkg/aws/podidentity` — an EKS Pod Identity role with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component, unreleased |
 | `pkg/aws/ekscluster` — an EKS Auto Mode cluster with its secrets key, cluster and node roles and control-plane log group, `truvity:k8s/aws:EksCluster` | Pulumi component, unreleased |
 | `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component, unreleased |
+| `pkg/aws/ackfactory` — the AWS identity of the ACK controllers: the IAM and EKS controller roles, the service controllers' roles (adopting what is live) and the per-project capability roles; plain functions, names are API | Go package, unreleased |
 | `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
 | `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
 | `charts/eks-auto-node-pools` — Karpenter NodePools and NodeClasses for EKS Auto Mode, one disruption budget per pool, subnet tags and roles as values | Helm chart, `oci://ghcr.io/truvity/charts/eks-auto-node-pools`, unreleased |
