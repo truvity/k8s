@@ -90,7 +90,9 @@ not aliased.
 `Prefixes` (`pulumi.StringArrayOutput`) and `PrefixList()` (`[]string`): the
 local repository prefixes, in the order of `Upstreams`.
 
-## `pkg/aws/backupbucket`
+## `pkg/aws/backupbucket` (deprecated)
+
+Moved to `github.com/truvity/cnpg/v2/pkg/aws/backupstore` (see its `docs/backupstore.md`); this package forwards to it for one release. The component type is `truvity:cnpg/aws:BackupStore`, aliased from the type below.
 
 `truvity:k8s/aws:BackupBucket` deploys a cross-account backup bucket: a
 versioned S3 bucket in a backup account that a workload account may write to

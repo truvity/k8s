@@ -1,30 +1,62 @@
-// Package backupbucket deploys a cross-account backup bucket as one Pulumi
-// ComponentResource: a versioned S3 bucket in a backup account that a
-// workload account may write to and may never permanently delete from.
+// Package backupbucket is DEPRECATED: the cross-account backup bucket and its
+// KMS key moved to github.com/truvity/cnpg/v2/pkg/aws/backupstore (K5 of the
+// estate model: the backup bucket belongs to the CNPG family).
 //
-// What the component builds, in the account of the AWS provider:
-//   - the bucket, versioned, encrypted with its own customer-managed KMS key
-//     (rotation on), with every form of public access blocked;
-//   - a bucket policy that admits a named writer role in the source account
-//     (a glob), optionally one read-only role and any number of list-only
-//     roles, and denies s3:DeleteObjectVersion to every principal outside
-//     the backup account;
-//   - a key policy that admits the same roles to the key and nothing else
-//     in the source account: a second gate that survives a bucket-policy
-//     mistake;
-//   - a lifecycle configuration the caller supplies (the backstop behind
-//     whatever retention the backup tool enforces itself);
-//   - optionally S3 Object Lock in COMPLIANCE mode, so nobody, the backup
-//     account included, can delete a version inside the window;
-//   - optionally a same-account replica in another region, with its own
-//     key, a replication role and the replication configuration.
+// Everything here forwards to that package, so an importer keeps compiling
+// and keeps its resource URNs: the component's type changes from
+// truvity:k8s/aws:BackupBucket to truvity:cnpg/aws:BackupStore, and the
+// new component aliases itself from the old type. Import backupstore
+// directly. This package is removed in the release after next.
 //
-// The bucket and the keys are protected by default (Args.Protect), and the
-// keys are retained on delete: key destruction is a break-glass act, so
-// Pulumi drops a key from state instead of scheduling its deletion.
-//
-// Every name, tag, boundary and description is a caller input. Nothing here
-// defaults to one estate's value.
-//
-// See docs/reference.md for the children, their names and their aliases.
+// Deprecated: use github.com/truvity/cnpg/v2/pkg/aws/backupstore.
 package backupbucket
+
+import (
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/truvity/cnpg/v2/pkg/aws/backupstore"
+)
+
+// TypeToken is the Pulumi type of the component.
+//
+// Deprecated: use backupstore.TypeToken.
+const TypeToken = backupstore.TypeToken
+
+// DefaultPartition is the AWS partition used when Args.Partition is empty.
+//
+// Deprecated: use backupstore.DefaultPartition.
+const DefaultPartition = backupstore.DefaultPartition
+
+type (
+	// Replica configures the same-account replica in another region.
+	//
+	// Deprecated: use backupstore.Replica.
+	Replica = backupstore.Replica
+	// Args configures the component.
+	//
+	// Deprecated: use backupstore.Args.
+	Args = backupstore.Args
+	// BackstopArgs configures Backstop.
+	//
+	// Deprecated: use backupstore.BackstopArgs.
+	BackstopArgs = backupstore.BackstopArgs
+	// Transition is one storage-class transition of Backstop.
+	//
+	// Deprecated: use backupstore.Transition.
+	Transition = backupstore.Transition
+	// BackupBucket is the component.
+	//
+	// Deprecated: use backupstore.BackupStore.
+	BackupBucket = backupstore.BackupStore
+)
+
+// Backstop builds the whole-bucket lifecycle rule.
+//
+// Deprecated: use backupstore.Backstop.
+var Backstop = backupstore.Backstop
+
+// New registers the component and its children.
+//
+// Deprecated: use backupstore.New.
+func New(ctx *pulumi.Context, name string, args *Args, opts ...pulumi.ResourceOption) (*BackupBucket, error) {
+	return backupstore.New(ctx, name, args, opts...)
+}

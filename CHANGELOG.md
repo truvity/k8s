@@ -38,6 +38,8 @@ them, and for anything breaking, what to do.
   in `docs/decisions/0004-tenancy-deprecation.md`. If you install this chart: no
   action now; plan the move before the window ends.
 
+- **Deprecated:** `pkg/aws/backupbucket` moves to `github.com/truvity/cnpg/v2/pkg/aws/backupstore` (K5: the backup bucket belongs to the CNPG family) and is now a forwarder of type aliases and one function, for one release. Importers keep compiling; to migrate, change the import path and `BackupBucket` to `BackupStore`. The component's Pulumi type is now `truvity:cnpg/aws:BackupStore`, aliased from `truvity:k8s/aws:BackupBucket`, so a stack that deployed it from here previews with no change and no replace. k8s now depends on `truvity/cnpg/v2`. The package is removed in the release after next.
+
 ## v0.11.0
 
 - `charts/tenancy`: renders each tenant's `Namespace`, with its Pod Security
