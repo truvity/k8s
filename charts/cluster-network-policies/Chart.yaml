@@ -1,0 +1,24 @@
+apiVersion: v2
+name: cluster-network-policies
+description: >-
+  A cluster's own NetworkPolicies, as data: the policies that contain its
+  platform workloads, one per entry, each with a reason. The chart renders the
+  shape (selector, policy types, rules, sync wave, deletion protection) and
+  refuses a policy that does not say why it exists; what a policy admits is the
+  caller's. Nothing here belongs to an estate.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag (truvity/ci-workflows
+# release-public.yaml).
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/k8s
+sources:
+  - https://github.com/truvity/k8s
+keywords:
+  - networkpolicy
+  - network-policy
+  - containment
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

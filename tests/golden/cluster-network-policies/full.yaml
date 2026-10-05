@@ -1,0 +1,106 @@
+---
+# Source: cluster-network-policies/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: edge-agent
+  namespace: edge
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: edge-agent
+  policyTypes:
+    - Egress
+  egress:
+    - {}
+
+---
+# Source: cluster-network-policies/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: static-page
+  namespace: page
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: static-page
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway-system
+      ports:
+      - port: 8080
+        protocol: TCP
+
+---
+# Source: cluster-network-policies/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: scraper
+  namespace: metrics
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: scraper
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+      - port: 10250
+        protocol: TCP
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/16
+      - ipBlock:
+          cidr: 172.20.0.0/16
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            example.com/router: "true"
+      - ipBlock:
+          cidr: 172.20.0.0/16
+
+---
+# Source: cluster-network-policies/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workers
+  namespace: builds
+  annotations:
+    example.com/owner: platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - podSelector: {}
+  egress:
+    - to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+          - 10.0.0.0/16
+          - 172.20.0.0/16
+          - 169.254.169.254/32

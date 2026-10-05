@@ -1,0 +1,35 @@
+# Nothing here names an estate. The list is empty: a cluster says which
+# policies it wants, and why.
+
+# Default for every policy; an entry may override it with its own `protect`.
+# On, a policy carries
+#   argocd.argoproj.io/sync-options: Prune=false,Delete=false
+# so Argo CD neither prunes it when it leaves a render nor deletes it with its
+# Application. Off (the default) renders no annotation of that kind: a
+# NetworkPolicy is cheap to put back, and a stale one is the hazard.
+protect: false
+# Also render helm.sh/resource-policy: keep on protected policies.
+helmKeep: false
+
+# One entry per NetworkPolicy. Each entry:
+#
+#   name:        the object's name (required)
+#   namespace:   the object's namespace (required)
+#   reason:      why the policy exists (required, not rendered): a policy is a
+#                decision, and the next reader should not have to guess it
+#   podSelector: a label selector (matchLabels, matchExpressions); {} selects
+#                every pod of the namespace (required)
+#   policyTypes: Ingress, Egress, or both (required). A type listed with no
+#                rules for it denies that direction for the selected pods.
+#   ingress:     the ingress rules, verbatim (optional)
+#   egress:      the egress rules, verbatim (optional)
+#   syncWave:    argocd.argoproj.io/sync-wave (optional)
+#   protect:     overrides the chart's `protect` (optional)
+#   annotations: literal annotations (optional; may not set a key the chart
+#                computes)
+#
+# THE FIRST POLICY THAT SELECTS A POD DENIES EVERYTHING THE POLICY DOES NOT
+# ALLOW, in each direction it lists. Adding the first policy to a namespace
+# that had none turns that namespace's selected pods default-deny. Check what a
+# namespace already has before adding to it.
+policies: []

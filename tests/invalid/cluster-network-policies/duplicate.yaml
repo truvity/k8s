@@ -1,0 +1,3 @@
+policies:
+  - {name: a, namespace: ns, reason: "a reason that is long enough", podSelector: {}, policyTypes: [Ingress]}
+  - {name: a, namespace: ns, reason: "another reason that is long", podSelector: {}, policyTypes: [Egress]}

@@ -1,0 +1,57 @@
+{{- /* One NetworkPolicy per entry of `policies`, in the order given. */ -}}
+{{- $root := . -}}
+{{- $seen := dict -}}
+{{- range $i, $p := .Values.policies }}
+{{- $key := printf "%s/%s" $p.namespace $p.name -}}
+{{- if hasKey $seen $key -}}
+{{- fail (printf "policies[%d]: %s is listed twice" $i $key) -}}
+{{- end -}}
+{{- $_ := set $seen $key true -}}
+{{- /* A rule list for a direction the policy does not list is ignored by Kubernetes: a silent no-op, so refuse it. */ -}}
+{{- range $dir := list "Ingress" "Egress" -}}
+{{- if and (hasKey $p (lower $dir)) (not (has $dir $p.policyTypes)) -}}
+{{- fail (printf "policies[%d] (%s): has %s rules but policyTypes does not list %s, so Kubernetes would ignore them" $i $key (lower $dir) $dir) -}}
+{{- end -}}
+{{- end -}}
+{{- $annotations := dict -}}
+{{- if not (kindIs "invalid" $p.syncWave) -}}
+{{- $_ := set $annotations "argocd.argoproj.io/sync-wave" (toString $p.syncWave) -}}
+{{- end -}}
+{{- if include "cluster-network-policies.protected" (dict "root" $root "entry" $p) -}}
+{{- $_ := set $annotations "argocd.argoproj.io/sync-options" "Prune=false,Delete=false" -}}
+{{- if $root.Values.helmKeep -}}{{- $_ := set $annotations "helm.sh/resource-policy" "keep" -}}{{- end -}}
+{{- end -}}
+{{- range $k, $v := ($p.annotations | default dict) -}}
+{{- if hasKey $annotations $k -}}
+{{- fail (printf "policies[%d] (%s): annotations sets %s, which this chart computes; use the dedicated key" $i $key $k) -}}
+{{- end -}}
+{{- $_ := set $annotations $k $v -}}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $p.name }}
+  namespace: {{ $p.namespace }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if $p.podSelector }}
+  podSelector:
+    {{- toYaml $p.podSelector | nindent 4 }}
+  {{- else }}
+  podSelector: {}
+  {{- end }}
+  policyTypes:
+    {{- toYaml $p.policyTypes | nindent 4 }}
+  {{- if hasKey $p "ingress" }}
+  ingress:
+    {{- toYaml $p.ingress | nindent 4 }}
+  {{- end }}
+  {{- if hasKey $p "egress" }}
+  egress:
+    {{- toYaml $p.egress | nindent 4 }}
+  {{- end }}
+{{- end }}

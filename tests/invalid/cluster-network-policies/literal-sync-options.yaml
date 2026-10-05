@@ -1,0 +1,8 @@
+policies:
+  - name: a
+    namespace: ns
+    reason: a reason that is long enough
+    podSelector: {}
+    policyTypes: [Ingress]
+    protect: true
+    annotations: {argocd.argoproj.io/sync-options: Prune=true}
