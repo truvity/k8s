@@ -26,6 +26,16 @@ them, and for anything breaking, what to do.
   renders a Namespace. `just lint` and `just test` cover it (schema, 13
   refused fixtures, goldens).
 
+- `charts/tenancy` is deprecated (`deprecated: true` in `Chart.yaml`, so Helm
+  prints a notice on install and pull). Nothing is removed and what the chart
+  renders does not change. Tenancy is moving to guidelines (a contract in
+  `truvity/policy`), thin per-tenant values and a per-tenant identity
+  ServiceAccount; the generic objects already have homes in `cluster-foundation`,
+  `cluster-baseline` and `cluster-network-policies`. The window, which ends on
+  conditions and not a date, and what the chart gets until then (fixes only) are
+  in `docs/decisions/0004-tenancy-deprecation.md`. If you install this chart: no
+  action now; plan the move before the window ends.
+
 ## v0.11.0
 
 - `charts/tenancy`: renders each tenant's `Namespace`, with its Pod Security

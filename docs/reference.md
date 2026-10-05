@@ -986,6 +986,14 @@ budget of one node, so consolidation cannot move more than one node at a time;
 
 ## `charts/tenancy`
 
+**Deprecated.** Tenancy is becoming guidelines (a contract), thin per-tenant
+values and a per-tenant identity ServiceAccount. The chart keeps rendering what
+it renders, receives correctness and security fixes only, and is removed in a
+release of its own after the window in
+[0004](decisions/0004-tenancy-deprecation.md): the contract is published, no
+cluster installs the chart, and two releases and 60 days have passed since.
+New features are not added here.
+
 The per-tenant plumbing of a shared cluster, as data. Install a pinned version
 from `oci://ghcr.io/truvity/charts/tenancy`.
 
