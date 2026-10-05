@@ -1,0 +1,24 @@
+# Protection: the chart's default and an entry's override.
+protect: true
+helmKeep: true
+policies:
+  - name: kept
+    namespace: edge
+    reason: Deleting it would open the namespace.
+    syncWave: 5
+    podSelector: {}
+    policyTypes: [Ingress]
+    ingress:
+      - from:
+          - podSelector: {}
+  - name: not-kept
+    namespace: edge
+    reason: Cheap to put back; a stale copy is the hazard.
+    protect: false
+    podSelector:
+      matchExpressions:
+        - {key: tier, operator: In, values: [web, api]}
+    policyTypes: [Ingress]
+    ingress:
+      - from:
+          - podSelector: {}

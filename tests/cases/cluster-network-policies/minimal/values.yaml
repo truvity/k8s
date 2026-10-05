@@ -1,0 +1,11 @@
+# One policy: the pods of one workload may open any connection out, and
+# nothing else is said about them.
+policies:
+  - name: edge-agent
+    namespace: edge
+    reason: The agent dials out to a service that has no fixed address.
+    podSelector:
+      matchLabels: {app.kubernetes.io/name: edge-agent}
+    policyTypes: [Egress]
+    egress:
+      - {}

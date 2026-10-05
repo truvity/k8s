@@ -1,0 +1,2 @@
+policies:
+  - {name: a, namespace: ns, reason: "because", podSelector: {}, policyTypes: [Egress], egress: [{}]}

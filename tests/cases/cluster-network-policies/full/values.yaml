@@ -1,0 +1,62 @@
+# The shapes a cluster uses: an open egress, an ingress allowed from one
+# namespace and nothing out (egress listed, no rules: denied), a policy with
+# peers and ports, a sync wave and a literal annotation.
+policies:
+  - name: edge-agent
+    namespace: edge
+    reason: The agent dials out to a service that has no fixed address.
+    syncWave: 15
+    podSelector:
+      matchLabels: {app.kubernetes.io/name: edge-agent}
+    policyTypes: [Egress]
+    egress:
+      - {}
+  - name: static-page
+    namespace: page
+    reason: Serves two files and reaches nothing; the gateway reaches it.
+    syncWave: 15
+    podSelector:
+      matchLabels: {app.kubernetes.io/name: static-page}
+    policyTypes: [Ingress, Egress]
+    ingress:
+      - from:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: gateway-system}
+        ports:
+          - {port: 8080, protocol: TCP}
+  - name: scraper
+    namespace: metrics
+    reason: Scrapes the nodes' kubelets and talks to the API server and the resolver.
+    syncWave: 15
+    podSelector:
+      matchLabels: {app.kubernetes.io/name: scraper}
+    policyTypes: [Egress]
+    egress:
+      - to:
+          - ipBlock: {cidr: 10.0.0.0/16}
+          - ipBlock: {cidr: 172.20.0.0/16}
+        ports:
+          - {port: 10250, protocol: TCP}
+          - {port: 443, protocol: TCP}
+      - to:
+          - namespaceSelector:
+              matchLabels: {example.com/router: "true"}
+          - ipBlock: {cidr: 172.20.0.0/16}
+        ports:
+          - {port: 53, protocol: UDP}
+          - {port: 53, protocol: TCP}
+  - name: workers
+    namespace: builds
+    reason: "Containment of build workers: same-namespace traffic and the internet less the private ranges."
+    podSelector: {}
+    policyTypes: [Ingress, Egress]
+    ingress:
+      - from:
+          - podSelector: {}
+    egress:
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except: [10.0.0.0/16, 172.20.0.0/16, 169.254.169.254/32]
+    annotations:
+      example.com/owner: platform

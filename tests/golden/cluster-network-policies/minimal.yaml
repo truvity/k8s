@@ -1,0 +1,15 @@
+---
+# Source: cluster-network-policies/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: edge-agent
+  namespace: edge
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: edge-agent
+  policyTypes:
+    - Egress
+  egress:
+    - {}

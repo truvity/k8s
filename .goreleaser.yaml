@@ -29,7 +29,9 @@ release:
 
     Go module: `go get github.com/truvity/k8s@{{ .Tag }}`.
     Charts, version `{{ .Version }}`: `oci://ghcr.io/truvity/charts/cluster-baseline`,
-    `oci://ghcr.io/truvity/charts/cluster-foundation` and
-    `oci://ghcr.io/truvity/charts/eks-auto-node-pools`.
+    `oci://ghcr.io/truvity/charts/cluster-foundation`,
+    `oci://ghcr.io/truvity/charts/cluster-network-policies`,
+    `oci://ghcr.io/truvity/charts/eks-auto-node-pools` and
+    `oci://ghcr.io/truvity/charts/tenancy`.
     The mirrored CRD charts `volume-snapshot-crds` and `cilium-crds` are
     published at the upstream version they mirror, once, by the `crd-charts` job.

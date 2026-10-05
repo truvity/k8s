@@ -16,6 +16,16 @@ them, and for anything breaking, what to do.
   so a stack that registered them itself previews no change. Cluster,
   account, region, partition, boundary names and projects are inputs.
 
+- `charts/cluster-network-policies`: a cluster's own NetworkPolicies as data,
+  published to `oci://ghcr.io/truvity/charts/cluster-network-policies` from the
+  next tag. One `NetworkPolicy` per entry of `policies`: name, namespace, pod
+  selector, policy types and the rules verbatim, with a sync wave and optional
+  Argo CD deletion protection. Every entry needs a `reason`; the render refuses
+  rules for a direction the policy does not list, a duplicate and an unknown
+  key. The chart renders the shape, the caller says what is admitted; it never
+  renders a Namespace. `just lint` and `just test` cover it (schema, 13
+  refused fixtures, goldens).
+
 ## v0.11.0
 
 - `charts/tenancy`: renders each tenant's `Namespace`, with its Pod Security

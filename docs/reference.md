@@ -921,6 +921,43 @@ until the ConfigMap exists: without it every NetworkPolicy in the cluster is
 silently ignored. Enabling it changes nothing until a policy selects a pod.
 Deleting it turns every policy off, which is why it is protected like a Namespace.
 
+## `charts/cluster-network-policies`
+
+A cluster's own NetworkPolicies, as data: the policies that contain its platform
+workloads. Install a pinned version from
+`oci://ghcr.io/truvity/charts/cluster-network-policies`.
+
+The chart is the mechanism, not the policy. It renders one `NetworkPolicy` per
+entry and refuses an entry that does not say why it exists; what a policy
+admits (the namespaces, ports and address ranges) is the caller's, so the rules
+are rendered verbatim. Apply it from the tool that owns the cluster's platform
+namespaces, alongside `cluster-foundation`: it renders the policies, never a
+namespace.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `policies[]` | none | One policy per entry (below). |
+| `protect` | `false` | Every policy carries `argocd.argoproj.io/sync-options: Prune=false,Delete=false`. Off by default: a NetworkPolicy is cheap to put back and a stale one is the hazard. |
+| `helmKeep` | `false` | Also `helm.sh/resource-policy: keep` on protected policies. |
+
+An entry: `name`, `namespace`, `reason` (at least ten characters, not rendered),
+`podSelector` (a label selector; `{}` selects every pod of the namespace) and
+`policyTypes` are required; `ingress` and `egress` (rules, verbatim), `syncWave`,
+`protect` (overrides the chart's) and literal `annotations` are optional.
+
+What the render refuses: an unknown key, a missing reason, an entry listed twice,
+`ingress` or `egress` rules for a direction `policyTypes` does not list
+(Kubernetes would silently ignore them) and a literal annotation that sets a key
+the chart computes.
+
+### The first policy denies
+
+The first policy that selects a pod denies everything it does not allow, in each
+direction it lists: a type listed with no rules for it is a deny. Adding the
+first policy to a namespace that had none turns that namespace's selected pods
+default-deny. Check what a namespace already has before adding to it. This
+chart cannot see the cluster, so the `reason` is where the decision is recorded.
+
 ## `charts/eks-auto-node-pools`
 
 Karpenter NodePools, and the NodeClasses they need, for EKS Auto Mode. Install
