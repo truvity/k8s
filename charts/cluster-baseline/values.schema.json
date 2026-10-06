@@ -30,7 +30,31 @@
           "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
           "additionalProperties": { "$ref": "#/definitions/namespace" }
         }
-      }
+      },
+      "$comment": "A namespace whose level departs from the default level needs a reason, so the exemption can be reviewed and retired. The template refuses the departures a schema cannot see: a mode switched off, a per-mode level.",
+      "allOf": [
+        {
+          "if": { "properties": { "level": { "const": "privileged" } }, "required": ["level"] },
+          "then": { "properties": { "namespaces": { "additionalProperties": {
+            "if": { "properties": { "level": { "not": { "const": "privileged" } } }, "required": ["level"] },
+            "then": { "required": ["reason"] }
+          } } } }
+        },
+        {
+          "if": { "properties": { "level": { "const": "baseline" } }, "required": ["level"] },
+          "then": { "properties": { "namespaces": { "additionalProperties": {
+            "if": { "properties": { "level": { "not": { "const": "baseline" } } }, "required": ["level"] },
+            "then": { "required": ["reason"] }
+          } } } }
+        },
+        {
+          "if": { "properties": { "level": { "const": "restricted" } }, "required": ["level"] },
+          "then": { "properties": { "namespaces": { "additionalProperties": {
+            "if": { "properties": { "level": { "not": { "const": "restricted" } } }, "required": ["level"] },
+            "then": { "required": ["reason"] }
+          } } } }
+        }
+      ]
     },
     "protect": { "type": "boolean" },
     "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
