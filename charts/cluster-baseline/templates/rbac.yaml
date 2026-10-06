@@ -1,0 +1,74 @@
+{{- /*
+Opt-in RBAC per namespace (`rbac.namespaces`): namespaced Roles, and
+RoleBindings to a ClusterRole or to a Role of the same namespace; and
+cluster-wide ClusterRoles (`rbac.clusterRoles`), typically for rights on
+operator CRDs that a built-in role does not carry (`aggregateTo` adds the
+aggregate-to-<role> label). Not protected by default (`rbac.protect`).
+*/ -}}
+{{- $rb := .Values.rbac -}}
+{{- range $name := keys ($rb.clusterRoles | default dict) | sortAlpha }}
+{{- $e := index $rb.clusterRoles $name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  {{- with $e.aggregateTo }}
+  labels:
+    {{- range $role := . }}
+    rbac.authorization.k8s.io/aggregate-to-{{ $role }}: "true"
+    {{- end }}
+  {{- end }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" (ternary $e.protect $rb.protect (hasKey $e "protect")) "extra" dict) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+rules:
+  {{- toYaml $e.rules | nindent 2 }}
+{{- end }}
+{{- range $ns := keys ($rb.namespaces | default dict) | sortAlpha }}
+{{- $n := index $rb.namespaces $ns }}
+{{- $roles := $n.roles | default dict }}
+{{- range $name := keys $roles | sortAlpha }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" $rb.protect "extra" dict) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+rules:
+  {{- toYaml (index $roles $name).rules | nindent 2 }}
+{{- end }}
+{{- range $name := keys ($n.roleBindings | default dict) | sortAlpha }}
+{{- $b := index $n.roleBindings $name }}
+{{- $where := printf "rbac.namespaces.%s.roleBindings.%s" $ns $name }}
+{{- if and $b.role $b.clusterRole }}{{ fail (printf "%s names both role and clusterRole" $where) }}{{ end }}
+{{- if not (or $b.role $b.clusterRole) }}{{ fail (printf "%s names neither role nor clusterRole" $where) }}{{ end }}
+{{- if and $b.role (not (hasKey $roles $b.role)) }}{{ fail (printf "%s binds role %q, which is not in rbac.namespaces.%s.roles" $where $b.role $ns) }}{{ end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" $rb.protect "extra" dict) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: {{ ternary "Role" "ClusterRole" (not (empty $b.role)) }}
+  name: {{ $b.role | default $b.clusterRole }}
+subjects:
+  {{- range $s := $b.subjects }}
+  - kind: {{ $s.kind }}
+    name: {{ $s.name | quote }}
+    {{- if eq $s.kind "ServiceAccount" }}
+    namespace: {{ $s.namespace | default $ns }}
+    {{- else }}
+    apiGroup: rbac.authorization.k8s.io
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

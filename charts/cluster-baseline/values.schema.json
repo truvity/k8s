@@ -147,9 +147,123 @@
           "additionalProperties": { "$ref": "#/definitions/limitRangeNamespace" }
         }
       }
+    },
+    "rbac": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protect": { "type": "boolean" },
+        "clusterRoles": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/objectName" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rules"],
+            "properties": {
+              "protect": { "type": "boolean" },
+              "aggregateTo": { "type": "array", "uniqueItems": true, "items": { "enum": ["admin", "edit", "view"] } },
+              "rules": { "$ref": "#/definitions/policyRules" }
+            }
+          }
+        },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "roles": {
+                "type": "object",
+                "propertyNames": { "$ref": "#/definitions/objectName" },
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["rules"],
+                  "properties": { "rules": { "$ref": "#/definitions/policyRules" } }
+                }
+              },
+              "roleBindings": {
+                "type": "object",
+                "propertyNames": { "$ref": "#/definitions/objectName" },
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["subjects"],
+                  "properties": {
+                    "clusterRole": { "type": "string", "minLength": 1 },
+                    "role": { "$ref": "#/definitions/objectName" },
+                    "subjects": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/rbacSubject" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ackRoleSelectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namePrefix": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?-?$" },
+        "protect": { "type": "boolean" },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["roleARN"],
+            "properties": {
+              "roleARN": { "type": "string", "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$" },
+              "protect": { "type": "boolean" }
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
+    "networkPolicyRule": {
+      "type": "object",
+      "required": ["description"],
+      "description": "A NetworkPolicy ingress (from) or egress (to) rule, verbatim, with a description that is rendered as a comment.",
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "from": { "type": "array" },
+        "to": { "type": "array" },
+        "ports": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "policyRules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["verbs"],
+        "properties": {
+          "apiGroups": { "type": "array", "items": { "type": "string" } },
+          "resources": { "type": "array", "items": { "type": "string" } },
+          "resourceNames": { "type": "array", "items": { "type": "string" } },
+          "nonResourceURLs": { "type": "array", "items": { "type": "string" } },
+          "verbs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        }
+      }
+    },
+    "rbacSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": { "enum": ["User", "Group", "ServiceAccount"] },
+        "name": { "type": "string", "minLength": 1 },
+        "namespace": { "$ref": "#/definitions/namespaceName" }
+      }
+    },
     "principalList": {
       "type": "array",
       "uniqueItems": true,
@@ -203,6 +317,9 @@
       "additionalProperties": false,
       "required": ["deny"],
       "properties": {
+        "intraNamespace": { "type": "boolean", "description": "Let the namespace's own pods through, each denied direction." },
+        "ingress": { "type": "array", "items": { "$ref": "#/definitions/networkPolicyRule" } },
+        "egress": { "type": "array", "items": { "$ref": "#/definitions/networkPolicyRule" } },
         "name": { "$ref": "#/definitions/objectName" },
         "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
         "deny": {
@@ -290,6 +407,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "labels": {
+          "type": "object",
+          "description": "Labels the Namespace object carries beside the Pod Security ones (which the chart refuses here).",
+          "propertyNames": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$" },
+          "additionalProperties": { "type": "string", "maxLength": 63 }
+        },
         "level": { "$ref": "#/definitions/level" },
         "version": { "$ref": "#/definitions/version" },
         "reason": { "type": "string", "minLength": 1 },

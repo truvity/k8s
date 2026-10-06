@@ -1,0 +1,55 @@
+# The per-namespace guardrails kit: a namespace's labels beside its Pod
+# Security ones, a baseline NetworkPolicy that lets the namespace's own pods,
+# a gateway and DNS through, a role spine with a namespaced Role, a
+# ClusterRole aggregated into admin, and an ACK IAMRoleSelector.
+podSecurity:
+  modes:
+    enforce: {enabled: true}
+  namespaces:
+    shop:
+      labels:
+        example.com/project: shop
+        example.com/tier: primary
+networkPolicy:
+  name: tenant-baseline
+  namespaces:
+    shop:
+      deny: [ingress, egress]
+      dnsEgress: true
+      intraNamespace: true
+      ingress:
+        - description: the shared gateway
+          from:
+            - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway}}
+              podSelector: {matchLabels: {app.kubernetes.io/name: gateway}}
+      egress:
+        - description: HTTPS out, not the metadata endpoint
+          to:
+            - ipBlock: {cidr: 0.0.0.0/0, except: [169.254.169.254/32]}
+          ports: [{port: 443, protocol: TCP}]
+rbac:
+  clusterRoles:
+    shop-crds:
+      aggregateTo: [admin]
+      rules:
+        - {apiGroups: [example.com], resources: [widgets], verbs: [get, list, watch, create, update, patch, delete]}
+  namespaces:
+    shop:
+      roles:
+        read-certs:
+          rules:
+            - {apiGroups: [cert-manager.io], resources: [certificaterequests], verbs: [create]}
+      roleBindings:
+        deployers:
+          clusterRole: edit
+          subjects: [{kind: Group, name: "shop:deployer"}]
+        certs:
+          role: read-certs
+          subjects: [{kind: Group, name: "system:serviceaccounts:shop"}]
+        runner:
+          clusterRole: view
+          subjects: [{kind: ServiceAccount, name: ci}]
+ackRoleSelectors:
+  namePrefix: ack-project-
+  namespaces:
+    shop: {roleARN: "arn:example:iam::placeholder:role/example-ack-project-shop"}

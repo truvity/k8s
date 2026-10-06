@@ -1,0 +1,168 @@
+---
+# Source: cluster-baseline/templates/pod-security.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    example.com/project: "shop"
+    example.com/tier: "primary"
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: cluster-baseline/templates/network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: shop
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+    - Ingress
+  ingress:
+    # intraNamespace: the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: gateway
+  egress:
+    # intraNamespace: the namespace's own pods
+    - to:
+        - podSelector: {}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: "kube-dns"
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # HTTPS out, not the metadata endpoint
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+          - 169.254.169.254/32
+
+---
+# Source: cluster-baseline/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shop-crds
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  - apiGroups:
+    - example.com
+    resources:
+    - widgets
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+
+---
+# Source: cluster-baseline/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: read-certs
+  namespace: shop
+rules:
+  - apiGroups:
+    - cert-manager.io
+    resources:
+    - certificaterequests
+    verbs:
+    - create
+
+---
+# Source: cluster-baseline/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: certs
+  namespace: shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: read-certs
+subjects:
+  - kind: Group
+    name: "system:serviceaccounts:shop"
+    apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: cluster-baseline/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployers
+  namespace: shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: Group
+    name: "shop:deployer"
+    apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: cluster-baseline/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: runner
+  namespace: shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: "ci"
+    namespace: shop
+
+---
+# Source: cluster-baseline/templates/ack-role-selectors.yaml
+apiVersion: services.k8s.aws/v1alpha1
+kind: IAMRoleSelector
+metadata:
+  name: ack-project-shop
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
+spec:
+  arn: "arn:example:iam::placeholder:role/example-ack-project-shop"
+  namespaceSelector:
+    names:
+      - shop

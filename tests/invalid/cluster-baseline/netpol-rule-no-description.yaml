@@ -1,0 +1,7 @@
+# Every allow rule needs a description.
+networkPolicy:
+  namespaces:
+    shop:
+      deny: [ingress]
+      ingress:
+        - from: [{podSelector: {}}]

@@ -1,0 +1,25 @@
+{{- /*
+Opt-in ACK IAMRoleSelectors (`ackRoleSelectors.namespaces`): one cluster-scoped
+IAMRoleSelector per namespace, <namePrefix><namespace>, binding an IAM role to
+that namespace by NAME. The ACK controllers then reconcile the namespace's AWS
+resources with that role (its capability ceiling), never with their own.
+Removing one widens what the namespace's resources run as, so it is protected
+by default (`ackRoleSelectors.protect`).
+*/ -}}
+{{- $a := .Values.ackRoleSelectors -}}
+{{- range $ns := keys ($a.namespaces | default dict) | sortAlpha }}
+{{- $e := index $a.namespaces $ns }}
+---
+apiVersion: services.k8s.aws/v1alpha1
+kind: IAMRoleSelector
+metadata:
+  name: {{ printf "%s%s" ($a.namePrefix | default "") $ns }}
+  {{- with include "cluster-baseline.annotations" (dict "protect" (ternary $e.protect $a.protect (hasKey $e "protect")) "extra" dict) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  arn: {{ $e.roleARN | quote }}
+  namespaceSelector:
+    names:
+      - {{ $ns }}
+{{- end }}
