@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.15.0
+
 - `charts/cluster-baseline`: the per-namespace guardrails kit, all opt-in:
   a namespace's own `labels` beside its Pod Security labels; in the
   default-deny NetworkPolicy, `intraNamespace` and `ingress`/`egress` allow
