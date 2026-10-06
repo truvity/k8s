@@ -1,7 +1,10 @@
 {{- /*
 A default-deny NetworkPolicy per listed namespace, opt-in. The DNS decision is
 required by the schema whenever egress is denied. Protected by default
-(networkPolicy.protect, or the entry's own `protect`).
+(networkPolicy.protect, or the entry's own `protect`). An entry may let
+traffic through: `intraNamespace` (the namespace's own pods, each denied
+direction) and `ingress`/`egress` rules, NetworkPolicy rules verbatim with a
+`description`, only for a direction it denies.
 */ -}}
 {{- $np := .Values.networkPolicy -}}
 {{- range $ns := keys ($np.namespaces | default dict) | sortAlpha }}
@@ -21,8 +24,21 @@ spec:
     {{- range $t := sortAlpha $e.deny }}
     - {{ title $t }}
     {{- end }}
-  {{- if and (has "egress" $e.deny) $e.dnsEgress }}
-  egress:
+  {{- range $dir := list "ingress" "egress" }}
+  {{- $rules := index $e $dir | default list }}
+  {{- if and $rules (not (has $dir $e.deny)) }}
+  {{- fail (printf "networkPolicy.namespaces.%s.%s: allow rules for a direction the policy does not deny" $ns $dir) }}
+  {{- end }}
+  {{- $intra := and $e.intraNamespace (has $dir $e.deny) }}
+  {{- $dns := and (eq $dir "egress") (has "egress" $e.deny) $e.dnsEgress }}
+  {{- if or $rules $intra $dns }}
+  {{ $dir }}:
+    {{- if $intra }}
+    # intraNamespace: the namespace's own pods
+    - {{ ternary "from" "to" (eq $dir "ingress") }}:
+        - podSelector: {}
+    {{- end }}
+    {{- if $dns }}
     - to:
         - namespaceSelector:
             matchLabels:
@@ -35,5 +51,11 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    {{- end }}
+    {{- range $r := $rules }}
+    # {{ required (printf "networkPolicy.namespaces.%s.%s: every rule needs a description" $ns $dir) $r.description }}
+    - {{ toYaml (omit $r "description") | indent 6 | trim }}
+    {{- end }}
+  {{- end }}
   {{- end }}
 {{- end }}

@@ -1,0 +1,6 @@
+# A RoleBinding to a Role the namespace does not have.
+rbac:
+  namespaces:
+    shop:
+      roleBindings:
+        b: {role: missing, subjects: [{kind: Group, name: g}]}

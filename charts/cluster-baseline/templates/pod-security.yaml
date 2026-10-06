@@ -1,7 +1,8 @@
 {{- /*
 One labels-only Namespace per entry of podSecurity.namespaces. No spec, no
-other metadata: applied server-side, the object owns the PSA labels and
-nothing else, so the namespace's real owner keeps owning the rest.
+other metadata: applied server-side, the object owns the PSA labels (and the
+entry's `labels`, if any) and nothing else, so the namespace's real owner
+keeps owning the rest.
 */ -}}
 {{- $root := . -}}
 {{- $names := keys (.Values.podSecurity.namespaces | default dict) | sortAlpha -}}
@@ -24,6 +25,12 @@ metadata:
     pod-security.kubernetes.io/{{ $mode }}-version: {{ .version }}
     {{- end }}
     {{- end }}
+    {{- end }}
+    {{- range $k := keys ($entry.labels | default dict) | sortAlpha }}
+    {{- if hasPrefix "pod-security.kubernetes.io/" $k }}
+    {{- fail (printf "podSecurity.namespaces.%s.labels.%s: the Pod Security labels are the chart's, from level and modes" $name $k) }}
+    {{- end }}
+    {{ $k }}: {{ index $entry.labels $k | quote }}
     {{- end }}
   {{- if or $root.Values.protect $entry.reason }}
   annotations:

@@ -6,6 +6,14 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/cluster-baseline`: the per-namespace guardrails kit, all opt-in:
+  a namespace's own `labels` beside its Pod Security labels; in the
+  default-deny NetworkPolicy, `intraNamespace` and `ingress`/`egress` allow
+  rules (verbatim, each with a `description`); `rbac` (namespaced Roles and
+  RoleBindings, ClusterRoles with `aggregateTo`); `ackRoleSelectors` (one ACK
+  IAMRoleSelector per namespace, by name, protected by default). A release
+  that sets none of them renders exactly what the previous one did.
+
 ## v0.14.0
 
 - `charts/cluster-baseline`: `labelGuard`, a ValidatingAdmissionPolicy that

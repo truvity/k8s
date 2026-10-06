@@ -821,6 +821,23 @@ which is a reviewed values change like any other).
 | `guard.excludeNamePrefixes` | `[]` | Namespaces whose name starts with one of these are never checked. |
 | `guard.namespaceSelector` | `{}` | A label selector over the namespace's own labels. Empty matches all. |
 
+### The per-namespace guardrails kit
+
+Beside Pod Security and the default-deny policy, the chart renders the rest of
+what a namespace's guardrails are, all opt-in, all per namespace by name:
+
+| Key | What it renders |
+|---|---|
+| `podSecurity.namespaces.<ns>.labels` | More labels on the Namespace object (the chart refuses `pod-security.kubernetes.io/*` here: those come from level and modes). |
+| `networkPolicy.namespaces.<ns>.intraNamespace` | In the default-deny policy, a rule letting the namespace's own pods through, each denied direction. |
+| `networkPolicy.namespaces.<ns>.ingress`, `.egress` | Allow rules in the same policy: NetworkPolicy rules verbatim (`from`/`to`, `ports`) with a required `description`, rendered as a comment. Only for a direction the entry denies. |
+| `rbac.namespaces.<ns>.roles.<name>.rules` | A namespaced Role. |
+| `rbac.namespaces.<ns>.roleBindings.<name>` | A RoleBinding to a ClusterRole (`clusterRole`) or a Role of the namespace (`role`), with `subjects` (`User`, `Group`, `ServiceAccount`; a ServiceAccount defaults to the namespace). |
+| `rbac.clusterRoles.<name>` | A ClusterRole, `rules` and optional `aggregateTo` (`admin`, `edit`, `view`). |
+| `rbac.protect` | `false`: removing a binding only takes a right away. |
+| `ackRoleSelectors.namespaces.<ns>.roleARN` | A cluster-scoped ACK `IAMRoleSelector` named `<ackRoleSelectors.namePrefix><ns>`, binding the role to the namespace by name: the ACK controllers reconcile the namespace's AWS resources with that role. |
+| `ackRoleSelectors.protect` | `true`: removing a selector widens what those resources run as. |
+
 ### The label guard
 
 `labelGuard.enabled` (default `false`) renders a `ValidatingAdmissionPolicy`

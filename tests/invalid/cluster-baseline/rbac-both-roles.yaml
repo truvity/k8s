@@ -1,0 +1,7 @@
+# A RoleBinding names a role or a clusterRole, not both.
+rbac:
+  namespaces:
+    shop:
+      roles: {r: {rules: [{apiGroups: [""], resources: [pods], verbs: [get]}]}}
+      roleBindings:
+        b: {role: r, clusterRole: view, subjects: [{kind: Group, name: g}]}

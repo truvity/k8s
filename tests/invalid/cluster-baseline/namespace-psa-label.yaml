@@ -1,0 +1,5 @@
+# A namespace's own labels may not set a Pod Security label: those are the chart's.
+podSecurity:
+  namespaces:
+    shop:
+      labels: {pod-security.kubernetes.io/enforce: privileged}

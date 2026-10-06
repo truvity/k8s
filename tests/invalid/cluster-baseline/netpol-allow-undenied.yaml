@@ -1,0 +1,8 @@
+# Allow rules for a direction the policy does not deny.
+networkPolicy:
+  namespaces:
+    shop:
+      deny: [ingress]
+      egress:
+        - description: out
+          to: [{ipBlock: {cidr: 0.0.0.0/0}}]

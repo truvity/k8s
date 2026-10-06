@@ -1,0 +1,4 @@
+# The role must be an IAM role ARN.
+ackRoleSelectors:
+  namespaces:
+    shop: {roleARN: "shop-role"}

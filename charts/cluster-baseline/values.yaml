@@ -155,6 +155,18 @@ networkPolicy:
   #       protect: false           # optional per-entry override
   #     batch:
   #       deny: [ingress]
+  #     shop:
+  #       deny: [ingress, egress]
+  #       dnsEgress: true
+  #       intraNamespace: true       # the namespace's own pods, both ways
+  #       ingress:                   # NetworkPolicy rules verbatim, plus a
+  #         - description: the gateway   # `description` (required)
+  #           from:
+  #             - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway}}
+  #       egress:
+  #         - description: HTTPS out
+  #           to: [{ipBlock: {cidr: 0.0.0.0/0}}]
+  #           ports: [{port: 443, protocol: TCP}]
   #
   # `dnsEgress` is a decision the render demands whenever egress is denied: a
   # plain egress deny-all breaks name resolution. true allows DNS (port 53,
@@ -201,4 +213,47 @@ limitRange:
   #       container:
   #         defaultRequest: { cpu: 100m, memory: 128Mi }
   #         default: { memory: 512Mi }
+  namespaces: {}
+
+# RBAC, opt-in. Per namespace: Roles, and RoleBindings to a ClusterRole or a
+# Role of the same namespace. Cluster-wide: ClusterRoles, typically rights on
+# operator CRDs, with `aggregateTo` to add them to built-in roles (admin, edit,
+# view). Not protected by default: removing a binding only takes a right away.
+#
+#   rbac:
+#     clusterRoles:
+#       team-crds:
+#         aggregateTo: [admin]
+#         rules:
+#           - {apiGroups: [example.com], resources: [widgets], verbs: [get, list, watch, create, update, patch, delete]}
+#     namespaces:
+#       team-a:
+#         roles:
+#           read-certs:
+#             rules:
+#               - {apiGroups: [cert-manager.io], resources: [certificaterequests], verbs: [create]}
+#         roleBindings:
+#           deployers:
+#             clusterRole: edit
+#             subjects: [{kind: Group, name: "team-a:deployer"}]
+#           certs:
+#             role: read-certs
+#             subjects: [{kind: Group, name: "system:serviceaccounts:team-a"}]
+rbac:
+  protect: false
+  clusterRoles: {}
+  namespaces: {}
+
+# ACK IAMRoleSelectors, opt-in: one per namespace, <namePrefix><namespace>,
+# binding an IAM role to the namespace by name, so the ACK controllers
+# reconcile its AWS resources with that role (its capability ceiling).
+# Protected by default: removing one widens what those resources run as.
+#
+#   ackRoleSelectors:
+#     namePrefix: ack-project-
+#     namespaces:
+#       team-a: {roleARN: "<the IAM role ARN>"}
+ackRoleSelectors:
+  namePrefix: ""
+  protect: true
   namespaces: {}
