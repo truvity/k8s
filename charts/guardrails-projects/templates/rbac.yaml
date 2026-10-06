@@ -1,0 +1,60 @@
+{{- /*
+The shared ClusterRoles, and each row's Roles and RoleBindings (to a
+ClusterRole, or to a Role of the same row). Prunable: removing a binding only
+takes a right away.
+*/ -}}
+{{- range $name := keys (.Values.clusterRoles | default dict) | sortAlpha }}
+{{- $e := index $.Values.clusterRoles $name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  {{- with $e.aggregateTo }}
+  labels:
+    {{- range $role := . }}
+    rbac.authorization.k8s.io/aggregate-to-{{ $role }}: "true"
+    {{- end }}
+  {{- end }}
+rules:
+  {{- toYaml $e.rules | nindent 2 }}
+{{- end }}
+{{- range $p := .Values.projects }}
+{{- $roles := $p.roles | default dict }}
+{{- range $name := keys $roles | sortAlpha }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $p.name }}
+rules:
+  {{- toYaml (index $roles $name).rules | nindent 2 }}
+{{- end }}
+{{- range $b := $p.roleBindings | default list }}
+{{- $where := printf "projects.%s.roleBindings.%s" $p.name $b.name }}
+{{- if and $b.role $b.clusterRole }}{{ fail (printf "%s names both role and clusterRole" $where) }}{{ end }}
+{{- if not (or $b.role $b.clusterRole) }}{{ fail (printf "%s names neither role nor clusterRole" $where) }}{{ end }}
+{{- if and $b.role (not (hasKey $roles $b.role)) }}{{ fail (printf "%s binds role %q, which is not in projects.%s.roles" $where $b.role $p.name) }}{{ end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $b.name }}
+  namespace: {{ $p.name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: {{ ternary "Role" "ClusterRole" (not (empty $b.role)) }}
+  name: {{ $b.role | default $b.clusterRole }}
+subjects:
+  {{- range $s := $b.subjects }}
+  - kind: {{ $s.kind }}
+    name: {{ $s.name | quote }}
+    {{- if eq $s.kind "ServiceAccount" }}
+    namespace: {{ $s.namespace | default $p.name }}
+    {{- else }}
+    apiGroup: rbac.authorization.k8s.io
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,3 @@
+# A row's labels may not set a Pod Security label.
+projects:
+  - {name: shop, kind: product, labels: {pod-security.kubernetes.io/enforce: privileged}}

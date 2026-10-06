@@ -1,0 +1,4 @@
+# A namespace is one row.
+projects:
+  - {name: shop, kind: product}
+  - {name: shop, kind: ci}

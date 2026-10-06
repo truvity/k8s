@@ -1,0 +1,46 @@
+{{- /*
+One Namespace per row: the row's labels and its Pod Security labels (the
+defaults unless the row departs from them, which needs a reason). Protected
+unless the row is `deletable`.
+*/ -}}
+{{- $root := . -}}
+{{- $ps := .Values.podSecurity -}}
+{{- $seen := dict -}}
+{{- range $p := .Values.projects }}
+{{- if hasKey $seen $p.name }}{{ fail (printf "projects: %s is listed twice" $p.name) }}{{ end }}
+{{- $_ := set $seen $p.name true }}
+{{- $row := $p.podSecurity | default dict }}
+{{- $level := $row.level | default $ps.level }}
+{{- $modes := $row.modes | default $ps.modes | sortAlpha }}
+{{- if and (or (ne $level $ps.level) (ne (toJson $modes) (toJson (sortAlpha $ps.modes)))) (not $row.reason) }}
+{{- fail (printf "projects.%s: its Pod Security departs from the defaults and has no reason; say why, so the exemption can be reviewed and retired" $p.name) }}
+{{- end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $p.name }}
+  labels:
+    {{- range $k := keys ($p.labels | default dict) | sortAlpha }}
+    {{- if hasPrefix "pod-security.kubernetes.io/" $k }}
+    {{- fail (printf "projects.%s.labels.%s: the Pod Security labels are the chart's" $p.name $k) }}
+    {{- end }}
+    {{ $k }}: {{ index $p.labels $k | quote }}
+    {{- end }}
+    {{- range $m := $modes }}
+    pod-security.kubernetes.io/{{ $m }}: {{ $level }}
+    {{- with $ps.version }}
+    pod-security.kubernetes.io/{{ $m }}-version: {{ . }}
+    {{- end }}
+    {{- end }}
+  {{- $ann := include "guardrails-projects.protect" (dict "root" $root "protect" (not $p.deletable)) }}
+  {{- if or $ann $row.reason }}
+  annotations:
+    {{- with $ann }}
+    {{- . | nindent 4 }}
+    {{- end }}
+    {{- with $row.reason }}
+    {{ $ps.reasonAnnotation }}: {{ . | quote }}
+    {{- end }}
+  {{- end }}
+{{- end }}

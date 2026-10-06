@@ -1,0 +1,35 @@
+{{- /*
+The ResourceQuota and LimitRange of each row that names a `quotas` profile.
+*/ -}}
+{{- $root := . -}}
+{{- range $p := .Values.projects }}
+{{- with $p.quota }}
+{{- if not (hasKey $root.Values.quotas .) }}
+{{- fail (printf "projects.%s.quota names %q, which is not in quotas (have: %s)" $p.name . (keys $root.Values.quotas | sortAlpha | join ", ")) }}
+{{- end }}
+{{- $q := index $root.Values.quotas . }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ $root.Values.quotaName }}
+  namespace: {{ $p.name }}
+spec:
+  hard:
+    {{- range $k := keys $q.hard | sortAlpha }}
+    {{ $k }}: {{ index $q.hard $k | toString | quote }}
+    {{- end }}
+{{- with $q.limitRange }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{ $root.Values.limitRangeName }}
+  namespace: {{ $p.name }}
+spec:
+  limits:
+    - type: Container
+      {{- toYaml . | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}

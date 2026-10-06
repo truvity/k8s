@@ -1,0 +1,87 @@
+# Nothing here names an estate: the rows and every rule are the caller's.
+# The render produces nothing until a row is listed.
+
+# --- Data protection ----------------------------------------------------------
+# Objects whose loss loses something carry
+# argocd.argoproj.io/sync-options: Prune=false,Delete=false (and, with
+# helmKeep, helm.sh/resource-policy: keep): the Namespace (everything in it)
+# unless the row is `deletable`, and the IAMRoleSelector (removing it widens
+# what the namespace's AWS resources run as). Everything else is prunable.
+helmKeep: false
+
+# --- Pod Security -------------------------------------------------------------
+# The default every row's Namespace gets. A row may set its own `level` or
+# `modes`; any departure from these needs the row's `reason`, recorded in
+# `reasonAnnotation`.
+podSecurity:
+  level: restricted
+  # Pin a Kubernetes minor ("v1.34") before enforcing; "" renders no
+  # *-version label (the API server reads it as latest).
+  version: ""
+  modes: [warn, audit]
+  reasonAnnotation: guardrails-projects/psa-reason
+
+# --- Baseline NetworkPolicy ---------------------------------------------------
+# One NetworkPolicy per row: default deny both ways, the namespace's own pods
+# (intraNamespace) and these rules. A rule is a NetworkPolicy ingress (`from`)
+# or egress (`to`) rule verbatim with `ports`, plus a required `description`
+# and an optional `kinds`: only rows of those kinds get it.
+#
+#   networkPolicy:
+#     ingress:
+#       - description: the shared gateway
+#         from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway}}}]
+#       - description: CI runners reach the namespace's Services
+#         kinds: [ci]
+#         from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: runners}}}]
+#     egress:
+#       - description: cluster DNS
+#         to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+#         ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+networkPolicy:
+  name: project-baseline
+  intraNamespace: true
+  ingress: []
+  egress: []
+
+# --- Quotas -------------------------------------------------------------------
+# By profile name; a row names one in `quota`. A ResourceQuota (`hard`) and,
+# optionally, a LimitRange's Container defaults (`limitRange`).
+#
+#   quotas:
+#     ci:
+#       hard: {requests.cpu: "16", requests.memory: 32Gi}
+#       limitRange: {defaultRequest: {cpu: 50m}, default: {memory: 512Mi}}
+quotas: {}
+quotaName: project-quota
+limitRangeName: project-defaults
+
+# --- ClusterRoles -------------------------------------------------------------
+# Shared by the rows, typically rights on operator CRDs aggregated into a
+# built-in role (`aggregateTo`: admin, edit, view).
+clusterRoles: {}
+
+# --- ACK IAMRoleSelectors -----------------------------------------------------
+# For a row with `ackRoleARN`: the cluster-scoped IAMRoleSelector
+# <namePrefix><namespace>, binding that role to the namespace by name, so the
+# ACK controllers reconcile the namespace's AWS resources with it.
+ackRoleSelectors:
+  namePrefix: ""
+
+# --- The rows -----------------------------------------------------------------
+# One per project namespace:
+#
+#   projects:
+#     - name: shop                         # the namespace
+#       kind: product                      # matched by the rules' `kinds`
+#       labels: {example.com/project: shop}
+#       podSecurity: {level: baseline, modes: [warn, audit], reason: "..."}
+#       quota: ci                          # a `quotas` profile
+#       deletable: false                   # true: removing the row deletes it
+#       roles:
+#         read-certs: {rules: [{apiGroups: [cert-manager.io], resources: [certificaterequests], verbs: [create]}]}
+#       roleBindings:
+#         - {name: deployers, clusterRole: edit, subjects: [{kind: Group, name: "shop:deployer"}]}
+#         - {name: certs, role: read-certs, subjects: [{kind: Group, name: "system:serviceaccounts:shop"}]}
+#       ackRoleARN: "<the IAM role ARN>"
+projects: []

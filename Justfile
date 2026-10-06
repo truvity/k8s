@@ -1,7 +1,7 @@
 # Development commands. Everything CI runs is a recipe here — the shared
 # check workflow (truvity/ci-workflows) runs each one as its own job.
 
-charts := "cluster-baseline cluster-foundation cluster-network-policies eks-auto-node-pools tenancy"
+charts := "cluster-baseline cluster-foundation cluster-network-policies eks-auto-node-pools guardrails-projects tenancy"
 crd-charts := "volume-snapshot-crds cilium-crds"
 
 # Format Go files.

@@ -1,0 +1,6 @@
+# Every rule needs a description.
+networkPolicy:
+  ingress:
+    - from: [{podSelector: {}}]
+projects:
+  - {name: shop, kind: product}

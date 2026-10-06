@@ -6,6 +6,13 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/guardrails-projects` (new, published from the next tag): the
+  guardrails of every project namespace from a list of project rows, for an
+  L3 `-projects` Application: Namespace with labels and Pod Security,
+  baseline NetworkPolicy, quota and LimitRange by profile, Roles and
+  RoleBindings, an ACK IAMRoleSelector per ceiling, shared ClusterRoles.
+  Namespaces and selectors carry `Prune=false,Delete=false`.
+
 ## v0.15.0
 
 - `charts/cluster-baseline`: the per-namespace guardrails kit, all opt-in:

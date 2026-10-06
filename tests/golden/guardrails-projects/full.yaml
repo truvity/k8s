@@ -1,0 +1,329 @@
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    example.com/project: "shop"
+    example.com/tier: "primary"
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox-alice
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+  annotations:
+    guardrails-projects/psa-reason: "warn-first: sandboxes are not enforced yet"
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: gateway
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+    # cluster DNS
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/16
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: ci-shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: gateway
+    # CI runners reach the namespace's Services
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: runners
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+    # cluster DNS
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/16
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: sandbox-alice
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: gateway
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+    # cluster DNS
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/16
+
+---
+# Source: guardrails-projects/templates/quotas.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: project-quota
+  namespace: ci-shop
+spec:
+  hard:
+    persistentvolumeclaims: "20"
+    requests.cpu: "16"
+    requests.memory: "32Gi"
+
+---
+# Source: guardrails-projects/templates/quotas.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: project-quota
+  namespace: sandbox-alice
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: "16Gi"
+
+---
+# Source: guardrails-projects/templates/quotas.yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: project-defaults
+  namespace: ci-shop
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "1"
+        memory: 512Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+
+---
+# Source: guardrails-projects/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tenant-crds
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  - apiGroups:
+    - example.com
+    resources:
+    - widgets
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+
+---
+# Source: guardrails-projects/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: read-certs
+  namespace: shop
+rules:
+  - apiGroups:
+    - cert-manager.io
+    resources:
+    - certificaterequests
+    verbs:
+    - create
+
+---
+# Source: guardrails-projects/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployers
+  namespace: shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: Group
+    name: "shop:deployer"
+    apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: guardrails-projects/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: certs
+  namespace: shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: read-certs
+subjects:
+  - kind: Group
+    name: "system:serviceaccounts:shop"
+    apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: guardrails-projects/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: job
+  namespace: ci-shop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: User
+    name: "ci:shop"
+    apiGroup: rbac.authorization.k8s.io
+  - kind: ServiceAccount
+    name: "runner"
+    namespace: ci-shop
+
+---
+# Source: guardrails-projects/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: owner
+  namespace: sandbox-alice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: Group
+    name: "sandbox:alice"
+    apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: guardrails-projects/templates/ack-role-selectors.yaml
+apiVersion: services.k8s.aws/v1alpha1
+kind: IAMRoleSelector
+metadata:
+  name: ack-project-shop
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
+spec:
+  arn: "arn:example:iam::placeholder:role/example-ack-project-shop"
+  namespaceSelector:
+    names:
+      - shop

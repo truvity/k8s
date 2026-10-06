@@ -1,0 +1,63 @@
+# Every feature: three kinds of row, a rule only CI rows get, a warn-first row
+# with its reason, quota profiles, a ClusterRole aggregated into admin, roles
+# and bindings of every subject kind, an ACK ceiling, a deletable row.
+helmKeep: true
+podSecurity:
+  level: restricted
+  version: v1.34
+  modes: [warn, audit, enforce]
+networkPolicy:
+  name: tenant-baseline
+  ingress:
+    - description: the shared gateway
+      from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: gateway}}
+    - description: CI runners reach the namespace's Services
+      kinds: [ci]
+      from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: runners}}
+  egress:
+    - description: cluster DNS
+      to:
+        - ipBlock: {cidr: 10.0.0.0/16}
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+quotas:
+  ci:
+    hard: {requests.cpu: "16", requests.memory: 32Gi, persistentvolumeclaims: 20}
+    limitRange:
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {cpu: "1", memory: 512Mi}
+  employee:
+    hard: {requests.cpu: "8", requests.memory: 16Gi}
+clusterRoles:
+  tenant-crds:
+    aggregateTo: [admin]
+    rules:
+      - {apiGroups: [example.com], resources: [widgets], verbs: [get, list, watch, create, update, patch, delete]}
+ackRoleSelectors:
+  namePrefix: ack-project-
+projects:
+  - name: shop
+    kind: product
+    labels: {example.com/project: shop, example.com/tier: primary}
+    roles:
+      read-certs:
+        rules:
+          - {apiGroups: [cert-manager.io], resources: [certificaterequests], verbs: [create]}
+    roleBindings:
+      - {name: deployers, clusterRole: edit, subjects: [{kind: Group, name: "shop:deployer"}]}
+      - {name: certs, role: read-certs, subjects: [{kind: Group, name: "system:serviceaccounts:shop"}]}
+    ackRoleARN: "arn:example:iam::placeholder:role/example-ack-project-shop"
+  - name: ci-shop
+    kind: ci
+    quota: ci
+    roleBindings:
+      - {name: job, clusterRole: edit, subjects: [{kind: User, name: "ci:shop"}, {kind: ServiceAccount, name: runner}]}
+  - name: sandbox-alice
+    kind: employee
+    quota: employee
+    deletable: true
+    podSecurity: {modes: [warn, audit], reason: "warn-first: sandboxes are not enforced yet"}
+    roleBindings:
+      - {name: owner, clusterRole: admin, subjects: [{kind: Group, name: "sandbox:alice"}]}
