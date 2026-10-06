@@ -14,7 +14,7 @@ var testDefaults = cluster.PoolDefaults{
 	Categories:    []string{"m", "r"},
 }
 
-const nodeRole = "arn:aws:iam::123456789012:role/example-eks-auto-node"
+const nodeRole = "arn:aws:iam::acct:role/example-eks-auto-node"
 
 func TestDeriveNodePools(t *testing.T) {
 	t.Parallel()
@@ -60,7 +60,7 @@ func TestDeriveNodePoolsOwnNodeClass(t *testing.T) {
 	pools, err := cluster.DeriveNodePools(map[string]cluster.NodePoolSpec{
 		"ci":       {EphemeralStorage: &cluster.EphemeralStorage{Size: "200Gi"}, PodSubnets: true},
 		"platform": {NodeClass: "standard"},
-	}, testDefaults, "arn:aws:iam::123456789012:role/eks/example-eks-auto-node")
+	}, testDefaults, "arn:aws:iam::acct:role/eks/example-eks-auto-node")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestDeriveNodePoolsOwnNodeClass(t *testing.T) {
 func TestOwnNodeClassNeedsTheNodeRole(t *testing.T) {
 	t.Parallel()
 
-	for _, arn := range []string{"", "arn:aws:iam::123456789012:user/someone", "arn:aws:iam::123456789012:role/"} {
+	for _, arn := range []string{"", "arn:aws:iam::acct:user/someone", "arn:aws:iam::acct:role/"} {
 		_, err := cluster.DeriveNodePools(map[string]cluster.NodePoolSpec{
 			"ci": {EphemeralStorage: &cluster.EphemeralStorage{Size: "200Gi"}},
 		}, testDefaults, arn)
