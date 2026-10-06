@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.22.0
+
 - `pkg/aws/ackfactory`: a project's ACK role can list KMS aliases and create, update and delete aliases named `alias/*-<project>-*` (an alias ARN carries no tags, so the tag condition cannot cover it). Using an alias still needs the project-tagged key.
 
 ## v0.21.0
