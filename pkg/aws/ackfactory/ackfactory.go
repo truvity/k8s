@@ -604,6 +604,16 @@ func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string) string
     "Resource": "*",
     "Condition": {"StringEquals": {"aws:ResourceTag/project": "%[2]s"}}
   },{
+    "Sid": "KMSAliasList",
+    "Effect": "Allow",
+    "Action": "kms:ListAliases",
+    "Resource": "*"
+  },{
+    "Sid": "KMSAliasByProjectName",
+    "Effect": "Allow",
+    "Action": ["kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias"],
+    "Resource": "arn:%[4]s:kms:*:%[1]s:alias/*-%[2]s-*"
+  },{
     "Sid": "DynamoDBAccountReads",
     "Effect": "Allow",
     "Action": ["dynamodb:ListTables", "dynamodb:DescribeLimits"],
