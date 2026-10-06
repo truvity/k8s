@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.21.0
+
 - `pkg/aws/vpclayout`: the address plan of a fleet of VPCs as arithmetic over declared facts: `Plan.VPCCIDR`, `DNSIP`, `PublicSubnetCIDR`, `Calculate` (each logical subnet cut into one block per AZ, /24 slots in a /22 or larger per-AZ blocks, overlaps and misalignment refused), `FilterAZs` (a region's AZs by slot index) and the `SubnetName` / `AZSuffix` naming of a subnet's Name tag. Moved from a consumer; the CIDRs and names are unchanged. The output is what `pkg/aws/vpc` takes as `Args`.
 
 ## v0.20.0
