@@ -80,8 +80,8 @@ type (
 		Observability Observability `yaml:"observability,omitempty"`
 		Delivery      Delivery      `yaml:"delivery,omitempty"`
 		// Labels are the platform-managed labels the live Namespace must
-		// carry: every *.truvity.io/*, truvity.com/* and
-		// pod-security.kubernetes.io/* key, and nothing else.
+		// carry: every key the consumer manages (see ManagedByDomains) and
+		// the pod-security.kubernetes.io/* keys, and nothing else.
 		Labels map[string]string `yaml:"labels,omitempty"`
 	}
 
@@ -137,7 +137,7 @@ type (
 		// (pulumi-tenancy), or "none" where nothing does.
 		ACKSelectorWriter string `yaml:"ackSelectorWriter,omitempty"`
 		// WorkloadIdentity: the namespace is admitted to the
-		// truvity-identity-ca Bundle and may mint SPIFFE leaves.
+		// identity trust Bundle and may mint SPIFFE leaves.
 		WorkloadIdentity bool `yaml:"workloadIdentity,omitempty"`
 		// PodIdentities are the shared test identities a CI or employee
 		// namespace gets a ServiceAccount of each name, bound
@@ -161,7 +161,7 @@ type (
 		// admit the namespace's routes by name.
 		Listeners []string `yaml:"listeners,omitempty,flow"`
 		// RouteGrantBusiness: the namespace carries the coarse
-		// gateway.truvity.io/route-grant-business-origin label, which only
+		// route-grant-business-origin label, which only
 		// the multi-project wildcard listener selects.
 		RouteGrantBusiness bool `yaml:"routeGrantBusiness,omitempty"`
 	}

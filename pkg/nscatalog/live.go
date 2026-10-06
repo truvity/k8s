@@ -67,19 +67,29 @@ func (m Mismatch) String() string {
 	}
 }
 
-// managedLabel reports whether a label key is one the platform manages and
-// the catalog therefore describes: the *.truvity.io and truvity.com keys and
-// the Pod Security labels. Everything else (kubernetes.io/metadata.name,
-// Argo CD and Kargo bookkeeping, Helm) is not the catalog's.
-func managedLabel(key string) bool {
-	prefix, _, ok := strings.Cut(key, "/")
-	if !ok {
+// ManagedByDomains returns the managed-label predicate Compare takes: a key is
+// managed when its prefix is a Pod Security label or one of the domains (or a
+// subdomain of one). Everything else (kubernetes.io/metadata.name, Argo CD and
+// Kargo bookkeeping, Helm) is not the catalog's.
+func ManagedByDomains(domains ...string) func(key string) bool {
+	return func(key string) bool {
+		prefix, _, ok := strings.Cut(key, "/")
+		if !ok {
+			return false
+		}
+
+		if prefix == "pod-security.kubernetes.io" {
+			return true
+		}
+
+		for _, d := range domains {
+			if prefix == d || strings.HasSuffix(prefix, "."+d) {
+				return true
+			}
+		}
+
 		return false
 	}
-
-	return prefix == "pod-security.kubernetes.io" ||
-		prefix == "truvity.com" ||
-		strings.HasSuffix(prefix, ".truvity.io") || prefix == "truvity.io"
 }
 
 // ParseKubectlNamespaces reads `kubectl get namespaces -o json`.
@@ -107,9 +117,9 @@ func ParseKubectlNamespaces(data []byte) ([]LiveNamespace, error) {
 
 // Compare lists every difference between a cluster's catalog and its live
 // namespaces: rows with no namespace, namespaces with no row, and, where both
-// exist, every managed label (managedLabel) that differs. Sorted by
+// exist, every managed label (the managed predicate) that differs. Sorted by
 // namespace, then kind, then label.
-func Compare(c *Catalog, live []LiveNamespace) []Mismatch {
+func Compare(c *Catalog, live []LiveNamespace, managed func(key string) bool) []Mismatch {
 	var out []Mismatch
 
 	byName := make(map[string]LiveNamespace, len(live))
@@ -126,7 +136,7 @@ func Compare(c *Catalog, live []LiveNamespace) []Mismatch {
 			continue
 		}
 
-		out = append(out, compareLabels(c.Cluster, row, ns)...)
+		out = append(out, compareLabels(c.Cluster, row, ns, managed)...)
 	}
 
 	for _, ns := range live {
@@ -142,7 +152,7 @@ func Compare(c *Catalog, live []LiveNamespace) []Mismatch {
 	return out
 }
 
-func compareLabels(cluster string, row *Row, ns LiveNamespace) []Mismatch {
+func compareLabels(cluster string, row *Row, ns LiveNamespace, managed func(string) bool) []Mismatch {
 	var out []Mismatch
 
 	keys := map[string]bool{}
@@ -151,7 +161,7 @@ func compareLabels(cluster string, row *Row, ns LiveNamespace) []Mismatch {
 	}
 
 	for k := range ns.Labels {
-		if managedLabel(k) {
+		if managed(k) {
 			keys[k] = true
 		}
 	}

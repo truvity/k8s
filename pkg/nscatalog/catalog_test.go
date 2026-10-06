@@ -18,7 +18,7 @@ func fixture() *nscatalog.Catalog {
 				Identity:   nscatalog.Identity{ACKCeiling: true, ACKSelectorWriter: nscatalog.WriterPulumiTenancy},
 				Labels: map[string]string{
 					"pod-security.kubernetes.io/enforce": "restricted",
-					"platform.truvity.io/project":        "url-shortener",
+					"platform.example.io/project":        "url-shortener",
 				},
 			},
 			{
@@ -52,7 +52,7 @@ func TestMarshalRoundTripsSorted(t *testing.T) {
 		t.Fatalf("rows not sorted or lost: %v", got)
 	}
 
-	if back.Row("url-shortener").Labels["platform.truvity.io/project"] != "url-shortener" {
+	if back.Row("url-shortener").Labels["platform.example.io/project"] != "url-shortener" {
 		t.Fatalf("labels lost in the round trip")
 	}
 
@@ -73,7 +73,7 @@ func TestCompareReportsEveryKind(t *testing.T) {
 		{Name: "default"},
 		{Name: "url-shortener", Labels: map[string]string{
 			"pod-security.kubernetes.io/enforce":             "baseline", // differs
-			"gateway.truvity.io/route-grant-business-origin": "true",     // extra, managed
+			"gateway.example.io/route-grant-business-origin": "true",     // extra, managed
 			"kubernetes.io/metadata.name":                    "url-shortener",
 			"argocd.argoproj.io/instance":                    "x", // not managed: ignored
 		}},
@@ -81,7 +81,7 @@ func TestCompareReportsEveryKind(t *testing.T) {
 	}
 
 	var got []string
-	for _, m := range nscatalog.Compare(fixture(), live) {
+	for _, m := range nscatalog.Compare(fixture(), live, nscatalog.ManagedByDomains("example.io", "example.com")) {
 		got = append(got, m.Namespace+" "+m.Kind+" "+m.Label)
 	}
 
@@ -89,8 +89,8 @@ func TestCompareReportsEveryKind(t *testing.T) {
 		"billing not-in-catalog ",
 		"dms missing-live ",
 		"url-shortener label-differs pod-security.kubernetes.io/enforce",
-		"url-shortener label-extra gateway.truvity.io/route-grant-business-origin",
-		"url-shortener label-missing platform.truvity.io/project",
+		"url-shortener label-extra gateway.example.io/route-grant-business-origin",
+		"url-shortener label-missing platform.example.io/project",
 	}
 
 	if !slices.Equal(got, want) {
