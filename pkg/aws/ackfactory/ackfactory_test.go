@@ -253,6 +253,21 @@ func TestProjectRolesAreOneRoleAndOnePolicyPerProject(t *testing.T) {
 	if got := str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy"); !strings.Contains(got, "parameter/business/alpha/*") {
 		t.Errorf("default SSM prefix not used: %s", got)
 	}
+
+	alpha := str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy")
+	for _, w := range []string{
+		`"kms:ListAliases"`,
+		`"kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias"`,
+		`:alias/*-alpha-*"`,
+	} {
+		if !strings.Contains(alpha, w) {
+			t.Errorf("KMS alias grant lacks %s: %s", w, alpha)
+		}
+	}
+
+	if strings.Contains(alpha, `alias/*"`) {
+		t.Errorf("alias grant is not project-scoped: %s", alpha)
+	}
 }
 
 func TestInputsAreRefusedBeforeAnythingIsRegistered(t *testing.T) {
