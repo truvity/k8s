@@ -246,7 +246,7 @@ func DeriveNodeClasses(classes map[string]NodeClassSpec, nodeRoleArn string) ([]
 // the cluster's node role, with the volume asked for and gp3's baseline
 // wherever it does not say.
 func deriveNodeClass(name string, es *EphemeralStorage, nodeRoleArn string) (*NodeClass, error) {
-	// arn:aws:iam::<acct>:role[/<path>]/<name> -- the NodeClass takes the
+	// arn:partition:iam::<acct>:role[/<path>]/<name> -- the NodeClass takes the
 	// NAME. An empty or path-less value is a cluster whose node role has not
 	// been reported yet: a NodeClass with no role would never turn Ready,
 	// and its pool would never provision.
