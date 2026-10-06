@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.16.0
+
 - `charts/guardrails-projects` (new, published from the next tag): the
   guardrails of every project namespace from a list of project rows, for an
   L3 `-projects` Application: Namespace with labels and Pod Security,
