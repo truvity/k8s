@@ -1,0 +1,5 @@
+# A principal may not carry a quote: it is written into a CEL string literal.
+labelGuard:
+  enabled: true
+  protectedDomains: [example.com]
+  allowedUsers: ["it's"]

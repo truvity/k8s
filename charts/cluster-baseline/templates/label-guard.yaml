@@ -1,0 +1,63 @@
+{{- /*
+The label guard: only named principals may set, change or remove the
+namespace labels the platform owns (protectedPrefixes, protectedDomains).
+Engines that select namespaces by label (Pod Security Admission, trust
+bundles, route grants, scrape selectors) read those labels, so whoever can
+write them can widen what a namespace gets. A ValidatingAdmissionPolicy only
+validates: it never mutates, so it never competes with a namespace's owner.
+
+Requests from allowedUsers, allowedUserPrefixes and allowedGroups are not
+looked at (matchConditions). Every other CREATE may carry no protected label,
+and every other UPDATE must leave the protected labels exactly as they were.
+Off by default; Warn and Audit first, Deny once the audit log is quiet.
+*/ -}}
+{{- $g := .Values.labelGuard -}}
+{{- if $g.enabled -}}
+{{- if not (or $g.allowedUsers $g.allowedUserPrefixes $g.allowedGroups) -}}
+{{- fail "labelGuard: name at least one allowed principal (allowedUsers, allowedUserPrefixes or allowedGroups), or nobody may label a namespace" -}}
+{{- end -}}
+{{- if not (or $g.protectedPrefixes $g.protectedDomains) -}}
+{{- fail "labelGuard: name the protected labels (protectedPrefixes or protectedDomains)" -}}
+{{- end -}}
+{{- $list := dict -}}
+{{- range $k := list "allowedUsers" "allowedUserPrefixes" "allowedGroups" "protectedPrefixes" "protectedDomains" -}}
+{{- $_ := set $list $k ((index $g $k) | default list | toJson | replace "\"" "'") -}}
+{{- end -}}
+{{- $protected := printf "%s.exists(p, k.startsWith(p)) || %s.exists(d, k.split('/')[0] == d || k.split('/')[0].endsWith('.' + d))" $list.protectedPrefixes $list.protectedDomains -}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $g.name }}
+spec:
+  failurePolicy: {{ $g.failurePolicy }}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
+    - name: not-an-allowed-principal
+      expression: "!(request.userInfo.username in {{ $list.allowedUsers }} || {{ $list.allowedUserPrefixes }}.exists(p, request.userInfo.username.startsWith(p)) || (has(request.userInfo.groups) && request.userInfo.groups.exists(g, g in {{ $list.allowedGroups }})))"
+  variables:
+    - name: newProtected
+      expression: "has(object.metadata.labels) ? object.metadata.labels.filter(k, {{ $protected }}) : []"
+    - name: oldProtected
+      expression: "request.operation == 'UPDATE' && has(oldObject.metadata.labels) ? oldObject.metadata.labels.filter(k, {{ $protected }}) : []"
+    # The protected labels this request sets, changes or removes.
+    - name: changed
+      expression: "variables.newProtected.filter(k, !(request.operation == 'UPDATE' && has(oldObject.metadata.labels) && k in oldObject.metadata.labels && oldObject.metadata.labels[k] == object.metadata.labels[k])) + variables.oldProtected.filter(k, !(has(object.metadata.labels) && k in object.metadata.labels))"
+  validations:
+    - expression: "variables.changed.size() == 0"
+      messageExpression: "'namespace ' + object.metadata.name + ': only the platform may set, change or remove the labels ' + variables.changed.join(', ')"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $g.name }}
+spec:
+  policyName: {{ $g.name }}
+  validationActions: {{ $g.validationActions | toJson }}
+{{- end }}

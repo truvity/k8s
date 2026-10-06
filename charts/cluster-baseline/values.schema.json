@@ -67,6 +67,35 @@
         "namespaceSelector": { "$ref": "#/definitions/labelSelector" }
       }
     },
+    "labelGuard": {
+      "type": "object",
+      "description": "A ValidatingAdmissionPolicy and its binding that let only the named principals set, change or remove the protected namespace labels.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": { "$ref": "#/definitions/objectName" },
+        "validationActions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["Warn", "Audit", "Deny"] }
+        },
+        "failurePolicy": { "enum": ["Ignore", "Fail"] },
+        "protectedPrefixes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?/$" }
+        },
+        "protectedDomains": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$" }
+        },
+        "allowedUsers": { "$ref": "#/definitions/principalList" },
+        "allowedUserPrefixes": { "$ref": "#/definitions/principalList" },
+        "allowedGroups": { "$ref": "#/definitions/principalList" }
+      }
+    },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
@@ -121,6 +150,11 @@
     }
   },
   "definitions": {
+    "principalList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "pattern": "^[^'\"\\\\]+$" }
+    },
     "namespaceName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
     "objectName": {
       "type": "string",

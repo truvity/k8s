@@ -821,6 +821,31 @@ which is a reviewed values change like any other).
 | `guard.excludeNamePrefixes` | `[]` | Namespaces whose name starts with one of these are never checked. |
 | `guard.namespaceSelector` | `{}` | A label selector over the namespace's own labels. Empty matches all. |
 
+### The label guard
+
+`labelGuard.enabled` (default `false`) renders a `ValidatingAdmissionPolicy`
+and its binding that let only named principals set, change or remove the
+namespace labels the platform owns. Engines that select namespaces by label
+(Pod Security Admission, trust bundles, route grants, scrape selectors) read
+those labels, so whoever writes them widens what a namespace gets.
+
+A request from an allowed principal is not looked at. Any other `CREATE` may
+carry no protected label, and any other `UPDATE` must leave every protected
+label exactly as it was (same keys, same values). The message names the labels
+the request set, changed or removed. It only validates; it never mutates.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `labelGuard.enabled` | `false` | Render the policy and its binding. Needs at least one allowed principal and one protected prefix or domain. |
+| `labelGuard.name` | `cluster-baseline-namespace-labels` | Name of both objects. |
+| `labelGuard.validationActions` | `[Warn, Audit]` | Any of `Warn`, `Audit`, `Deny`. Add `Deny` once the audit log shows only the expected principals. |
+| `labelGuard.failurePolicy` | `Ignore` | `Ignore` or `Fail`. Use `Fail` together with `Deny`. |
+| `labelGuard.protectedPrefixes` | `[pod-security.kubernetes.io/]` | Label keys starting with one of these are protected. Each ends in `/`. |
+| `labelGuard.protectedDomains` | `[]` | Label keys whose prefix is one of these DNS domains or a subdomain of one: `example.com` protects `example.com/x` and `team.example.com/x`, not `notexample.com/x`. |
+| `labelGuard.allowedUsers` | `[]` | Exact user names the guard does not look at. |
+| `labelGuard.allowedUserPrefixes` | `[]` | User name prefixes, for principals whose session part varies (an assumed IAM role: its `assumed-role/<role>/` ARN prefix). |
+| `labelGuard.allowedGroups` | `[]` | Groups the guard does not look at. |
+
 ### Opt-in extras
 
 Each renders nothing until a namespace is listed under it, and none of them

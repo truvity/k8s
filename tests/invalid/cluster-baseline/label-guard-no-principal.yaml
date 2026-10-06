@@ -1,0 +1,4 @@
+# Enabled with no allowed principal: nobody could label a namespace.
+labelGuard:
+  enabled: true
+  protectedDomains: [example.com]

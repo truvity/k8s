@@ -1,0 +1,40 @@
+---
+# Source: cluster-baseline/templates/label-guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cluster-baseline-namespace-labels
+spec:
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
+    - name: not-an-allowed-principal
+      expression: "!(request.userInfo.username in ['kubernetes-admin'] || ['arn:example:sts::placeholder:assumed-role/example-deployer/'].exists(p, request.userInfo.username.startsWith(p)) || (has(request.userInfo.groups) && request.userInfo.groups.exists(g, g in ['example:k8s:admin'])))"
+  variables:
+    - name: newProtected
+      expression: "has(object.metadata.labels) ? object.metadata.labels.filter(k, ['pod-security.kubernetes.io/'].exists(p, k.startsWith(p)) || ['example.com'].exists(d, k.split('/')[0] == d || k.split('/')[0].endsWith('.' + d))) : []"
+    - name: oldProtected
+      expression: "request.operation == 'UPDATE' && has(oldObject.metadata.labels) ? oldObject.metadata.labels.filter(k, ['pod-security.kubernetes.io/'].exists(p, k.startsWith(p)) || ['example.com'].exists(d, k.split('/')[0] == d || k.split('/')[0].endsWith('.' + d))) : []"
+    # The protected labels this request sets, changes or removes.
+    - name: changed
+      expression: "variables.newProtected.filter(k, !(request.operation == 'UPDATE' && has(oldObject.metadata.labels) && k in oldObject.metadata.labels && oldObject.metadata.labels[k] == object.metadata.labels[k])) + variables.oldProtected.filter(k, !(has(object.metadata.labels) && k in object.metadata.labels))"
+  validations:
+    - expression: "variables.changed.size() == 0"
+      messageExpression: "'namespace ' + object.metadata.name + ': only the platform may set, change or remove the labels ' + variables.changed.join(', ')"
+
+---
+# Source: cluster-baseline/templates/label-guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cluster-baseline-namespace-labels
+spec:
+  policyName: cluster-baseline-namespace-labels
+  validationActions: ["Warn","Audit"]
