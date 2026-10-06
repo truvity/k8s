@@ -3,6 +3,20 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: sandbox
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    cluster-baseline/psa-reason: "warn-first: the sandbox is not enforced yet"
+
+---
+# Source: cluster-baseline/templates/pod-security.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
   name: shop
   labels:
     pod-security.kubernetes.io/audit: restricted

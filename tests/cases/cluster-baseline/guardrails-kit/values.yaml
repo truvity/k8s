@@ -10,6 +10,10 @@ podSecurity:
       labels:
         example.com/project: shop
         example.com/tier: primary
+    sandbox:
+      reason: "warn-first: the sandbox is not enforced yet"
+      modes:
+        enforce: {enabled: false}
 networkPolicy:
   name: tenant-baseline
   namespaces:

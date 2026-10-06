@@ -399,6 +399,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "enabled": { "type": "boolean", "description": "false: this namespace carries no label of this kind (needs a reason when the mode is on)." },
         "level": { "$ref": "#/definitions/level" },
         "version": { "$ref": "#/definitions/version" }
       }
