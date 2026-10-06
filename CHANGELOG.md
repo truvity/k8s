@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.14.0
+
 - `charts/cluster-baseline`: `labelGuard`, a ValidatingAdmissionPolicy that
   lets only named principals (`allowedUsers`, `allowedUserPrefixes`,
   `allowedGroups`) set, change or remove protected namespace labels
