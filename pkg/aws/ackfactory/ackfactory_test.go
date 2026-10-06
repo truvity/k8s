@@ -302,3 +302,34 @@ func TestTheDefaultPartitionIsTheCommercialOne(t *testing.T) {
 		t.Errorf("cluster ARN %q, want %q", got, want)
 	}
 }
+
+func TestProjectRolesCanForbidRolesThePlatformMints(t *testing.T) {
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.ProjectRoles(ctx, cluster,
+			ackfactory.ProjectRolesOptions{Boundary: "deploy", ForbiddenRoles: []string{"c1-archive-*"}},
+			[]ackfactory.ProjectRole{{Name: "alpha"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy")
+	for _, want := range []string{`"Effect": "Deny"`, `"iam:*"`, `arn:part:iam::acct-example:role/c1-archive-*`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("policy lacks %s: %s", want, got)
+		}
+	}
+
+	// And with none, the allow-only document is untouched.
+	plain, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.ProjectRoles(ctx, cluster, ackfactory.ProjectRolesOptions{Boundary: "deploy"},
+			[]ackfactory.ProjectRole{{Name: "alpha"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(str(find(t, plain, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy"), "Deny") {
+		t.Error("a policy with no forbidden roles carries a deny")
+	}
+}

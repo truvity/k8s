@@ -1,6 +1,7 @@
 package ackfactory
 
 import (
+	"encoding/json"
 	"context"
 	"errors"
 	"fmt"
@@ -471,6 +472,12 @@ type ProjectRolesOptions struct {
 	// one that requires the project and cluster tags on iam:CreateRole and
 	// entraps the roles the controllers create under it. Required.
 	Boundary string
+	// ForbiddenRoles are role-name patterns (`*` allowed) a project role may
+	// NOT touch, whatever its project prefix would otherwise allow: a role the
+	// platform's own identity mints for the project (an archive role, say).
+	// An explicit deny, so it wins over the project-prefixed allow. Empty adds
+	// nothing: the policy is unchanged.
+	ForbiddenRoles []string
 	// Controllers are the short names of the controllers allowed to assume
 	// the roles. Nil means DefaultProjectControllers.
 	Controllers []string
@@ -553,7 +560,7 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 		if _, err := iam.NewRolePolicy(ctx, roleName+"-policy", &iam.RolePolicyArgs{
 			Role:   role.Name,
 			Name:   pulumi.String(roleName + "-policy"),
-			Policy: pulumi.String(projectPolicy(c, name, ssm)),
+			Policy: pulumi.String(projectPolicy(c, name, ssm, o.ForbiddenRoles)),
 		}, o.ResourceOptions...); err != nil {
 			return fmt.Errorf("attach ack-project policy for %s: %w", name, err)
 		}
@@ -563,8 +570,8 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 }
 
 // projectPolicy is a project role's identity policy.
-func projectPolicy(c Cluster, name, ssmPrefix string) string {
-	return fmt.Sprintf(`{
+func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string) string {
+	return withForbiddenRoles(c, forbidden, fmt.Sprintf(`{
   "Version": "2012-10-17",
   "Statement": [{
     "Sid": "IAMRead",
@@ -615,5 +622,37 @@ func projectPolicy(c Cluster, name, ssmPrefix string) string {
     "Action": "ssm:*",
     "Resource": "arn:%[4]s:ssm:*:%[1]s:parameter%[3]s/*"
   }]
-}`, c.AccountID, name, ssmPrefix, c.partition())
+}`, c.AccountID, name, ssmPrefix, c.partition()))
+}
+
+// withForbiddenRoles appends the explicit deny for ForbiddenRoles to a policy
+// document, or returns it as it is when there are none.
+func withForbiddenRoles(c Cluster, forbidden []string, doc string) string {
+	if len(forbidden) == 0 {
+		return doc
+	}
+
+	resources := make([]string, 0, len(forbidden))
+	for _, pattern := range forbidden {
+		resources = append(resources, c.roleARN(pattern))
+	}
+
+	var policy map[string]any
+	if err := json.Unmarshal([]byte(doc), &policy); err != nil {
+		panic(fmt.Sprintf("ackfactory: project policy is not JSON: %v", err))
+	}
+
+	policy["Statement"] = append(policy["Statement"].([]any), map[string]any{
+		"Sid":      "DenyPlatformMintedRoles",
+		"Effect":   "Deny",
+		"Action":   "iam:*",
+		"Resource": resources,
+	})
+
+	out, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	return string(out)
 }
