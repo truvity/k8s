@@ -380,6 +380,45 @@
           "ackRoleARN": {
             "type": "string",
             "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$"
+          },
+          "podIdentities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/definitions/objectName"
+            }
+          }
+        }
+      }
+    },
+    "podIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clusterName": {
+          "type": "string"
+        },
+        "associations": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/objectName"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "roleARN",
+              "associationNamespace"
+            ],
+            "properties": {
+              "roleARN": {
+                "type": "string",
+                "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$"
+              },
+              "associationNamespace": {
+                "$ref": "#/definitions/namespaceName"
+              }
+            }
           }
         }
       }

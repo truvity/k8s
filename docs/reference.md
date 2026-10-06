@@ -1139,6 +1139,7 @@ renders, per row:
 | ResourceQuota `quotaName`, LimitRange `limitRangeName` | the `quotas` profile the row names in `quota` | no |
 | Roles, RoleBindings | the row's `roles` and `roleBindings` (to a `clusterRole` or a `role` of the row) | no |
 | IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
+| ServiceAccount, PodIdentityAssociation `<name>-<identity>` | the row's `podIdentities` (names under `podIdentities.associations`: `roleARN`, `associationNamespace`); the association lives in its own namespace | no |
 
 plus the shared `clusterRoles` (`aggregateTo`: admin, edit, view). Protected
 objects carry `argocd.argoproj.io/sync-options: Prune=false,Delete=false`
