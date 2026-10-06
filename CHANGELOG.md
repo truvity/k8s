@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/nscatalog`: the namespace catalog contract (one row per cluster and namespace, one column group per concern), its YAML encoding (`Marshal` takes the provenance header the caller stamps; `Unmarshal`, `MarshalUnder`) and the read-only live check (`Compare`, `CompareACKSelectors`, the kubectl JSON parsers). Moved from a consumer; no behaviour change.
+
 ## v0.18.0
 
 - `charts/guardrails-projects`: `projects[].podIdentities` (names under
