@@ -1,0 +1,4 @@
+clusterName: example-cluster
+subnetSelectorTags: {example.com/subnet-tier: nodes}
+nodeClasses:
+  - {name: standard, role: r, ephemeralStorage: {size: 80Gi, iops: 16000, throughput: 2000}}
