@@ -1,0 +1,5 @@
+# A protected domain must be a DNS name with at least two labels.
+labelGuard:
+  enabled: true
+  protectedDomains: [example]
+  allowedGroups: [admins]

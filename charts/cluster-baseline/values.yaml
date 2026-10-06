@@ -93,6 +93,32 @@ guard:
   # selector). Empty matches every namespace.
   namespaceSelector: {}
 
+# The label guard: a ValidatingAdmissionPolicy that lets only the named
+# principals set, change or remove the namespace labels the platform owns.
+# Engines that select namespaces by label read them, so whoever writes them
+# widens what a namespace gets. Off by default.
+labelGuard:
+  enabled: false
+  name: cluster-baseline-namespace-labels
+  # Warn and Audit first; Deny once the audit log shows only the expected
+  # principals.
+  validationActions: [Warn, Audit]
+  # Ignore: a warning guard must never block a namespace. Use Fail together
+  # with Deny.
+  failurePolicy: Ignore
+  # Label keys starting with one of these are protected.
+  protectedPrefixes:
+    - pod-security.kubernetes.io/
+  # Label keys whose prefix is one of these DNS domains, or a subdomain of
+  # one (example.com protects example.com/x and team.example.com/x).
+  protectedDomains: []
+  # The principals the guard does not look at: exact user names, user name
+  # prefixes (an assumed role's session names vary) and groups. Name at least
+  # one, or nobody could label a namespace.
+  allowedUsers: []
+  allowedUserPrefixes: []
+  allowedGroups: []
+
 # --- Opt-in per namespace ----------------------------------------------------
 # Each block below renders nothing until a namespace is listed under it. The
 # namespaces must already exist: these objects are namespaced and do not

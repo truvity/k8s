@@ -6,6 +6,13 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/cluster-baseline`: `labelGuard`, a ValidatingAdmissionPolicy that
+  lets only named principals (`allowedUsers`, `allowedUserPrefixes`,
+  `allowedGroups`) set, change or remove protected namespace labels
+  (`protectedPrefixes`, default the Pod Security labels; `protectedDomains`,
+  a domain and its subdomains). Off by default, `[Warn, Audit]` when on: a
+  release that does not set it renders exactly what the previous one did.
+
 ## v0.13.0
 
 - **Deprecated:** `pkg/aws/backupbucket` moves to `github.com/truvity/cnpg/v2/pkg/aws/backupstore` (K5: the backup bucket belongs to the CNPG family) and is now a forwarder of type aliases and one function, for one release. Importers keep compiling; to migrate, change the import path and `BackupBucket` to `BackupStore`. The component's Pulumi type is now `truvity:cnpg/aws:BackupStore`, aliased from `truvity:k8s/aws:BackupBucket`, so a stack that deployed it from here previews with no change and no replace. k8s now depends on `truvity/cnpg/v2`. The package is removed in the release after next.

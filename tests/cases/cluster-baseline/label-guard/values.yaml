@@ -1,0 +1,15 @@
+# The label guard with every kind of principal and protected label: the Pod
+# Security labels and everything under example.com, writable only by the
+# delivery engine's assumed role, one break-glass user and the admin group.
+labelGuard:
+  enabled: true
+  protectedPrefixes:
+    - pod-security.kubernetes.io/
+  protectedDomains:
+    - example.com
+  allowedUsers:
+    - kubernetes-admin
+  allowedUserPrefixes:
+    - "arn:example:sts::placeholder:assumed-role/example-deployer/"
+  allowedGroups:
+    - "example:k8s:admin"
