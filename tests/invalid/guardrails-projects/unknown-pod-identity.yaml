@@ -1,0 +1,4 @@
+# A row names an association that is not declared.
+podIdentities: {clusterName: example}
+projects:
+  - {name: shop, kind: product, podIdentities: [missing]}

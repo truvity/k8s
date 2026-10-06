@@ -68,6 +68,19 @@ clusterRoles: {}
 ackRoleSelectors:
   namePrefix: ""
 
+# --- EKS Pod Identity ---------------------------------------------------------
+# For each name a row lists in `podIdentities`: a ServiceAccount of that name in
+# the row's namespace and an ACK PodIdentityAssociation <namespace>-<name> in
+# `associationNamespace`, out of the namespace's reach.
+#
+#   podIdentities:
+#     clusterName: my-cluster
+#     associations:
+#       test-s3: {roleARN: "<the IAM role ARN>", associationNamespace: identity-system}
+podIdentities:
+  clusterName: ""
+  associations: {}
+
 # --- The rows -----------------------------------------------------------------
 # One per project namespace:
 #
@@ -84,4 +97,5 @@ ackRoleSelectors:
 #         - {name: deployers, clusterRole: edit, subjects: [{kind: Group, name: "shop:deployer"}]}
 #         - {name: certs, role: read-certs, subjects: [{kind: Group, name: "system:serviceaccounts:shop"}]}
 #       ackRoleARN: "<the IAM role ARN>"
+#       podIdentities: [test-s3]           # names under podIdentities.associations
 projects: []
