@@ -13,6 +13,10 @@ them, and for anything breaking, what to do.
   RoleBindings, ClusterRoles with `aggregateTo`); `ackRoleSelectors` (one ACK
   IAMRoleSelector per namespace, by name, protected by default). A release
   that sets none of them renders exactly what the previous one did.
+- `charts/cluster-baseline`: `podSecurity.namespaces.<ns>.modes.<kind>.enabled:
+  false` switches one label kind off for one namespace (a warn-first namespace
+  on an enforcing cluster); like any departure from the defaults it needs a
+  `reason`.
 
 ## v0.14.0
 

@@ -47,6 +47,9 @@ podSecurity:
   # when that kind is switched off cluster-wide, which is how enforcement is
   # rolled out one namespace at a time. Any override of the resolved level
   # must carry a `reason`: the render refuses one that does not.
+  # `modes.<kind>.enabled: false` does the opposite for one namespace: no
+  # label of that kind although the kind is on cluster-wide (a warn-first
+  # namespace on an enforcing cluster); it needs a `reason` too.
   namespaces: {}
 
 # Labels-only Namespace objects are meant to be applied server-side, so they

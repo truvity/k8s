@@ -18,7 +18,11 @@ chart defaults for any mode (and therefore needs a reason).
   {{- $default := $sw.level | default $psa.level -}}
   {{- $level := "" -}}
   {{- $version := "" -}}
-  {{- if $nm.level -}}
+  {{- if and (hasKey $nm "enabled") (not $nm.enabled) -}}
+    {{- /* This namespace switches the mode off (a warn-first namespace on an
+           enforcing cluster): no label of this kind, and a reason is due. */ -}}
+    {{- if $sw.enabled -}}{{- $override = true -}}{{- end -}}
+  {{- else if $nm.level -}}
     {{- $level = $nm.level -}}
   {{- else if $sw.enabled -}}
     {{- $level = $ns.level | default $default -}}

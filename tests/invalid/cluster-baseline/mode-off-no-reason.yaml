@@ -1,0 +1,8 @@
+# Switching an enforced mode off for one namespace needs a reason.
+podSecurity:
+  modes:
+    enforce: {enabled: true}
+  namespaces:
+    sandbox:
+      modes:
+        enforce: {enabled: false}
