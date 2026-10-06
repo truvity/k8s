@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.18.0
+
 - `charts/guardrails-projects`: `projects[].podIdentities` (names under
   `podIdentities.associations`) renders a ServiceAccount in the row's
   namespace and an ACK PodIdentityAssociation `<namespace>-<name>` in the
