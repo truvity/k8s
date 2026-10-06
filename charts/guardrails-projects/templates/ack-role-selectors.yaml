@@ -1,0 +1,22 @@
+{{- /*
+For a row with `ackRoleARN`: the cluster-scoped IAMRoleSelector
+<namePrefix><namespace>, binding the role to the namespace by name. Protected:
+removing it widens what the namespace's AWS resources run as.
+*/ -}}
+{{- $root := . -}}
+{{- range $p := .Values.projects }}
+{{- with $p.ackRoleARN }}
+---
+apiVersion: services.k8s.aws/v1alpha1
+kind: IAMRoleSelector
+metadata:
+  name: {{ printf "%s%s" ($root.Values.ackRoleSelectors.namePrefix | default "") $p.name }}
+  annotations:
+    {{- include "guardrails-projects.protect" (dict "root" $root "protect" true) | nindent 4 }}
+spec:
+  arn: {{ . | quote }}
+  namespaceSelector:
+    names:
+      - {{ $p.name }}
+{{- end }}
+{{- end }}

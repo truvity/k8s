@@ -1,0 +1,39 @@
+{{- /*
+One baseline NetworkPolicy per row: default deny both ways, the namespace's own
+pods, and the shared rules (a rule with `kinds` only for rows of those kinds).
+Prunable: the Namespace carries the protection.
+*/ -}}
+{{- $np := .Values.networkPolicy -}}
+{{- range $p := .Values.projects }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $np.name }}
+  namespace: {{ $p.name }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  {{- range $dir := list "ingress" "egress" }}
+  {{- $any := $np.intraNamespace }}
+  {{- range $r := index $np $dir | default list }}{{ if or (not $r.kinds) (has $p.kind $r.kinds) }}{{ $any = true }}{{ end }}{{ end }}
+  {{- if not $any }}
+  {{ $dir }}: []
+  {{- else }}
+  {{ $dir }}:
+    {{- if $np.intraNamespace }}
+    # the namespace's own pods
+    - {{ ternary "from" "to" (eq $dir "ingress") }}:
+        - podSelector: {}
+    {{- end }}
+    {{- range $r := index $np $dir | default list }}
+    {{- if or (not $r.kinds) (has $p.kind $r.kinds) }}
+    # {{ required (printf "networkPolicy.%s: every rule needs a description" $dir) $r.description }}
+    - {{ toYaml (omit $r "description" "kinds") | indent 6 | trim }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+{{- end }}

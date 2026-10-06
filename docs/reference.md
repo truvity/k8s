@@ -1124,3 +1124,26 @@ tenant's lifecycle: it is created and removed with the namespace, in it, and
 needs the namespace's token Secret. The broker side (the accounts the broker
 knows, the auth callout that maps a namespace to the account of the same name)
 belongs with the broker; the contract between them is that name.
+
+## guardrails-projects
+
+One Application renders the guardrails of every project namespace of a
+cluster from a list of rows (`projects`), the shape of an L3 `-projects`
+Application: the caller computes the rows (one per namespace) and the chart
+renders, per row:
+
+| Object | From | Protected |
+|---|---|---|
+| Namespace | `name`, `labels`, Pod Security (`podSecurity` defaults, or the row's `level`/`modes` with a required `reason`) | yes, unless the row is `deletable` |
+| NetworkPolicy `networkPolicy.name` | default deny both ways, `intraNamespace`, the shared `ingress`/`egress` rules (verbatim, each with `description`; a rule with `kinds` only for rows of those kinds) | no |
+| ResourceQuota `quotaName`, LimitRange `limitRangeName` | the `quotas` profile the row names in `quota` | no |
+| Roles, RoleBindings | the row's `roles` and `roleBindings` (to a `clusterRole` or a `role` of the row) | no |
+| IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
+
+plus the shared `clusterRoles` (`aggregateTo`: admin, edit, view). Protected
+objects carry `argocd.argoproj.io/sync-options: Prune=false,Delete=false`
+(and `helm.sh/resource-policy: keep` with `helmKeep`), so the Application can
+prune everything else. A row listed twice, a Pod Security label among a
+row's `labels`, an unknown quota profile and a rule without a description
+are refused.
+

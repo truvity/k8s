@@ -1,0 +1,4 @@
+# One row with the defaults: a Namespace warned and audited at restricted,
+# a baseline policy letting only the namespace's own pods through.
+projects:
+  - {name: shop, kind: product}

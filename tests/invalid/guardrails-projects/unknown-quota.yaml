@@ -1,0 +1,3 @@
+# A row's quota must name a profile.
+projects:
+  - {name: shop, kind: product, quota: missing}

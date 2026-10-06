@@ -1,0 +1,7 @@
+# A binding names a role or a clusterRole, not both.
+projects:
+  - name: shop
+    kind: product
+    roles: {r: {rules: [{apiGroups: [""], resources: [pods], verbs: [get]}]}}
+    roleBindings:
+      - {name: b, role: r, clusterRole: view, subjects: [{kind: Group, name: g}]}

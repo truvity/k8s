@@ -1,0 +1,3 @@
+# The ACK ceiling must be an IAM role ARN.
+projects:
+  - {name: shop, kind: product, ackRoleARN: shop-role}
