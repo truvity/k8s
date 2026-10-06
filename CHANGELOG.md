@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.23.0
+
 - `pkg/nscatalog`: `Build` derives one cluster's catalog from its facts (`Inputs`: the Pod Security table, the foundation's namespaces, the tenant inventory, the business projects, the listener groups' selectors, the shared broker, the delivery projects, Kargo). Every project, CI and employee namespace is written by `guardrails-projects`, which stamps its Pod Security labels and renders its ACK role selector; the label keys are the caller's (`LabelKeys`, with `Identity`). The tenancy naming (`EmployeeNamespace`, `CIRepoNamespace`, `Tenancy.Namespaces`) comes with it. Moved from a consumer; its catalogs are unchanged.
 - `pkg/cluster`: the Pod Security table (`PodSecurity`: `Validate`, `Resolve` to what a Namespace's owner stamps per row, the same labels `cluster-baseline.resolve` renders; `WithDeletableRows`, `ResolvedPodSecurity.WithOwnedRow`) and the label guard (`DeriveLabelGuard`, `LabelGuard.Validate`: who may write the protected namespace labels). Moved from a consumer.
 - `charts/cluster-baseline`: the schema refuses a namespace whose `level` departs from `podSecurity.level` without a `reason` (the template already did; a schema error names the namespace before anything renders).
