@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/ackfactory`: `ProjectRolesOptions.ForbiddenRoles`, role-name patterns a project role may not touch (an explicit `iam:*` deny, so it wins over the project-prefixed allow): for a role the platform's own identity mints for a project, such as an archive role, whose name contains the project's name. Empty: the policy is unchanged.
+
 ## v0.16.0
 
 - `charts/guardrails-projects` (new, published from the next tag): the
