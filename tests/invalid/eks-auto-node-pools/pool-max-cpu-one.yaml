@@ -1,0 +1,2 @@
+nodePools:
+  - {name: general, archs: [arm64], capacityTypes: [on-demand], categories: [m], maxInstanceCpu: 1}

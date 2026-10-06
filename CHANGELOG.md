@@ -6,6 +6,9 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/cluster`: the EKS Auto Mode node pool derivation (`DeriveNodePools`, `DeriveNodeClasses`, `ApplyDefaultNodeClass`: the `eks-auto-node-pools` chart's `nodePools` and `nodeClasses` from declared pools, with the taints, the node role name and gp3's baseline filled in) and the input rules of a declared pool (`ValidateNodePool`, `ValidateNodeClass`, `ValidateEphemeralStorage`). A pool that states no architecture, capacity type or instance category takes the caller's `PoolDefaults`; the library has none of its own.
+- `charts/eks-auto-node-pools`: the schema refuses what the NodeClass or Karpenter would refuse later: an instance category outside c, m, r, t; `maxInstanceCpu` of 1 (Auto Mode admits no instance at or below 1 vCPU); `iops` above 16000; `throughput` above 1000. Four refusal fixtures.
+
 ## v0.19.0
 
 - `pkg/nscatalog`: the namespace catalog contract (one row per cluster and namespace, one column group per concern), its YAML encoding (`Marshal` takes the provenance header the caller stamps; `Unmarshal`, `MarshalUnder`) and the read-only live check (`Compare`, with `ManagedByDomains`, `CompareACKSelectors`, the kubectl JSON parsers). Moved from a consumer; no behaviour change.

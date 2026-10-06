@@ -61,7 +61,10 @@
           "type": "array", "minItems": 1, "uniqueItems": true,
           "items": { "enum": ["on-demand", "spot"] }
         },
-        "categories": { "$ref": "#/definitions/stringList" },
+        "categories": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["c", "m", "r", "t"] }
+        },
         "zones": { "$ref": "#/definitions/stringList" },
         "taints": {
           "type": "array",
@@ -77,7 +80,7 @@
           }
         },
         "cpuLimit": { "type": "integer", "minimum": 1 },
-        "maxInstanceCpu": { "type": "integer", "minimum": 1 },
+        "maxInstanceCpu": { "type": "integer", "minimum": 2 },
         "expireAfter": { "$ref": "#/definitions/duration" },
         "terminationGracePeriod": { "$ref": "#/definitions/duration" },
         "consolidationPolicy": { "enum": ["WhenEmpty", "WhenEmptyOrUnderutilized"] },
@@ -100,8 +103,8 @@
           "required": ["size", "iops", "throughput"],
           "properties": {
             "size": { "type": "string", "pattern": "^[0-9]+(Gi|Ti)$" },
-            "iops": { "type": "integer", "minimum": 3000 },
-            "throughput": { "type": "integer", "minimum": 125 }
+            "iops": { "type": "integer", "minimum": 3000, "maximum": 16000 },
+            "throughput": { "type": "integer", "minimum": 125, "maximum": 1000 }
           }
         }
       }
