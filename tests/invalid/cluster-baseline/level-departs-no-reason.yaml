@@ -1,0 +1,7 @@
+# The schema's rule: a namespace whose level differs from the default level
+# (here baseline, so restricted departs from it) says why.
+podSecurity:
+  level: baseline
+  namespaces:
+    example-batch:
+      level: restricted

@@ -784,7 +784,7 @@ keeps the rest. A name that does not exist yet is created, empty.
 | `podSecurity.modes.<kind>.enabled` | `warn`: true, `audit`: true, `enforce`: false | One switch per label kind. Off renders no label of that kind. |
 | `podSecurity.modes.<kind>.level` / `.version` | `""` | Replace the two values above for this one kind; empty inherits. |
 | `podSecurity.namespaces.<name>` | `{}` | The namespaces to label. An empty entry takes the defaults. The name is a DNS label. |
-| `podSecurity.namespaces.<name>.level` | unset | Replaces the level for every mode that is on in this namespace. Requires `reason`. |
+| `podSecurity.namespaces.<name>.level` | unset | Replaces the level for every mode that is on in this namespace. A level other than `podSecurity.level` requires `reason` (the schema refuses it without one). |
 | `podSecurity.namespaces.<name>.version` | unset | Replaces the version pin for this namespace. |
 | `podSecurity.namespaces.<name>.modes.<kind>.level` / `.version` | unset | Overrides one kind and renders its label even when the kind is off cluster-wide. This is the enforce canary. A level that differs from the default requires `reason`. |
 | `podSecurity.namespaces.<name>.reason` | unset | Why this namespace departs from the defaults. Required by the render for any override of the level or any kind that is off; rendered into `reasonAnnotation`. |
