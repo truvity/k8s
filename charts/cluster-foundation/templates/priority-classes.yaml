@@ -1,0 +1,21 @@
+{{- /* One PriorityClass per entry of `priorityClasses`, in name order. */ -}}
+{{- $root := . -}}
+{{- $defaults := list -}}
+{{- range $name := (keys (.Values.priorityClasses | default dict) | sortAlpha) }}
+{{- $entry := index $root.Values.priorityClasses $name }}
+{{- if $entry.globalDefault }}{{- $defaults = append $defaults $name -}}{{- end }}
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  {{- include "cluster-foundation.metadata" (dict "root" $root "name" $name "entry" $entry "computed" (dict) "where" (printf "priorityClasses.%s" $name)) | nindent 2 }}
+value: {{ int64 $entry.value }}
+globalDefault: {{ $entry.globalDefault | default false }}
+description: {{ $entry.description | quote }}
+{{- with $entry.preemptionPolicy }}
+preemptionPolicy: {{ . }}
+{{- end }}
+{{- end }}
+{{- if gt (len $defaults) 1 }}
+{{- fail (printf "priorityClasses: %s are all globalDefault; at most one may be" (join ", " $defaults)) }}
+{{- end }}

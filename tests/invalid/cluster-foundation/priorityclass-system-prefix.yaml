@@ -1,0 +1,4 @@
+priorityClasses:
+  system-mine:
+    value: 10
+    description: "reserved prefix"

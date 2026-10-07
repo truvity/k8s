@@ -1,7 +1,15 @@
 package ekscluster_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"sort"
 	"strings"
 	"sync"
@@ -12,7 +20,26 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/truvity/k8s/pkg/aws/ekscluster"
+	"github.com/truvity/k8s/pkg/cluster"
 )
+
+// testCAPEM is a throwaway self-signed CA certificate the mocked cluster
+// reports (base64-encoded, as EKS does).
+var testCAPEM = func() string {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "kubernetes"}, IsCA: true, BasicConstraintsValid: true}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+}()
 
 type alias struct {
 	typ      string
@@ -50,7 +77,23 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 	r.regs = append(r.regs, reg)
 	r.mu.Unlock()
 
-	return args.Name + "-id", args.Inputs.Copy(), nil
+	outs := args.Inputs.Copy()
+	if args.TypeToken == "aws:eks/cluster:Cluster" {
+		// What EKS reports once the cluster exists.
+		outs["endpoint"] = resource.NewStringProperty("https://api.c1.example")
+		outs["certificateAuthority"] = resource.NewObjectProperty(resource.PropertyMap{
+			"data": resource.NewStringProperty(base64.StdEncoding.EncodeToString([]byte(testCAPEM))),
+		})
+		outs["identities"] = resource.NewArrayProperty([]resource.PropertyValue{
+			resource.NewObjectProperty(resource.PropertyMap{
+				"oidcs": resource.NewArrayProperty([]resource.PropertyValue{
+					resource.NewObjectProperty(resource.PropertyMap{"issuer": resource.NewStringProperty("https://oidc.example/id/abc")}),
+				}),
+			}),
+		})
+	}
+
+	return args.Name + "-id", outs, nil
 }
 
 func (*recorder) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
@@ -631,7 +674,14 @@ func TestRefusals(t *testing.T) {
 		"entry principal repeat": {func(a *ekscluster.Args) {
 			a.AccessEntries[1].PrincipalARN = adminPrincipal
 		}, "already has an entry"},
-		"entry policy":    {func(a *ekscluster.Args) { a.AccessEntries[0].PolicyARN = "" }, "AccessEntries[0].PolicyARN is empty"},
+		"entry policy":   {func(a *ekscluster.Args) { a.AccessEntries[0].PolicyARN = "" }, "AccessEntries[0].PolicyARN is empty"},
+		"upgrade policy": {func(a *ekscluster.Args) { a.UpgradePolicy = "standard" }, "UpgradePolicy \"standard\""},
+		"unknown capability": {func(a *ekscluster.Args) {
+			a.Capabilities = []cluster.Capability{"gpu"}
+		}, "unknown capability \"gpu\""},
+		"repeated capability": {func(a *ekscluster.Args) {
+			a.Capabilities = []cluster.Capability{cluster.Storage, cluster.Storage}
+		}, "repeats a capability"},
 		"entry namespace": {func(a *ekscluster.Args) { a.AccessEntries[1].Namespaces = []string{""} }, "AccessEntries[1].Namespaces[0] is empty"},
 		"coredns version without its corefile": {func(a *ekscluster.Args) {
 			a.CoreDNS.Version = "v9.9.9-eksbuild.1"
@@ -848,5 +898,126 @@ func TestNoAccessEntriesAndNoCoreDNSRegisterNeither(t *testing.T) {
 		if strings.HasPrefix(r.typ, "aws:eks/access") || r.typ == "aws:eks/addon:Addon" {
 			t.Errorf("registered %s %s", r.typ, r.name)
 		}
+	}
+}
+
+func TestUpgradePolicyAndDeletionProtectionOnlyWhenSet(t *testing.T) {
+	res, err := run(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := find(t, res.regs, "aws:eks/cluster:Cluster", "k-cluster")
+	for _, key := range []resource.PropertyKey{"upgradePolicy", "deletionProtection"} {
+		if v, ok := c.inputs[key]; ok && !v.IsNull() {
+			t.Errorf("%s = %v without being asked for", key, v)
+		}
+	}
+
+	a := base()
+	a.UpgradePolicy = ekscluster.UpgradePolicyStandard
+	a.DeletionProtection = ptr(true)
+
+	res, err = run(t, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c = find(t, res.regs, "aws:eks/cluster:Cluster", "k-cluster")
+	if got := c.inputs["upgradePolicy"].ObjectValue()["supportType"].StringValue(); got != "STANDARD" {
+		t.Errorf("upgradePolicy.supportType %q", got)
+	}
+
+	if v := c.inputs["deletionProtection"]; !v.IsBool() || !v.BoolValue() {
+		t.Errorf("deletionProtection = %v, want true", v)
+	}
+}
+
+// contractOf runs the component and returns what its Contract resolves to.
+func contractOf(t *testing.T, a *ekscluster.Args) cluster.Outputs {
+	t.Helper()
+
+	var (
+		mu  sync.Mutex
+		got cluster.Outputs
+	)
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		p, err := pulumiaws.NewProvider(ctx, "aws-main", &pulumiaws.ProviderArgs{})
+		if err != nil {
+			return err
+		}
+
+		a.Provider = p
+
+		c, err := ekscluster.New(ctx, "k", a)
+		if err != nil {
+			return err
+		}
+
+		c.Contract.ApplyT(func(o cluster.Outputs) error {
+			mu.Lock()
+			got = o
+			mu.Unlock()
+
+			return nil
+		})
+
+		return nil
+	}, pulumi.WithMocks("example", "dev", &recorder{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	return got
+}
+
+func TestContractReportsTheClusterUnderTheProviderNeutralContract(t *testing.T) {
+	got := contractOf(t, base())
+
+	if err := got.Validate(); err != nil {
+		t.Fatalf("the contract does not validate: %v", err)
+	}
+
+	if got.Provider != cluster.ProviderEKS || got.Name != "c1" || got.Endpoint != "https://api.c1.example" {
+		t.Errorf("provider, name, endpoint: %q %q %q", got.Provider, got.Name, got.Endpoint)
+	}
+
+	if got.CertificateAuthorityPEM != testCAPEM {
+		t.Errorf("the certificate authority is not the decoded PEM:\n%s", got.CertificateAuthorityPEM)
+	}
+
+	if got.OIDCIssuer != "https://oidc.example/id/abc" {
+		t.Errorf("oidc issuer %q", got.OIDCIssuer)
+	}
+
+	var caps []string
+	for _, c := range got.Capabilities.List() {
+		caps = append(caps, string(c))
+	}
+
+	if want := "node-pools,workload-identity,load-balancing,api-access"; strings.Join(caps, ",") != want {
+		t.Errorf("capabilities %v, want %s", caps, want)
+	}
+}
+
+func TestContractCapabilitiesAreTheCallers(t *testing.T) {
+	a := base()
+	a.Capabilities = []cluster.Capability{cluster.NodePools, cluster.Storage, cluster.NetworkPolicy}
+
+	got := contractOf(t, a)
+	if err := got.Validate(); err != nil {
+		t.Fatalf("the contract does not validate: %v", err)
+	}
+
+	if !got.Capabilities.Has(cluster.Storage) || got.Capabilities.Has(cluster.WorkloadIdentity) {
+		t.Errorf("capabilities %v", got.Capabilities.List())
+	}
+
+	if got.OIDCIssuer != "" {
+		t.Errorf("issuer %q reported without workload-identity", got.OIDCIssuer)
 	}
 }

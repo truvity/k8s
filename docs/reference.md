@@ -15,6 +15,20 @@
 
 `Outputs.Validate()` returns nil, or one error that joins every problem.
 
+### `pkg/cluster/clusterout`
+
+Every provider component reports its contract as a `clusterout.Output`, a
+Pulumi output whose element is a `cluster.Outputs`, in its `Contract` field.
+`Name()`, `Endpoint()`, `CertificateAuthorityPEM()` and `OIDCIssuer()` are
+string outputs of the fields; `Validated()` is the same output with
+`Validate` applied, so a bad report fails every resource that depends on it.
+The package is separate so `pkg/cluster` stays free of the Pulumi SDK.
+
+```go
+kubeconfigInputs := c.Contract.Validated() // any provider's component
+endpoint := c.Contract.Endpoint()
+```
+
 ### Capabilities
 
 | Capability | Constant | A cluster that offers it guarantees |
@@ -589,6 +603,9 @@ c, err := ekscluster.New(ctx, "main", &ekscluster.Args{
 | `LogGroupName`, `LogRetentionDays` | Default `/aws/eks/<Name>/cluster` (the group EKS writes to) and 90 days. |
 | `AccessEntries` | `Name`, `PrincipalARN`, `PolicyARN`, `Namespaces`: one `STANDARD` access entry and one access policy association per principal, scoped to the cluster, or to `Namespaces` when set. Names and principals are unique. The cluster has no bootstrap admin: with no entry nobody reaches its API. |
 | `CoreDNS` | `*CoreDNS`: `Version`, `Corefile`, `Extras`. Nil installs no add-on. See below. |
+| `UpgradePolicy` | `UpgradePolicyStandard` (`STANDARD`) or `UpgradePolicyExtended` (`EXTENDED`). Empty leaves it unset, so EKS keeps what the cluster has (EXTENDED for a new one). STANDARD: the cluster is upgraded when standard support ends and never pays for extended support. |
+| `DeletionProtection` | `*bool`. Nil leaves it unset (off for a new cluster). True: EKS refuses to delete the cluster, a second lock beside `Protect`, which only guards this Pulumi program. |
+| `Capabilities` | The contract's capabilities. Empty: `DefaultCapabilities()`, which is `node-pools`, `workload-identity`, `load-balancing`, `api-access`. Add `storage` and `network-policy` once a default StorageClass exists and the NetworkPolicy controller is on (`cluster-foundation` renders both). |
 | `Tags` | Set on the key, the roles, the log group and the cluster. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
 | `LegacyTopLevel` | Adopt loose resources by alias. |
@@ -604,7 +621,8 @@ unknown log type, an empty node pool, a key rotation period outside 90 to
 policy, a repeated access entry name or principal, an empty namespace, a
 `CoreDNS.Version` other than `DefaultCoreDNSVersion` with no `Corefile`, extras
 with no `kubernetes` stanza to insert them above, an empty or multi-line extra,
-and a naming hook that returns an empty or repeated name.
+an `UpgradePolicy` other than `STANDARD` or `EXTENDED`, an unknown or repeated
+capability, and a naming hook that returns an empty or repeated name.
 
 The cluster is created after both roles, every policy attachment and the log
 group; the access entries and the add-on after the cluster, each policy
@@ -677,6 +695,11 @@ for a cluster that is meant to be torn down.
 `Cluster` (`*eks.Cluster`), `KeyARN`, `ClusterRoleARN`, `ClusterRoleName`,
 `NodeRoleARN`, `NodeRoleName` (`pulumi.StringOutput`). The component exports no
 stack output of its own: the caller names those.
+
+`Contract` (`clusterout.Output`) is the cluster under the provider-neutral
+contract: provider `eks`, the name, the endpoint, the certificate authority
+decoded from base64 to PEM, the cluster's own service-account token issuer
+(empty unless `workload-identity` is in `Capabilities`) and the capabilities.
 
 ## `pkg/aws/eksoidc`
 
@@ -965,7 +988,7 @@ leave new pods unschedulable. An entry may carry its own `protect`.
 
 The objects a cluster needs before any workload, as data: Namespaces with
 their Pod Security labels and deletion protection, ClusterRoleBindings,
-StorageClasses and, on EKS Auto Mode, the NetworkPolicy controller switch.
+StorageClasses, PriorityClasses and, on EKS Auto Mode, the NetworkPolicy controller switch.
 Install a pinned version from `oci://ghcr.io/truvity/charts/cluster-foundation`.
 
 It differs from `cluster-baseline` on purpose. `cluster-baseline` renders
@@ -990,6 +1013,7 @@ namespace is listed.
 | `namespaces.<name>` | `{}` | `level` (needs a `reason`), `reason`, `syncWave`, `protect`, literal `labels` and `annotations`. |
 | `clusterRoleBindings.<name>` | none | `clusterRole`, `subjects` (`Group`, `User`, `ServiceAccount` with a `namespace`), `syncWave`, `protect`. |
 | `storageClasses.<name>` | none | `provisioner`, `isDefault`, `reclaimPolicy`, `volumeBindingMode`, `allowVolumeExpansion`, `parameters`, `syncWave`, `protect`. |
+| `priorityClasses.<name>` | none | `value` (at most 1000000000), `description` (required), `globalDefault` (at most one), `preemptionPolicy`, `syncWave`, `protect`, `annotations`. A `system-` name is refused: Kubernetes reserves it. |
 | `eksAuto.networkPolicyController` | off | `enabled`, `syncWave`, `protect`: renders ConfigMap `amazon-vpc-cni` in `kube-system`. |
 
 A literal label or annotation may not set a key the chart computes (the

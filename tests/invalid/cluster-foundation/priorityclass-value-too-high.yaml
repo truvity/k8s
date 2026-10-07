@@ -1,0 +1,4 @@
+priorityClasses:
+  huge:
+    value: 2000000000
+    description: "above the user range"

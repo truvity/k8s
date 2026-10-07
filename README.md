@@ -14,6 +14,7 @@ capabilities.
 | --- | --- |
 | Go module `github.com/truvity/k8s` | `go get github.com/truvity/k8s@v0.1.0` |
 | `pkg/cluster` — the provider-neutral contract: outputs and capabilities, with a validator | Go package, no cloud dependency |
+| `pkg/cluster/clusterout` — the contract as a Pulumi output (`Contract` of every provider component) | Go package |
 | `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component, unreleased |
 | `pkg/aws/backupbucket` — DEPRECATED, moved to `truvity/cnpg` `pkg/aws/backupstore`; a versioned, KMS-encrypted cross-account backup bucket with version deletion denied, optional Object Lock and cross-region replica, `truvity:k8s/aws:BackupBucket` | Pulumi component, unreleased |
 | `pkg/aws/vpcpeering` — a cross-account, cross-region VPC peering with its routes, DNS-resolution options and private-zone associations, `truvity:k8s/aws:VpcPeering` | Pulumi component, unreleased |
@@ -23,7 +24,7 @@ capabilities.
 | `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component, unreleased |
 | `pkg/aws/ackfactory` — the AWS identity of the ACK controllers: the IAM and EKS controller roles, the service controllers' roles (adopting what is live) and the per-project capability roles; plain functions, names are API | Go package, unreleased |
 | `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
-| `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
+| `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses, PriorityClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
 | `charts/cluster-network-policies` — a cluster's own NetworkPolicies as data: selector, policy types and rules per entry, each with a required reason, sync wave and optional deletion protection | Helm chart, `oci://ghcr.io/truvity/charts/cluster-network-policies`, unreleased |
 | `charts/eks-auto-node-pools` — Karpenter NodePools and NodeClasses for EKS Auto Mode, one disruption budget per pool, subnet tags and roles as values | Helm chart, `oci://ghcr.io/truvity/charts/eks-auto-node-pools`, unreleased |
 | `charts/guardrails-projects` — the guardrails of every project namespace from a list of project rows: Namespace with labels and Pod Security, baseline NetworkPolicy (shared rules filtered by the row's kind), quota and LimitRange by profile, Roles and RoleBindings, an ACK IAMRoleSelector for the row's ceiling role; data-bearing objects carry `Prune=false,Delete=false` | Helm chart, `oci://ghcr.io/truvity/charts/guardrails-projects` |

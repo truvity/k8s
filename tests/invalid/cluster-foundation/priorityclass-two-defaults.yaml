@@ -1,0 +1,9 @@
+priorityClasses:
+  a:
+    value: 1
+    description: "first"
+    globalDefault: true
+  b:
+    value: 2
+    description: "second"
+    globalDefault: true
