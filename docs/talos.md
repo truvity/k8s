@@ -191,6 +191,94 @@ talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5 --dry-run
 talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5
 ```
 
+## Workload identity (IAM roles for service accounts)
+
+A pod gets AWS credentials by presenting a ServiceAccount token that AWS STS
+verifies against the cluster's issuer. Four pieces, all offline until the
+last:
+
+1. **The issuer.** Set `Cluster.ServiceAccountIssuer` to an https URL you
+   control, for example `https://oidc.example.com/clusters/example`. The API
+   server signs tokens as that issuer and announces
+   `<issuer>/openid/v1/jwks`; the endpoint stays an accepted issuer.
+2. **The documents.** Generate them from the secrets bundle, no cluster
+   needed:
+
+   ```go
+   keys, _ := oidc.PublicKeysFromPEM(bundle.Certs.K8sServiceAccount.Key)
+   docs, _ := oidc.Generate(issuer, keys...)
+   // docs.Discovery -> <issuer>/.well-known/openid-configuration
+   // docs.JWKS      -> <issuer>/openid/v1/jwks
+   ```
+
+   They are what kube-apiserver serves itself (key IDs, algorithms, field
+   order). A key rotation publishes the old and the new key together until
+   no token signed with the old one is alive.
+3. **Publication.** `pkg/aws/oidcissuer` writes both objects to an
+   S3-compatible bucket (AWS S3, or a store reached through the AWS
+   provider's S3 endpoint) and, with `IAMProvider`, registers the issuer as
+   an IAM OpenID Connect provider (client ID `sts.amazonaws.com`). The bucket
+   must serve them publicly at the issuer URL: a public-read policy on the
+   prefix, or a CDN or custom domain in front. `oidcissuer.TrustPolicy`
+   writes a role's trust policy for named ServiceAccounts
+   (`<namespace>/<name>`, `*` allowed in the name).
+4. **The webhook.** [amazon-eks-pod-identity-webhook][webhook] (the
+   component that makes this "IRSA on Talos") mutates every pod whose
+   ServiceAccount carries `eks.amazonaws.com/role-arn`: it projects a token
+   with audience `sts.amazonaws.com` and sets `AWS_ROLE_ARN`,
+   `AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_REGION` and `AWS_STS_REGIONAL_ENDPOINTS`.
+   The AWS SDKs pick those up with no code change.
+
+[webhook]: https://github.com/aws/amazon-eks-pod-identity-webhook
+
+### Running the webhook
+
+- **Image and serving certificate.** Run the upstream image (or a fork you
+  maintain) with a serving certificate from cert-manager (the `cluster-pki`
+  chart's issuer, or a self-signed one): the webhook's
+  `MutatingWebhookConfiguration` needs the CA bundle injected
+  (`cert-manager.io/inject-ca-from`).
+- **Flags.** `--token-audience=sts.amazonaws.com`, `--aws-default-region`
+  (required by recent versions; pods otherwise get no region),
+  `--sts-regional-endpoint=true`, `--annotation-prefix=eks.amazonaws.com`.
+  Keep `--in-cluster=false` and give it the certificate files.
+- **Replicas.** Two, with a PodDisruptionBudget, spread over nodes.
+- **Failure policy and ordering.** With `failurePolicy: Ignore` (usual: a
+  webhook outage must not stop every pod), a pod created while the webhook
+  is down starts WITHOUT credentials and stays so until recreated. Order
+  every workload that needs AWS after the webhook (an Argo CD sync wave
+  later than the webhook's), and check in CI that no annotated
+  ServiceAccount sits in an earlier wave.
+- **Bootstrap-critical pods** (an etcd backup, a secrets operator that
+  unseals with a cloud KMS) should not depend on the webhook at all: give
+  them the projected token and the environment by hand.
+
+  ```yaml
+  env:
+    - {name: AWS_ROLE_ARN, value: "<role ARN>"}
+    - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+    - {name: AWS_REGION, value: "<region>"}
+  volumeMounts:
+    - {name: aws-token, mountPath: /var/run/secrets/aws, readOnly: true}
+  volumes:
+    - name: aws-token
+      projected:
+        sources:
+          - serviceAccountToken: {audience: sts.amazonaws.com, path: token, expirationSeconds: 3600}
+  ```
+
+- **Key type.** The bundle's ServiceAccount key is RSA (RS256); keep it so
+  for AWS.
+
+### Checking it end to end
+
+```sh
+curl -fsS https://oidc.example.com/clusters/example/.well-known/openid-configuration
+kubectl create token -n backup etcd-backup --audience sts.amazonaws.com > /tmp/t
+aws sts assume-role-with-web-identity --role-arn "<role ARN>" \
+  --role-session-name check --web-identity-token "file:///tmp/t"
+```
+
 ## Disaster recovery
 
 - **etcd** is backed up by `charts/talos-etcd-backup`. To restore, bootstrap
