@@ -1,10 +1,9 @@
 # AWS S3 through a role assumed with a projected token: no stored key, no
 # webhook.
-image: {tag: v0.1.0-beta.3}
+image: {tag: v0.1.0-beta.2}
 clusterName: example
 s3: {bucket: backups, region: us-east-1}
 encryption: {ageRecipient: age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq}
-compression: false
 credentials:
   webIdentity:
     roleArn: "<role ARN>"

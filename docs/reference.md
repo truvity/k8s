@@ -1277,14 +1277,13 @@ into a namespace the machine config grants `os:etcd:backup`
 
 | Value | Default | Meaning |
 | --- | --- | --- |
-| `image.tag` | required | The talos-backup tag. Its environment contract (`CLUSTER_NAME`, `BUCKET`, `S3_PREFIX`, `AWS_REGION`, `CUSTOM_S3_ENDPOINT`, `USE_PATH_STYLE`, `AGE_X25519_PUBLIC_KEY`, `DISABLE_ENCRYPTION`, `ENABLE_COMPRESSION`) is what the chart writes; re-check it on a bump. |
+| `image.tag` | required | The talos-backup tag. Its environment contract (`CLUSTER_NAME`, `BUCKET`, `S3_PREFIX`, `AWS_REGION`, `CUSTOM_S3_ENDPOINT`, `USE_PATH_STYLE`, `AGE_X25519_PUBLIC_KEY`, `DISABLE_ENCRYPTION`) is what the chart writes, verified against v0.1.0-beta.2, which turns path-style addressing on with `USE_PATH_STYLE=false`; re-check it on a bump. |
 | `clusterName` | required | Part of every snapshot's key. |
 | `schedule`, `timeZone` | `17 3 * * *`, none | The CronJob's. Runs never overlap. |
 | `s3.bucket`, `s3.region` | required | The bucket and region. |
 | `s3.prefix`, `s3.endpoint`, `s3.pathStyle` | `etcd`, AWS, `false` | Key prefix; a non-AWS store's URL and its addressing. |
 | `encryption.ageRecipient` | required | The age X25519 recipient (`age1...`). Its private key stays off the cluster. |
 | `encryption.disabled`, `disabledReason` | `false` | Plaintext, only with a reason. |
-| `compression` | `true` | Compress before encrypting. |
 | `credentials.secretName` | none | A Secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. |
 | `credentials.webIdentity.roleArn` | none | A role assumed with a token the pod projects itself (audience `sts.amazonaws.com`): no webhook in the path of the recovery backup. Exactly one of the two credentials. |
 | `serviceAccountName`, `talosServiceAccountName` | `talos-etcd-backup`, `talos-etcd-backup-talos` | The pod's ServiceAccount (what a trust policy names) and the `talos.dev` ServiceAccount whose Secret carries the Talos API credentials; they must differ. |

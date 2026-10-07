@@ -38,7 +38,6 @@
         "disabledReason": { "type": "string" }
       }
     },
-    "compression": { "type": "boolean" },
     "credentials": {
       "type": "object",
       "additionalProperties": false,
