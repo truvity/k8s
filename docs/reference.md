@@ -822,8 +822,96 @@ of `ProjectRoles` are registered directly under the stack, as they always were.
 
 ## Other provider components
 
-None yet. Each provider's page lands here with its inputs, its children and
-the alias each child carries.
+### `pkg/talos/schematic`
+
+A Talos Image Factory schematic (`Schematic`: overlay, extra kernel
+arguments, META values, official system extensions, bootloader, SecureBoot,
+disk image) and its ID, the hex SHA-256 of its canonical YAML, computed
+offline exactly as the factory computes it (the factory's own test vectors
+are this package's tests). `Parse` refuses an unknown field.
+
+`Installer` names the image a node installs and upgrades to:
+
+| Field | Meaning |
+| --- | --- |
+| `SchematicID` | The 64-hex schematic ID. Required unless `Image` is set. |
+| `Factory` | The factory host. Default `factory.talos.dev`. A mirror of the factory is a registry mirror in the machine config, not this. |
+| `Platform` | `metal` (default), or a cloud or hypervisor platform. |
+| `SecureBoot` | The `-installer-secureboot` image. |
+| `Image` | A whole repository instead (a board the factory cannot build), without a tag. |
+
+`Reference(talosVersion)` is `<factory>/<platform>-installer/<id>:<version>`
+(or `<Image>:<version>`). Pin the ID in the cluster's declaration and keep
+the schematic beside it; a test that re-derives the ID from the schematic
+catches an extension added without a new ID.
+
+### `pkg/talos/machineconfig`
+
+Renders a self-hosted Talos cluster's machine configs offline, with Talos'
+own generator and validator (`github.com/siderolabs/talos/pkg/machinery`),
+from a declared `Cluster` and its secrets bundle. One Talos minor per
+release: `SupportedTalosMinor` (`v1.14`); another is refused.
+
+```go
+bundle, _ := machineconfig.NewSecrets("v1.14.2") // once per cluster; keep it like a root key
+data, _ := machineconfig.MarshalSecrets(bundle)   // talosctl's secrets.yaml format
+out, err := machineconfig.Render(&machineconfig.Cluster{
+	Name:              "example",
+	Endpoint:          "https://10.0.0.10:6443",
+	TalosVersion:      "v1.14.2",
+	KubernetesVersion: "1.36.4",
+	Installer:         schematic.Installer{SchematicID: id},
+	Network:           machineconfig.Network{NodeSubnets: []string{"10.0.0.0/24"}},
+	ControlPlane:      machineconfig.ControlPlane{VIP: "10.0.0.10"},
+	Nodes: []machineconfig.Node{
+		{Hostname: "cp-1", Role: machineconfig.RoleControlPlane, Address: "10.0.0.11", InstallDisk: "/dev/nvme0n1", VIPLink: "eth0"},
+	},
+}, bundle)
+// out.Nodes["cp-1"] -> talosctl apply-config --insecure -n 10.0.0.11 --file -
+// out.Talosconfig, out.Contract, out.Warnings
+```
+
+| `Cluster` field | Meaning |
+| --- | --- |
+| `Name`, `Endpoint` | The cluster's name (DNS label) and its API URL, `https://<host>:<port>`. |
+| `TalosVersion`, `KubernetesVersion` | `vX.Y.Z` within `SupportedTalosMinor`; `X.Y.Z` that Talos supports (checked with Talos' compatibility table). |
+| `Installer` | The installer of every node; a node's `Installer` replaces it. |
+| `Network.PodSubnets`, `ServiceSubnets`, `DNSDomain` | Default: Talos' (`10.244.0.0/16`, `10.96.0.0/12`, `cluster.local`). |
+| `Network.CNI` | `none` (default: no CNI at all, the caller installs Cilium) or `flannel` (which needs `KubeProxy`). |
+| `Network.KubeProxy` | Default false: the control plane renders no kube-proxy (Cilium replaces it). |
+| `Network.KubePrismPort` | The node-local API balancer. Default 7445. |
+| `Network.NodeSubnets` | The ranges the kubelet's node IP and etcd's advertised address must be in. Set them on any node with a second address (a VPN, an overlay). |
+| `ControlPlane.VIP` | A shared layer-2 address (`Layer2VIPConfig`) on every control plane node's `VIPLink`. |
+| `ControlPlane.CertSANs`, `AllowScheduling` | Extra API certificate names; no `NoSchedule` taint on the control plane. |
+| `ServiceAccountIssuer` | The https issuer tokens are signed as; the JWKS URI is `<issuer>/openid/v1/jwks`; the endpoint stays an accepted issuer. Empty: the endpoint. |
+| `TalosAPIAccess` | `Roles` and `Namespaces` whose ServiceAccounts may reach the Talos API (`os:etcd:backup` for a backup job). |
+| `DisableDiscovery` | Turn off the cluster discovery service. |
+| `Capabilities` | The contract's capabilities. Default `api-access`, plus `workload-identity` with an issuer. |
+| `Patches`, `ControlPlanePatches`, `WorkerPatches` | Strategic-merge machine config patches; with a node's `Patches`, applied in that order after the rendered settings. The later wins. |
+| `Nodes` | `Hostname`, `Role` (`controlplane`, `worker`), `Address`, `InstallDisk` (a `/dev` path) or `InstallDiskSelector` (CEL), `Installer`, `VIPLink`, `Labels`, `Taints`, `LocalVolumes`, `Patches`. |
+
+A `LocalVolume` is a Talos user volume mounted at `/var/mnt/<name>`:
+`DiskSelector` (CEL, required), `MinSize` and/or `MaxSize` (`100GiB`, `80%`),
+`Filesystem` (`xfs` default, `ext4`), `Encryption` (`tpm`, `nodeID`; a static
+key is a secret and belongs in a patch).
+
+`Render` generates each node's config, removes the CNI and generated
+hostname documents, applies `RenderedPatch` (the Cluster's settings, no
+secret: a reviewer reads exactly that) and then the caller's patches, and
+validates the result as Talos does on a metal node, strictly. An invalid
+result is an error naming the node. It warns about an even number of control
+plane nodes. It is deterministic in its inputs, except for the talosconfig's
+freshly minted client certificate. `Contract(bundle)` reports provider
+`talos`, the endpoint, the bundle's Kubernetes CA and the issuer.
+
+`Validate` refuses, all at once: a name, endpoint or version of the wrong
+shape, another Talos minor, a Kubernetes version Talos does not support, a
+bad installer, a CIDR with host bits, an unknown CNI, flannel without
+kube-proxy, a VIP that is not an IP or a control plane node without a VIP
+link, an issuer that is not https or ends in a slash, an unknown Talos API
+role, an unknown capability, no control plane node, a repeated hostname or
+address, not exactly one install disk, and a local volume without a name,
+selector or size, or with an unknown filesystem or encryption.
 
 ## `charts/cluster-baseline`
 

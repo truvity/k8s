@@ -1,0 +1,130 @@
+version: v1alpha1
+debug: false
+persist: true
+machine:
+    type: worker
+    token: <random>
+    ca:
+        crt: <base64>
+        key: ""
+    certSANs:
+        - api.example.com
+    features:
+        diskQuotaSupport: true
+cluster:
+    token: <random>
+---
+apiVersion: v1alpha1
+kind: DiscoveryServiceConfig
+name: default
+endpoint: https://discovery.talos.dev/
+---
+apiVersion: v1alpha1
+kind: DiscoveryIdentityConfig
+clusterID: <random>
+clusterSecret: <redacted>
+---
+apiVersion: v1alpha1
+kind: ResolverConfig
+hostDNS:
+    enabled: true
+    forwardKubeDNSToHost: true
+---
+apiVersion: v1alpha1
+kind: VolumeConfig
+name: EPHEMERAL
+mount:
+    secure: true
+---
+apiVersion: v1alpha1
+kind: FilesystemTrimConfig
+interval: 168h0m0s
+---
+apiVersion: v1alpha1
+kind: SecurityProfileConfig
+workloadIsolation: true
+---
+apiVersion: v1alpha1
+kind: KubeClusterConfig
+clusterName: example
+endpoint: https://10.0.0.10:6443
+---
+apiVersion: v1alpha1
+kind: KubeNodeConfig
+nodeIP:
+    validSubnets:
+        - 10.0.0.0/24
+labels:
+    example.com/storage: local
+taints:
+    example.com/storage: local:NoSchedule
+---
+apiVersion: v1alpha1
+kind: KubeletConfig
+image: ghcr.io/siderolabs/kubelet:v1.36.4
+config: {}
+defaultRuntimeSeccompProfileEnabled: true
+---
+apiVersion: v1alpha1
+kind: KubeNetworkConfig
+dnsDomain: cluster.local
+podSubnets:
+    - 10.244.0.0/16
+serviceSubnets:
+    - 10.96.0.0/12
+---
+apiVersion: v1alpha1
+kind: KubeAPIServerCAConfig
+acceptedCAs:
+    - |
+      <pem>
+---
+apiVersion: v1alpha1
+kind: KubePrismConfig
+port: 7445
+---
+apiVersion: v1alpha1
+kind: UnattendedInstallConfig
+installer:
+    image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.2
+provisioning:
+    diskSelector:
+        match: disk.transport == "nvme"
+    wipe: false
+---
+apiVersion: v1alpha1
+kind: HostnameConfig
+hostname: db-1
+---
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: local-db
+provisioning:
+    diskSelector:
+        match: disk.transport == "nvme" && !system_disk
+    minSize: 100GiB
+    maxSize: 400GiB
+filesystem:
+    type: xfs
+encryption:
+    provider: luks2
+    keys:
+        - slot: 0
+          tpm: {}
+---
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: bulk
+provisioning:
+    diskSelector:
+        match: disk.rotational
+    minSize: 10GiB
+filesystem:
+    type: ext4
+---
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: docker.io
+endpoints:
+    - url: https://mirror.example.com/v2/docker.io
+      overridePath: true
