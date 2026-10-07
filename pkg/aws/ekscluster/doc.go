@@ -13,16 +13,23 @@
 // (cluster role) and the EC2 service (node role); Args.ClusterTrustPolicy and
 // Args.NodeTrustPolicy replace them verbatim.
 //
-// Access entries, security group rules, DNS records and add-ons are not part
-// of the component: they belong to whoever owns the cluster and take the
-// cluster from the component's Cluster field.
+// Args.AccessEntries are the principals given access through the API
+// authentication mode (one access entry and one access policy association
+// each), and Args.CoreDNS installs the coredns add-on with a Corefile the
+// component renders from the stock file plus the caller's extra lines.
+// Security group rules, DNS records and other add-ons are not part of the
+// component: they belong to whoever owns the cluster and take the cluster
+// from the component's Cluster field.
 //
 // What the component refuses, before registering anything: a missing provider,
 // name, version, subnet or service CIDR, a service CIDR that is not IPv4, an
 // empty or repeated subnet, policy ARN or inline policy, a cluster role with no
 // policy, one role name given to both roles, an unknown control-plane log type,
-// a key rotation period outside what KMS accepts, and a naming hook that
-// returns an empty or repeated name. All problems are reported at once.
+// a key rotation period outside what KMS accepts, an access entry with no
+// name, principal or policy or a repeated name or principal, a CoreDNS version
+// with no stock Corefile of its own, an extra Corefile line that is empty or
+// spans lines, and a naming hook that returns an empty or repeated name. All
+// problems are reported at once.
 //
 // The cluster, the KMS key and the two roles are protected unless Args.Protect
 // points at false: replacing any of them is an outage or a loss of the key

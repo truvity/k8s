@@ -1,6 +1,7 @@
 package ekscluster_test
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 	"sync"
@@ -59,6 +60,10 @@ func (*recorder) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 func ptr[T any](v T) *T { return &v }
 
 const (
+	adminPrincipal  = "arn:example:iam::role/admin"
+	viewerPrincipal = "arn:example:iam::role/viewer"
+	rewriteLine     = "rewrite name suffix .c1.example. .example. answer auto"
+
 	clusterPolicyA = "arn:example:iam::policy/ClusterPolicyA"
 	clusterPolicyB = "arn:example:iam::policy/service-role/ClusterPolicyB"
 	nodePolicy     = "arn:example:iam::policy/NodePolicy"
@@ -79,6 +84,11 @@ func base() *ekscluster.Args {
 			{Name: "pull", Document: pulumi.String(`{"pull":true}`)},
 			{Name: "import", Document: pulumi.String(`{"import":true}`)},
 		},
+		AccessEntries: []ekscluster.AccessEntry{
+			{Name: "admin", PrincipalARN: adminPrincipal, PolicyARN: "arn:example:eks::policy/Admin"},
+			{Name: "viewer", PrincipalARN: viewerPrincipal, PolicyARN: "arn:example:eks::policy/View", Namespaces: []string{"a", "b"}},
+		},
+		CoreDNS:        &ekscluster.CoreDNS{Extras: []string{rewriteLine}},
 		LegacyTopLevel: true,
 	}
 }
@@ -103,6 +113,12 @@ func legacy(c ekscluster.Child) string {
 		return "node-inline-" + c.Key
 	case ekscluster.KindLogGroup:
 		return "cluster-logs"
+	case ekscluster.KindAccessEntry:
+		return c.Key + "-access-entry"
+	case ekscluster.KindAccessPolicy:
+		return c.Key + "-policy"
+	case ekscluster.KindCoreDNS:
+		return "coredns-addon"
 	default:
 		return "cluster"
 	}
@@ -207,6 +223,11 @@ func TestDefaultNames(t *testing.T) {
 
 	want := []string{
 		"aws:cloudwatch/logGroup:LogGroup k-logs",
+		"aws:eks/accessEntry:AccessEntry k-access-admin",
+		"aws:eks/accessEntry:AccessEntry k-access-viewer",
+		"aws:eks/accessPolicyAssociation:AccessPolicyAssociation k-access-admin-policy",
+		"aws:eks/accessPolicyAssociation:AccessPolicyAssociation k-access-viewer-policy",
+		"aws:eks/addon:Addon k-coredns",
 		"aws:eks/cluster:Cluster k-cluster",
 		"aws:iam/role:Role k-cluster-role",
 		"aws:iam/role:Role k-node-role",
@@ -235,6 +256,11 @@ func TestChildrenKeepTheNamesTheHookGives(t *testing.T) {
 
 	want := []string{
 		"aws:cloudwatch/logGroup:LogGroup cluster-logs",
+		"aws:eks/accessEntry:AccessEntry admin-access-entry",
+		"aws:eks/accessEntry:AccessEntry viewer-access-entry",
+		"aws:eks/accessPolicyAssociation:AccessPolicyAssociation admin-policy",
+		"aws:eks/accessPolicyAssociation:AccessPolicyAssociation viewer-policy",
+		"aws:eks/addon:Addon coredns-addon",
 		"aws:eks/cluster:Cluster cluster",
 		"aws:iam/role:Role cluster-role",
 		"aws:iam/role:Role node-role",
@@ -597,6 +623,24 @@ func TestRefusals(t *testing.T) {
 		"empty pool": {func(a *ekscluster.Args) { a.NodePools = []string{""} }, "NodePools[0] is empty"},
 		"rotation":   {func(a *ekscluster.Args) { a.KeyRotationDays = 10 }, "KeyRotationDays"},
 		"retention":  {func(a *ekscluster.Args) { a.LogRetentionDays = -1 }, "LogRetentionDays"},
+		"entry name": {func(a *ekscluster.Args) { a.AccessEntries[0].Name = "" }, "AccessEntries[0].Name is empty"},
+		"entry repeat": {func(a *ekscluster.Args) {
+			a.AccessEntries[1].Name = "admin"
+		}, "AccessEntries[1]: duplicate name"},
+		"entry principal": {func(a *ekscluster.Args) { a.AccessEntries[0].PrincipalARN = "" }, "AccessEntries[0].PrincipalARN is empty"},
+		"entry principal repeat": {func(a *ekscluster.Args) {
+			a.AccessEntries[1].PrincipalARN = adminPrincipal
+		}, "already has an entry"},
+		"entry policy":    {func(a *ekscluster.Args) { a.AccessEntries[0].PolicyARN = "" }, "AccessEntries[0].PolicyARN is empty"},
+		"entry namespace": {func(a *ekscluster.Args) { a.AccessEntries[1].Namespaces = []string{""} }, "AccessEntries[1].Namespaces[0] is empty"},
+		"coredns version without its corefile": {func(a *ekscluster.Args) {
+			a.CoreDNS.Version = "v9.9.9-eksbuild.1"
+		}, "needs its stock CoreDNS.Corefile"},
+		"coredns no anchor": {func(a *ekscluster.Args) {
+			a.CoreDNS.Corefile = ".:53 {\n    errors\n}"
+		}, "no \"kubernetes\" stanza"},
+		"coredns empty extra":     {func(a *ekscluster.Args) { a.CoreDNS.Extras = []string{" "} }, "CoreDNS.Extras[0] is empty"},
+		"coredns multiline extra": {func(a *ekscluster.Args) { a.CoreDNS.Extras = []string{"a\nb"} }, "spans more than one line"},
 		"empty name": {func(a *ekscluster.Args) {
 			a.Names = func(c ekscluster.Child) string {
 				if c.Kind == ekscluster.KindKey {
@@ -677,5 +721,132 @@ func TestOutputsExist(t *testing.T) {
 
 	if c.Cluster == nil {
 		t.Error("Cluster is not set")
+	}
+}
+
+func TestAccessEntries(t *testing.T) {
+	res, err := run(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, principal := range map[string]string{"admin": adminPrincipal, "viewer": viewerPrincipal} {
+		e := find(t, res.regs, "aws:eks/accessEntry:AccessEntry", "k-access-"+name)
+		if str(e, "clusterName") != "c1" || str(e, "principalArn") != principal || str(e, "type") != "STANDARD" {
+			t.Errorf("entry %s: %v", name, e.inputs)
+		}
+
+		p := find(t, res.regs, "aws:eks/accessPolicyAssociation:AccessPolicyAssociation", "k-access-"+name+"-policy")
+		if str(p, "clusterName") != "c1" || str(p, "principalArn") != principal {
+			t.Errorf("policy %s: %v", name, p.inputs)
+		}
+	}
+
+	admin := find(t, res.regs, "aws:eks/accessPolicyAssociation:AccessPolicyAssociation", "k-access-admin-policy")
+	if str(admin, "policyArn") != "arn:example:eks::policy/Admin" {
+		t.Errorf("admin policyArn %q", str(admin, "policyArn"))
+	}
+
+	if scope := admin.inputs["accessScope"].ObjectValue(); scope["type"].StringValue() != "cluster" || scope.HasValue("namespaces") {
+		t.Errorf("admin scope %v, want the cluster", scope)
+	}
+
+	viewer := find(t, res.regs, "aws:eks/accessPolicyAssociation:AccessPolicyAssociation", "k-access-viewer-policy")
+
+	scope := viewer.inputs["accessScope"].ObjectValue()
+	if scope["type"].StringValue() != "namespace" {
+		t.Errorf("viewer scope type %v", scope["type"])
+	}
+
+	if got := scope["namespaces"].ArrayValue(); len(got) != 2 || got[0].StringValue() != "a" || got[1].StringValue() != "b" {
+		t.Errorf("viewer namespaces %v", got)
+	}
+}
+
+func TestCoreDNSAddon(t *testing.T) {
+	res, err := run(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := find(t, res.regs, "aws:eks/addon:Addon", "k-coredns")
+	if str(a, "clusterName") != "c1" || str(a, "addonName") != "coredns" || str(a, "addonVersion") != ekscluster.DefaultCoreDNSVersion {
+		t.Errorf("addon %v", a.inputs)
+	}
+
+	if str(a, "resolveConflictsOnCreate") != "OVERWRITE" || str(a, "resolveConflictsOnUpdate") != "OVERWRITE" {
+		t.Errorf("conflict resolution %v", a.inputs)
+	}
+
+	var values map[string]string
+	if err := json.Unmarshal([]byte(str(a, "configurationValues")), &values); err != nil {
+		t.Fatalf("configurationValues is not JSON: %v", err)
+	}
+
+	corefile := values["corefile"]
+	if !strings.Contains(corefile, "    "+rewriteLine+"\n    kubernetes ") {
+		t.Fatalf("extra not anchored above the kubernetes stanza:\n%s", corefile)
+	}
+
+	// One line added, nothing else touched.
+	if got := strings.Replace(corefile, "    "+rewriteLine+"\n", "", 1); got != ekscluster.StockCorefile {
+		t.Fatalf("corefile differs from the stock file beyond the extra:\n%s", got)
+	}
+}
+
+// The rendering is state: a consumer that rendered the configuration itself
+// before adopting the component must see the same string, byte for byte.
+func TestCoreDNSConfigurationValuesAreStable(t *testing.T) {
+	res, err := run(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `{"corefile":".:53 {\n    errors\n    health {\n        lameduck 5s\n      }\n    ready\n` +
+		`    rewrite name suffix .c1.example. .example. answer auto\n` +
+		`    kubernetes cluster.local in-addr.arpa ip6.arpa {\n      pods insecure\n      fallthrough in-addr.arpa ip6.arpa\n    }\n` +
+		`    prometheus :9153\n    forward . /etc/resolv.conf\n    cache 30\n    loop\n    reload\n    loadbalance\n}"}`
+
+	if got := str(find(t, res.regs, "aws:eks/addon:Addon", "k-coredns"), "configurationValues"); got != want {
+		t.Errorf("configurationValues\n got %s\nwant %s", got, want)
+	}
+}
+
+func TestCoreDNSExtrasInOrderAndOwnCorefile(t *testing.T) {
+	a := base()
+	a.CoreDNS = &ekscluster.CoreDNS{
+		Version:  "v9.9.9-eksbuild.1",
+		Corefile: ".:53 {\n    kubernetes cluster.local\n}",
+		Extras:   []string{"one", "two"},
+	}
+
+	res, err := run(t, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addon := find(t, res.regs, "aws:eks/addon:Addon", "k-coredns")
+	if str(addon, "addonVersion") != "v9.9.9-eksbuild.1" {
+		t.Errorf("version %q", str(addon, "addonVersion"))
+	}
+
+	if got, want := str(addon, "configurationValues"), `{"corefile":".:53 {\n    one\n    two\n    kubernetes cluster.local\n}"}`; got != want {
+		t.Errorf("configurationValues %s, want %s", got, want)
+	}
+}
+
+func TestNoAccessEntriesAndNoCoreDNSRegisterNeither(t *testing.T) {
+	a := base()
+	a.AccessEntries, a.CoreDNS = nil, nil
+
+	res, err := run(t, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, r := range children(res.regs) {
+		if strings.HasPrefix(r.typ, "aws:eks/access") || r.typ == "aws:eks/addon:Addon" {
+			t.Errorf("registered %s %s", r.typ, r.name)
+		}
 	}
 }
