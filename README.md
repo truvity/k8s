@@ -126,6 +126,9 @@ No consumer is recorded at v0; a repository that adopts it adds a line here.
 - [docs/adoption.md](docs/adoption.md) — using a component, adopting one over
   existing infrastructure, and every breaking upgrade.
 - [docs/reference.md](docs/reference.md) — the Go types and the capability set.
+- [docs/talos.md](docs/talos.md) — provisioning, changing and upgrading a
+  self-hosted Talos cluster: secrets, image schematics, first boot, talosctl
+  upgrades, recovery.
 - [docs/safety.md](docs/safety.md) — what is refused and what must never be
   done to a cluster's resources.
 - [docs/doctrine.md](docs/doctrine.md) — why it is shaped this way.
