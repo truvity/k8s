@@ -333,6 +333,28 @@ A third class of disk, slow and large (spinning disks in RAID), fits the
 same local-volume pattern: a Talos raw or user volume per array, static
 PersistentVolumes on it.
 
+## Conformance
+
+`hack/conformance.sh` (CI: `.github/workflows/conformance.yaml`) is how
+this repository checks the provider without Talos hardware:
+
+1. **Offline.** A cluster using every field is rendered with a fresh secrets
+   bundle, and every machine config is validated by the real `talosctl`
+   (`validate --mode metal --strict`) of the supported version; the issuer
+   documents are checked against the contract.
+2. **On kind**, standing in for Talos nodes (no CNI, no kube-proxy): Cilium
+   with the Talos values; a LoadBalancer Service gets an address from a
+   `cilium-config` pool and answers from outside the cluster through L2
+   announcements; a `cluster-network-policies` policy denies, then allows;
+   a `local-volumes` volume binds on its node and holds data; the
+   `cluster-pki` issuer issues a certificate; the `talos-etcd-backup`
+   objects pass the API server and Pod Security restricted.
+
+What it cannot cover is the hardware: booting the installer image, the
+VIP's failover, user volumes on real disks, the Talos API serving an etcd
+snapshot. Those are the first-provisioning checks of a real cluster
+(`talosctl health`, a VIP failover drill, a restored snapshot).
+
 ## Disaster recovery
 
 - **etcd** is backed up by `charts/talos-etcd-backup`: a CronJob that asks

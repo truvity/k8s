@@ -1,0 +1,58 @@
+# Conformance of the Talos provider without Talos hardware (hack/conformance.sh):
+# the machine configs rendered offline and validated by the real talosctl, then a
+# kind cluster without CNI or kube-proxy standing in for Talos nodes, running
+# Cilium with the Talos values and this repository's charts.
+#
+# Its own workflow, not a Justfile recipe of the shared check: it needs docker
+# and creates a cluster, which the shared runners do not offer.
+name: Conformance
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=kubernetes-sigs/kind
+  KIND_VERSION: v0.33.0
+  KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+  # renovate: datasource=github-releases depName=siderolabs/talos
+  TALOSCTL_VERSION: v1.14.2
+  TALOSCTL_SHA256: c6c9552b0e5f767352c595fa1c0af4f186f697488646872955057d23990a66c4
+
+jobs:
+  talos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: truvity/ci-actions/setup-devbox@598251d570fd99ba403b99bfa65ae4472ed25e73 # v1.8.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install kind and talosctl (pinned, checksummed)
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"
+          curl -fsSLo "$bin/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  $bin/kind" | sha256sum -c -
+          curl -fsSLo "$bin/talosctl" "https://github.com/siderolabs/talos/releases/download/${TALOSCTL_VERSION}/talosctl-linux-amd64"
+          echo "${TALOSCTL_SHA256}  $bin/talosctl" | sha256sum -c -
+          chmod +x "$bin/kind" "$bin/talosctl"
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Conformance
+        run: devbox run -- bash hack/conformance.sh
+      - name: Cluster state on failure
+        if: failure()
+        run: |
+          kubectl get nodes -o wide || true
+          kubectl get pods -A -o wide || true
+          kubectl -n kube-system logs -l k8s-app=cilium --tail=100 || true
+          kubectl get ciliumloadbalancerippools,ciliuml2announcementpolicies -o yaml || true
