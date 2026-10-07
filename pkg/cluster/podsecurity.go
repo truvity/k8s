@@ -27,11 +27,11 @@ var (
 )
 
 type (
-	// PodSecurity is one cluster's Pod Security Admission table: the default
-	// level, version and modes, and one row per namespace. It is the input of
-	// the cluster-baseline chart's `podSecurity` (Resolve gives the same labels
-	// the chart's `cluster-baseline.resolve` helper renders), for a consumer
-	// whose Namespace owners stamp the labels themselves.
+	// PodSecurity is one cluster's Pod Security Admission policy: the default
+	// level, version and modes, and the exceptions to them. Every namespace of
+	// the catalog takes the defaults unless an exception row names it
+	// (nscatalog.Build); OwnerOf gives what a Namespace's owner stamps for a
+	// row, the same labels the cluster-baseline chart renders.
 	PodSecurity struct {
 		// Level is the default level; Version the default version label
 		// ("latest", or a pinned minor before anything is enforced).
@@ -39,11 +39,11 @@ type (
 		Version string
 		// Modes are the modes that render a label: warn, audit, enforce.
 		Modes []string
-		// Namespaces is the table. An empty row takes Level and Modes.
+		// Namespaces are the EXCEPTIONS: the namespaces whose row departs
+		// from Level and Modes (another level with a reason, narrower modes,
+		// deletable). Every other namespace of the catalog takes the
+		// defaults; nscatalog.Build names no namespace twice for this.
 		Namespaces map[string]PodSecurityNamespace
-		// BaselineOwned are the rows the cluster-baseline chart labels
-		// itself, because no owner of the consumer renders them.
-		BaselineOwned []string
 	}
 
 	// PodSecurityNamespace is one table row.
@@ -66,20 +66,11 @@ type (
 		Labels      map[string]string
 		Annotations map[string]string
 	}
-
-	// ResolvedPodSecurity is a table with its modes and BaselineOwned sorted
-	// and, per owner-rendered row (the table minus BaselineOwned), what the
-	// owner stamps.
-	ResolvedPodSecurity struct {
-		PodSecurity
-
-		Owner map[string]PodSecurityOwner
-	}
 )
 
 // Validate refuses a table the cluster-baseline chart would refuse: a level or
-// mode outside the standards, no version or no modes, a row that departs from
-// the default level without a reason, and a BaselineOwned name with no row.
+// mode outside the standards, no version or no modes, and a row that departs
+// from the default level without a reason.
 // The error names the offending key under prefix (the consumer's spelling of
 // the table, e.g. `cluster "devel": pod_security`).
 func (p *PodSecurity) Validate(prefix string) error {
@@ -111,12 +102,6 @@ func (p *PodSecurity) Validate(prefix string) error {
 
 		if row.Level != "" && row.Level != p.Level && row.Reason == "" {
 			return fmt.Errorf("%s.namespaces.%s departs from the default level and has no reason", prefix, ns)
-		}
-	}
-
-	for _, ns := range p.BaselineOwned {
-		if _, ok := p.Namespaces[ns]; !ok {
-			return fmt.Errorf("%s.baseline_owned: %q is not in the table's namespaces", prefix, ns)
 		}
 	}
 
@@ -153,11 +138,6 @@ func (p *PodSecurity) WithDeletableRows(namespaces, modes []string) *PodSecurity
 	}
 
 	return &out
-}
-
-// IsBaselineOwned reports whether the cluster-baseline chart labels ns itself.
-func (p *PodSecurity) IsBaselineOwned(ns string) bool {
-	return slices.Contains(p.BaselineOwned, ns)
 }
 
 // RowLevel is the level of a row: its own, or the default.
@@ -203,51 +183,4 @@ func (p *PodSecurity) OwnerOf(row PodSecurityNamespace) PodSecurityOwner {
 	}
 
 	return owner
-}
-
-// Resolve sorts the table's modes and BaselineOwned and computes what the
-// owner stamps on every row the chart does not label itself. Nil is nil.
-func (p *PodSecurity) Resolve() *ResolvedPodSecurity {
-	if p == nil {
-		return nil
-	}
-
-	out := &ResolvedPodSecurity{
-		PodSecurity: PodSecurity{
-			Level:         p.Level,
-			Version:       p.Version,
-			Modes:         slices.Sorted(slices.Values(p.Modes)),
-			Namespaces:    p.Namespaces,
-			BaselineOwned: slices.Sorted(slices.Values(p.BaselineOwned)),
-		},
-		Owner: map[string]PodSecurityOwner{},
-	}
-
-	for ns, row := range p.Namespaces {
-		if p.IsBaselineOwned(ns) {
-			continue
-		}
-
-		out.Owner[ns] = out.OwnerOf(row)
-	}
-
-	return out
-}
-
-// WithOwnedRow returns the resolved table plus one owner-rendered row (a
-// namespace that exists only while some switch is on). r is never mutated.
-func (r *ResolvedPodSecurity) WithOwnedRow(ns string, row PodSecurityNamespace) *ResolvedPodSecurity {
-	if r == nil {
-		return nil
-	}
-
-	out := *r
-	out.Namespaces = make(map[string]PodSecurityNamespace, len(r.Namespaces)+1)
-	maps.Copy(out.Namespaces, r.Namespaces)
-	out.Namespaces[ns] = row
-	out.Owner = make(map[string]PodSecurityOwner, len(r.Owner)+1)
-	maps.Copy(out.Owner, r.Owner)
-	out.Owner[ns] = out.OwnerOf(row)
-
-	return &out
 }

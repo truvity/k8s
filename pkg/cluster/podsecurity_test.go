@@ -16,7 +16,6 @@ func table() *cluster.PodSecurity {
 			"apps":   {},
 			"canary": {Modes: []string{"warn"}},
 		},
-		BaselineOwned: []string{"canary"},
 	}
 }
 
@@ -40,7 +39,6 @@ func TestPodSecurityValidate(t *testing.T) {
 		"row mode":     {row("x", cluster.PodSecurityNamespace{Modes: []string{"x"}}), `ps.namespaces.x: modes: "x"`},
 		"row level":    {row("x", cluster.PodSecurityNamespace{Level: "open", Reason: "r"}), `ps.namespaces.x: level "open"`},
 		"no reason":    {row("x", cluster.PodSecurityNamespace{Level: "baseline"}), "ps.namespaces.x departs from the default level"},
-		"baseline row": {func(p *cluster.PodSecurity) { p.BaselineOwned = []string{"ghost"} }, `ps.baseline_owned: "ghost"`},
 	} {
 		p := table()
 		tc.mutate(p)
@@ -59,18 +57,10 @@ func TestPodSecurityValidate(t *testing.T) {
 	}
 }
 
-func TestPodSecurityResolve(t *testing.T) {
-	r := table().Resolve()
+func TestPodSecurityOwnerOf(t *testing.T) {
+	p := table()
 
-	if !reflect.DeepEqual(r.Modes, []string{"audit", "enforce", "warn"}) {
-		t.Errorf("modes %v, want sorted", r.Modes)
-	}
-
-	if _, ok := r.Owner["canary"]; ok {
-		t.Error("a baseline-owned row has an owner entry")
-	}
-
-	agents := r.Owner["agents"]
+	agents := p.OwnerOf(p.Namespaces["agents"])
 	if agents.Labels["pod-security.kubernetes.io/enforce"] != "privileged" ||
 		agents.Labels["pod-security.kubernetes.io/enforce-version"] != "v1.34" || len(agents.Labels) != 6 {
 		t.Errorf("agents labels %v", agents.Labels)
@@ -84,9 +74,8 @@ func TestPodSecurityResolve(t *testing.T) {
 		t.Errorf("agents annotations %v, want %v", agents.Annotations, want)
 	}
 
-	var none *cluster.PodSecurity
-	if none.Resolve() != nil {
-		t.Error("a nil table resolves to something")
+	if !reflect.DeepEqual(p.RowModes(cluster.PodSecurityNamespace{}), []string{"audit", "enforce", "warn"}) {
+		t.Error("default modes are not sorted")
 	}
 }
 
@@ -102,27 +91,11 @@ func TestPodSecurityDerivedRows(t *testing.T) {
 		t.Fatal("the input table was mutated")
 	}
 
-	owner := q.Resolve().Owner["emp-a"]
+	owner := q.OwnerOf(q.Namespaces["emp-a"])
 	if len(owner.Annotations) != 0 || !reflect.DeepEqual(owner.Labels, map[string]string{
 		"pod-security.kubernetes.io/warn": "restricted", "pod-security.kubernetes.io/warn-version": "v1.34",
 	}) {
 		t.Errorf("emp-a owner %+v", owner)
-	}
-
-	r := p.Resolve()
-	on := r.WithOwnedRow("extra", cluster.PodSecurityNamespace{})
-
-	if _, ok := r.Owner["extra"]; ok {
-		t.Error("WithOwnedRow mutated its input")
-	}
-
-	if _, ok := on.Owner["extra"]; !ok {
-		t.Error("WithOwnedRow added no owner entry")
-	}
-
-	var none *cluster.ResolvedPodSecurity
-	if none.WithOwnedRow("x", cluster.PodSecurityNamespace{}) != nil {
-		t.Error("a nil table gains a row")
 	}
 }
 
