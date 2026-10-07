@@ -1,0 +1,2 @@
+volumes:
+  v: {storageClass: missing, node: n1, path: /var/mnt/a, capacity: 1Gi}

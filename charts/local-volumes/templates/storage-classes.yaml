@@ -1,0 +1,16 @@
+{{- /* One no-provisioner StorageClass per entry of `storageClasses`, in name order. */ -}}
+{{- $root := . -}}
+{{- range $name := (keys (.Values.storageClasses | default dict) | sortAlpha) }}
+{{- $e := index $root.Values.storageClasses $name }}
+{{- $computed := dict -}}
+{{- if $e.isDefault -}}{{- $_ := set $computed "storageclass.kubernetes.io/is-default-class" "true" -}}{{- end }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  {{- include "local-volumes.metadata" (dict "root" $root "name" $name "entry" $e "computed" $computed "where" (printf "storageClasses.%s" $name)) | nindent 2 }}
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: {{ $e.reclaimPolicy | default "Retain" }}
+allowVolumeExpansion: {{ $e.allowVolumeExpansion | default false }}
+{{- end }}

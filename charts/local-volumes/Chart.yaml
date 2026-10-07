@@ -1,0 +1,26 @@
+apiVersion: v2
+name: local-volumes
+description: >-
+  Local PersistentVolumes as data, for workloads that replicate their own
+  data (databases, queues): a no-provisioner StorageClass per tier and one
+  PersistentVolume per disk directory, pinned to its node and optionally to
+  the claim that owns it. Paths must live under the node's user volumes
+  (/var/mnt on Talos), so a missing mount fails the pod instead of filling
+  the system disk. Nothing here belongs to an estate.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag (truvity/ci-workflows
+# release-public.yaml).
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/k8s
+sources:
+  - https://github.com/truvity/k8s
+keywords:
+  - storage
+  - local-volume
+  - persistentvolume
+  - talos
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity
