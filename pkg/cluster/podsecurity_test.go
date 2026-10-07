@@ -32,13 +32,13 @@ func TestPodSecurityValidate(t *testing.T) {
 		mutate func(*cluster.PodSecurity)
 		want   string
 	}{
-		"level":        {func(p *cluster.PodSecurity) { p.Level = "strict" }, `ps.level "strict" is not one of`},
-		"version":      {func(p *cluster.PodSecurity) { p.Version = "" }, "ps.version is required"},
-		"modes":        {func(p *cluster.PodSecurity) { p.Modes = nil }, "ps.modes is required"},
-		"mode":         {func(p *cluster.PodSecurity) { p.Modes = []string{"deny"} }, `ps.modes: "deny" is not one of`},
-		"row mode":     {row("x", cluster.PodSecurityNamespace{Modes: []string{"x"}}), `ps.namespaces.x: modes: "x"`},
-		"row level":    {row("x", cluster.PodSecurityNamespace{Level: "open", Reason: "r"}), `ps.namespaces.x: level "open"`},
-		"no reason":    {row("x", cluster.PodSecurityNamespace{Level: "baseline"}), "ps.namespaces.x departs from the default level"},
+		"level":     {func(p *cluster.PodSecurity) { p.Level = "strict" }, `ps.level "strict" is not one of`},
+		"version":   {func(p *cluster.PodSecurity) { p.Version = "" }, "ps.version is required"},
+		"modes":     {func(p *cluster.PodSecurity) { p.Modes = nil }, "ps.modes is required"},
+		"mode":      {func(p *cluster.PodSecurity) { p.Modes = []string{"deny"} }, `ps.modes: "deny" is not one of`},
+		"row mode":  {row("x", cluster.PodSecurityNamespace{Modes: []string{"x"}}), `ps.namespaces.x: modes: "x"`},
+		"row level": {row("x", cluster.PodSecurityNamespace{Level: "open", Reason: "r"}), `ps.namespaces.x: level "open"`},
+		"no reason": {row("x", cluster.PodSecurityNamespace{Level: "baseline"}), "ps.namespaces.x departs from the default level"},
 	} {
 		p := table()
 		tc.mutate(p)
