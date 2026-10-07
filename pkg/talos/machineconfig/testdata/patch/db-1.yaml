@@ -1,0 +1,48 @@
+apiVersion: v1alpha1
+kind: UnattendedInstallConfig
+installer:
+    image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.2
+provisioning:
+    diskSelector:
+        match: disk.transport == "nvme"
+    wipe: false
+---
+apiVersion: v1alpha1
+kind: HostnameConfig
+hostname: db-1
+---
+apiVersion: v1alpha1
+kind: KubeNodeConfig
+labels:
+    example.com/storage: local
+nodeIP:
+    validSubnets:
+        - 10.0.0.0/24
+taints:
+    example.com/storage: local:NoSchedule
+---
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: local-db
+encryption:
+    keys:
+        - slot: 0
+          tpm: {}
+    provider: luks2
+filesystem:
+    type: xfs
+provisioning:
+    diskSelector:
+        match: disk.transport == "nvme" && !system_disk
+    maxSize: 400GiB
+    minSize: 100GiB
+---
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: bulk
+filesystem:
+    type: ext4
+provisioning:
+    diskSelector:
+        match: disk.rotational
+    minSize: 10GiB

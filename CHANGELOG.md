@@ -6,6 +6,9 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/talos/schematic` (new): a Talos Image Factory schematic, its ID computed offline as the factory computes it, and `Installer.Reference` (the pinned installer image of a schematic and a Talos version).
+- `pkg/talos/machineconfig` (new): renders a self-hosted Talos 1.14 cluster's machine configs offline from a declared `Cluster` and its secrets bundle, with Talos' own generator and strict client-side validation: pinned installer, no CNI and no kube-proxy for Cilium by default, ServiceAccount issuer and JWKS URI, control plane VIP, node subnets, user volumes, Talos API access; caller patches per cluster, role and node; the talosconfig; and the cluster under the provider-neutral contract.
+
 - `pkg/cluster/clusterout` (new): `Output`, the Pulumi output of a `cluster.Outputs`, with `Name()`, `Endpoint()`, `CertificateAuthorityPEM()`, `OIDCIssuer()` and `Validated()`. Every provider component reports its contract in a `Contract` field of this type.
 - `pkg/aws/ekscluster`: `EksCluster.Contract` reports the cluster under the provider-neutral contract (endpoint, PEM certificate authority, the cluster's token issuer, `Args.Capabilities` or `DefaultCapabilities()`). `Args.UpgradePolicy` (`STANDARD` or `EXTENDED`) and `Args.DeletionProtection` set the cluster's support policy and EKS's own deletion protection. Unset (the default), the cluster's inputs are what earlier releases sent: an adopted cluster previews no change.
 - `charts/cluster-foundation`: `priorityClasses.<name>` renders PriorityClasses (`value`, required `description`, at most one `globalDefault`, `preemptionPolicy`); a `system-` name or a value above one billion is refused. Nothing renders without it.
