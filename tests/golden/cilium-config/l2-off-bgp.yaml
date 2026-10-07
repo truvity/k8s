@@ -1,0 +1,71 @@
+---
+# Source: cilium-config/templates/bgp.yaml
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: services
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+  - advertisementType: Service
+    selector:
+      matchExpressions:
+      - key: example.com/no-bgp
+        operator: DoesNotExist
+    service:
+      addresses:
+      - LoadBalancerIP
+
+---
+# Source: cilium-config/templates/bgp.yaml
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: racks
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  bgpInstances:
+  - localASN: 64512
+    name: main
+    peers:
+    - name: tor-a
+      peerASN: 64513
+      peerAddress: 10.0.0.1
+      peerConfigRef:
+        name: tor
+    - name: tor-b
+      peerASN: 64513
+      peerAddress: 10.0.0.2
+      peerConfigRef:
+        name: tor
+  nodeSelector:
+    matchLabels:
+      example.com/bgp: "true"
+
+---
+# Source: cilium-config/templates/bgp.yaml
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: tor
+spec:
+  families:
+  - advertisements:
+      matchLabels:
+        advertise: bgp
+    afi: ipv4
+    safi: unicast
+  gracefulRestart:
+    enabled: true
+
+---
+# Source: cilium-config/templates/lb-ipam.yaml
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: routed
+spec:
+  blocks:
+    - cidr: 10.10.0.0/24

@@ -1,0 +1,11 @@
+bgp:
+  enabled: true
+  clusterConfigs:
+    racks:
+      spec:
+        bgpInstances:
+          - {name: main, localASN: 64512}
+  advertisements:
+    services:
+      spec:
+        advertisements: [{advertisementType: Service}]

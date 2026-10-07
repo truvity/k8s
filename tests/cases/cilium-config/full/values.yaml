@@ -1,0 +1,36 @@
+# Two pools (one restricted to labelled Services, one protected), a narrowed
+# L2 policy on the LAN interfaces of workers, and a second one for external IPs.
+protect: false
+loadBalancerIPPools:
+  lan:
+    blocks:
+      - {start: 10.0.0.100, stop: 10.0.0.149}
+    allowFirstLastIPs: true
+    syncWave: 1
+    protect: true
+  internal:
+    blocks:
+      - {cidr: 10.0.1.0/28}
+      - {cidr: "fd00:10::/124"}
+    serviceSelector:
+      matchLabels:
+        example.com/exposure: internal
+    allowFirstLastIPs: false
+    annotations:
+      example.com/owner: platform
+l2Announcements:
+  enabled: true
+  policies:
+    default:
+      interfaces: ["^eth[0-9]+$"]
+      nodeSelector:
+        matchExpressions:
+          - {key: node-role.kubernetes.io/control-plane, operator: DoesNotExist}
+      loadBalancerIPs: true
+    external-ips:
+      interfaces: ["^eth0$"]
+      serviceSelector:
+        matchLabels:
+          example.com/external-ip: "true"
+      loadBalancerIPs: false
+      externalIPs: true

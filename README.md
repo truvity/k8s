@@ -23,6 +23,8 @@ capabilities.
 | `pkg/aws/ekscluster` — an EKS Auto Mode cluster with its secrets key, cluster and node roles and control-plane log group, `truvity:k8s/aws:EksCluster` | Pulumi component, unreleased |
 | `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component, unreleased |
 | `pkg/aws/ackfactory` — the AWS identity of the ACK controllers: the IAM and EKS controller roles, the service controllers' roles (adopting what is live) and the per-project capability roles; plain functions, names are API | Go package, unreleased |
+| `pkg/talos/cilium` — the upstream Cilium chart's values for a Talos cluster | Go package |
+| `charts/cilium-config` — LoadBalancer IP pools, L2 announcements (default) and optional BGP for Cilium, as data | Helm chart, `oci://ghcr.io/truvity/charts/cilium-config` |
 | `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
 | `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses, PriorityClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
 | `charts/cluster-network-policies` — a cluster's own NetworkPolicies as data: selector, policy types and rules per entry, each with a required reason, sync wave and optional deletion protection | Helm chart, `oci://ghcr.io/truvity/charts/cluster-network-policies`, unreleased |

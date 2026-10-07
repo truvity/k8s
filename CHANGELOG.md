@@ -6,6 +6,9 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/cilium-config` (new, published from the next tag): LoadBalancer IP pools (LB-IPAM), L2 announcements (on by default, one policy that announces every LoadBalancer address) and, as an option, the BGP control plane's cluster configs, peer configs and advertisements. Refuses a pool with no blocks, a block that is both a CIDR and a range, an L2 policy that announces nothing, BGP objects while BGP is off, and a peer config reference to nothing.
+- `pkg/talos/cilium` (new): the upstream Cilium chart's values for a Talos cluster (KubePrism, kube-proxy replacement, cgroup and capability settings Talos needs, L2 announcements or BGP, native routing, devices).
+
 - `pkg/cluster/clusterout` (new): `Output`, the Pulumi output of a `cluster.Outputs`, with `Name()`, `Endpoint()`, `CertificateAuthorityPEM()`, `OIDCIssuer()` and `Validated()`. Every provider component reports its contract in a `Contract` field of this type.
 - `pkg/aws/ekscluster`: `EksCluster.Contract` reports the cluster under the provider-neutral contract (endpoint, PEM certificate authority, the cluster's token issuer, `Args.Capabilities` or `DefaultCapabilities()`). `Args.UpgradePolicy` (`STANDARD` or `EXTENDED`) and `Args.DeletionProtection` set the cluster's support policy and EKS's own deletion protection. Unset (the default), the cluster's inputs are what earlier releases sent: an adopted cluster previews no change.
 - `charts/cluster-foundation`: `priorityClasses.<name>` renders PriorityClasses (`value`, required `description`, at most one `globalDefault`, `preemptionPolicy`); a `system-` name or a value above one billion is refused. Nothing renders without it.

@@ -1,0 +1,26 @@
+apiVersion: v2
+name: cilium-config
+description: >-
+  The cluster network Cilium provides beyond the CNI, as data: LoadBalancer
+  IP pools (LB-IPAM), layer-2 announcements of those addresses (on by
+  default) and, as an option, BGP peering and advertisements. Cilium itself
+  is the upstream chart; this one renders the objects that configure it.
+  Nothing here belongs to an estate: every range, interface and AS number is
+  the caller's.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag (truvity/ci-workflows
+# release-public.yaml).
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/k8s
+sources:
+  - https://github.com/truvity/k8s
+keywords:
+  - cilium
+  - lb-ipam
+  - l2-announcements
+  - bgp
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

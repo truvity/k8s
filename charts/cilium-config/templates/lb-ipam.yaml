@@ -1,0 +1,23 @@
+{{- /* One CiliumLoadBalancerIPPool per entry of `loadBalancerIPPools`, in name order. */ -}}
+{{- $root := . -}}
+{{- range $name := (keys (.Values.loadBalancerIPPools | default dict) | sortAlpha) }}
+{{- $e := index $root.Values.loadBalancerIPPools $name }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  {{- include "cilium-config.metadata" (dict "root" $root "name" $name "entry" $e "where" (printf "loadBalancerIPPools.%s" $name)) | nindent 2 }}
+spec:
+  blocks:
+    {{- toYaml $e.blocks | nindent 4 }}
+  {{- with $e.serviceSelector }}
+  serviceSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if hasKey $e "allowFirstLastIPs" }}
+  allowFirstLastIPs: {{ ternary "Yes" "No" $e.allowFirstLastIPs | quote }}
+  {{- end }}
+  {{- if $e.disabled }}
+  disabled: true
+  {{- end }}
+{{- end }}
