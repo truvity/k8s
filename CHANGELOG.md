@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/vpc`: a test pins that a public-only VPC (no private subnet, `NATNone`) has empty `PrivateRouteTableIDs`, `NATGatewayIDs` and `NATEIPIDs`. The component already behaves so; a caller that exports a per-zone map by indexing `PrivateRouteTableIDs[az]` for every zone gets the zero `StringOutput`, which Pulumi serialises as its unknown-value sentinel, so range over the map instead.
+
 ## v0.25.0
 
 - `pkg/nscatalog`, `pkg/cluster` (BREAKING): the Pod Security input is the cluster's defaults plus EXCEPTIONS, not a list of every namespace. `Build` now labels every row it derives with the defaults unless `PodSecurity.Namespaces` names it (a name with no row is an error); the system namespaces and Kargo's controller and component namespaces are labelled only where an exception names them. Who stamps the labels is derived from the row's writer (system and Kargo rows: the cluster-baseline chart; guardrails-projects rows and the foundation's: the owner); a namespace no other input names, or one a component owns that the cluster-baseline chart must label, comes in through the new `Inputs.Components` (`Component{Name, LabelWriter}`). Removed: `PodSecurity.BaselineOwned` and `IsBaselineOwned` (and its `Validate` rule), `Resolve`, `ResolvedPodSecurity` and `WithOwnedRow`; use `OwnerOf` on a row for what its owner stamps. To migrate: delete every row of your table that takes the defaults, keep the exceptions, pass `Components` for the namespaces nothing else names.

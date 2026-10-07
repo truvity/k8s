@@ -1032,6 +1032,29 @@ func TestOutputs(t *testing.T) {
 	}
 }
 
+// A public-only VPC has no private route table and no NAT: the per-zone maps
+// are empty (no keys), so a consumer that ranges over them, or indexes them by
+// zone to export a map, never sees a zone whose resource does not exist.
+func TestPublicOnlyHasNoPerZoneOutputs(t *testing.T) {
+	res, err := run(t, base(), func(a *vpc.Args) {
+		a.Subnets = a.Subnets[:1]
+		a.NAT = vpc.NATNone
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := res.comp
+	if len(c.PrivateRouteTableIDs) != 0 || len(c.NATGatewayIDs) != 0 || len(c.NATEIPIDs) != 0 {
+		t.Errorf("per-zone outputs for resources that are not created: private route tables %v, NAT gateways %v, NAT EIPs %v",
+			c.PrivateRouteTableIDs, c.NATGatewayIDs, c.NATEIPIDs)
+	}
+
+	if n := len(ofType(res.regs, "aws:ec2/routeTable:RouteTable")); n != 1 {
+		t.Errorf("%d route tables registered, want only the public one", n)
+	}
+}
+
 func TestRefusals(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mut  func(a *vpc.Args)
