@@ -1,0 +1,5 @@
+l2Announcements:
+  policies:
+    default:
+      interface: [eth0]
+      loadBalancerIPs: true

@@ -1,0 +1,418 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cilium-config values",
+  "description": "An unknown key is an error, not a silent no-op: a misspelt selector or block would leave Services without an address and the rollout would look finished.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it."
+    },
+    "protect": {
+      "type": "boolean"
+    },
+    "helmKeep": {
+      "type": "boolean"
+    },
+    "loadBalancerIPPools": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/objectName"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/pool"
+      }
+    },
+    "l2Announcements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "policies": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/objectName"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/l2Policy"
+          }
+        }
+      }
+    },
+    "bgp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "clusterConfigs": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/objectName"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/bgpClusterConfig"
+          }
+        },
+        "peerConfigs": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/objectName"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/bgpObject"
+          }
+        },
+        "advertisements": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/objectName"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/bgpAdvertisement"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "objectName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "syncWave": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "labelSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "matchLabels": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "matchExpressions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "operator"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operator": {
+                "enum": [
+                  "In",
+                  "NotIn",
+                  "Exists",
+                  "DoesNotExist"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "cidr"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "start"
+                ]
+              },
+              {
+                "required": [
+                  "stop"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "start",
+            "stop"
+          ],
+          "not": {
+            "required": [
+              "cidr"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "cidr": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"
+        },
+        "start": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F:.]+$"
+        },
+        "stop": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F:.]+$"
+        }
+      }
+    },
+    "pool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blocks"
+      ],
+      "properties": {
+        "blocks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/block"
+          }
+        },
+        "serviceSelector": {
+          "$ref": "#/definitions/labelSelector"
+        },
+        "allowFirstLastIPs": {
+          "type": "boolean"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "syncWave": {
+          "$ref": "#/definitions/syncWave"
+        },
+        "protect": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotations": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "l2Policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "nodeSelector": {
+          "$ref": "#/definitions/labelSelector"
+        },
+        "serviceSelector": {
+          "$ref": "#/definitions/labelSelector"
+        },
+        "loadBalancerIPs": {
+          "type": "boolean"
+        },
+        "externalIPs": {
+          "type": "boolean"
+        },
+        "syncWave": {
+          "$ref": "#/definitions/syncWave"
+        },
+        "protect": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotations": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "bgpObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spec"
+      ],
+      "properties": {
+        "spec": {
+          "type": "object"
+        },
+        "syncWave": {
+          "$ref": "#/definitions/syncWave"
+        },
+        "protect": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotations": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "bgpClusterConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spec"
+      ],
+      "properties": {
+        "spec": {
+          "type": "object",
+          "required": [
+            "bgpInstances"
+          ],
+          "properties": {
+            "nodeSelector": {
+              "$ref": "#/definitions/labelSelector"
+            },
+            "bgpInstances": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "localASN"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "localASN": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4294967295
+                  },
+                  "peers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "peerASN": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4294967295
+                        },
+                        "peerAddress": {
+                          "type": "string"
+                        },
+                        "peerConfigRef": {
+                          "type": "object",
+                          "required": [
+                            "name"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "syncWave": {
+          "$ref": "#/definitions/syncWave"
+        },
+        "protect": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotations": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "bgpAdvertisement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spec",
+        "labels"
+      ],
+      "properties": {
+        "labels": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/stringMap"
+            }
+          ],
+          "minProperties": 1
+        },
+        "spec": {
+          "type": "object",
+          "required": [
+            "advertisements"
+          ],
+          "properties": {
+            "advertisements": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        },
+        "syncWave": {
+          "$ref": "#/definitions/syncWave"
+        },
+        "protect": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "annotations": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    }
+  }
+}

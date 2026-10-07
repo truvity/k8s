@@ -1,0 +1,52 @@
+{{- /* Cilium BGP control plane objects (cilium.io/v2), in name order per kind, when bgp.enabled. */ -}}
+{{- $root := . -}}
+{{- $bgp := .Values.bgp -}}
+{{- $any := or $bgp.clusterConfigs $bgp.peerConfigs $bgp.advertisements -}}
+{{- if and $any (not $bgp.enabled) }}
+{{- fail "bgp: objects are listed but bgp.enabled is false; nothing would render" }}
+{{- end }}
+{{- if $bgp.enabled }}
+{{- if not $bgp.clusterConfigs }}
+{{- fail "bgp.enabled: at least one clusterConfigs entry is required" }}
+{{- end }}
+{{- $peerConfigs := $bgp.peerConfigs | default dict }}
+{{- range $name := (keys $bgp.clusterConfigs | sortAlpha) }}
+{{- $e := index $bgp.clusterConfigs $name }}
+{{- range $inst := $e.spec.bgpInstances }}
+{{- range $peer := ($inst.peers | default list) }}
+{{- with $peer.peerConfigRef }}
+{{- if not (hasKey $peerConfigs .name) }}
+{{- fail (printf "bgp.clusterConfigs.%s: peer %s refers to peerConfig %q, which bgp.peerConfigs does not list" $name $peer.name .name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  {{- include "cilium-config.metadata" (dict "root" $root "name" $name "entry" $e "where" (printf "bgp.clusterConfigs.%s" $name)) | nindent 2 }}
+spec:
+  {{- toYaml $e.spec | nindent 2 }}
+{{- end }}
+{{- range $name := (keys $peerConfigs | sortAlpha) }}
+{{- $e := index $peerConfigs $name }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  {{- include "cilium-config.metadata" (dict "root" $root "name" $name "entry" $e "where" (printf "bgp.peerConfigs.%s" $name)) | nindent 2 }}
+spec:
+  {{- toYaml $e.spec | nindent 2 }}
+{{- end }}
+{{- range $name := (keys ($bgp.advertisements | default dict) | sortAlpha) }}
+{{- $e := index $bgp.advertisements $name }}
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  {{- include "cilium-config.metadata" (dict "root" $root "name" $name "entry" $e "labels" $e.labels "where" (printf "bgp.advertisements.%s" $name)) | nindent 2 }}
+spec:
+  {{- toYaml $e.spec | nindent 2 }}
+{{- end }}
+{{- end }}

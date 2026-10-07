@@ -1,0 +1,94 @@
+# Nothing here names an estate. Every pool is empty: a cluster says which
+# addresses its LoadBalancer Services may take.
+#
+# Cilium must run with the matching features on (the upstream chart's values;
+# pkg/talos/cilium renders them): l2announcements.enabled and
+# externalIPs.enabled for L2 announcements, bgpControlPlane.enabled for BGP.
+# LB-IPAM itself is always on in Cilium.
+
+# Default for every object; an entry may override it with its own `protect`.
+# On, an object carries
+#   argocd.argoproj.io/sync-options: Prune=false,Delete=false
+# Off (the default): a pool or a policy is cheap to put back.
+protect: false
+# Also render helm.sh/resource-policy: keep on protected objects.
+helmKeep: false
+
+# --- LB-IPAM ------------------------------------------------------------------
+# One CiliumLoadBalancerIPPool per entry, by name:
+#
+#   loadBalancerIPPools:
+#     lan:
+#       blocks:                               # required, at least one
+#         - {start: 10.0.0.100, stop: 10.0.0.149}
+#         - {cidr: 10.0.1.0/28}
+#       serviceSelector:                      # optional: which Services draw
+#         matchLabels: {example.com/exposure: lan}
+#       allowFirstLastIPs: false              # optional (Cilium's default: yes)
+#       disabled: false                       # optional: stop allocating
+#       syncWave: 0
+#       protect: true
+#
+# Pools must not overlap: Cilium marks overlapping pools conflicted and
+# allocates from neither. Keep the ranges out of every DHCP scope.
+loadBalancerIPPools: {}
+
+# --- L2 announcements --------------------------------------------------------
+# Answers ARP (IPv4) / NDP for each LoadBalancer address from one node at a
+# time (a lease per Service), so addresses from a pool on the nodes' own LAN
+# are reachable with no router configuration. On by default; off when BGP or
+# an external load balancer announces the addresses instead.
+l2Announcements:
+  enabled: true
+  # One CiliumL2AnnouncementPolicy per entry, by name. `default` announces
+  # every LoadBalancer address on every node; narrow it:
+  #
+  #   interfaces: ["^eth[0-9]+$"]   # regexes; NAME THEM when a node has a VPN
+  #                                 # or overlay link, or it will answer there
+  #   nodeSelector: {matchExpressions: [{key: node-role.kubernetes.io/control-plane, operator: DoesNotExist}]}
+  #   serviceSelector: {matchLabels: {example.com/exposure: lan}}
+  #   loadBalancerIPs: true          # announce .status.loadBalancer addresses
+  #   externalIPs: false             # announce .spec.externalIPs
+  policies:
+    default:
+      loadBalancerIPs: true
+      externalIPs: false
+
+# --- BGP (optional) ----------------------------------------------------------
+# Cilium's BGP control plane (v2 API). Off by default. When on, each entry's
+# `spec` is the object's spec, verbatim; the chart checks the shape it can.
+#
+#   bgp:
+#     enabled: true
+#     clusterConfigs:
+#       racks:
+#         spec:
+#           nodeSelector: {matchLabels: {example.com/bgp: "true"}}
+#           bgpInstances:
+#             - name: main
+#               localASN: 64512
+#               peers:
+#                 - name: tor
+#                   peerAddress: 10.0.0.1
+#                   peerASN: 64513
+#                   peerConfigRef: {name: tor}
+#     peerConfigs:
+#       tor:
+#         spec:
+#           families:
+#             - afi: ipv4
+#               safi: unicast
+#               advertisements: {matchLabels: {advertise: bgp}}
+#     advertisements:
+#       services:
+#         labels: {advertise: bgp}
+#         spec:
+#           advertisements:
+#             - advertisementType: Service
+#               service: {addresses: [LoadBalancerIP]}
+#               selector: {matchExpressions: [{key: somekey, operator: NotIn, values: [never]}]}
+bgp:
+  enabled: false
+  clusterConfigs: {}
+  peerConfigs: {}
+  advertisements: {}

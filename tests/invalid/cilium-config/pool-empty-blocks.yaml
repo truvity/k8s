@@ -1,0 +1,3 @@
+loadBalancerIPPools:
+  lan:
+    blocks: []
