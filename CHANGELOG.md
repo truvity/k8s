@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.26.0
+
 - `charts/cluster-pki` (new, published from the next tag): the cluster's internal CA as cert-manager objects: a self-signed or offline-minted root, an optional intermediate, the ClusterIssuer workloads use; CA keys never rotated on renewal, objects protected. `docs/talos.md` gains the cluster PKI section (the bundle's CAs and their rotation, the workloads' CA).
 - Conformance (`hack/conformance.sh`, its own CI workflow): the Talos machine configs validated by the real talosctl, and Cilium with the Talos values on a kind cluster without CNI or kube-proxy, exercising LB-IPAM and L2 announcements, NetworkPolicy enforcement, local volumes, the internal CA and the etcd backup objects under Pod Security restricted.
 - `pkg/talos/oidc` (new): the ServiceAccount issuer's discovery document and JWKS generated offline from the signing key, as kube-apiserver serves them.
