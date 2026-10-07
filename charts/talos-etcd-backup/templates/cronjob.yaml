@@ -1,0 +1,103 @@
+{{- include "talos-etcd-backup.check" . }}
+{{- $v := .Values }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ $v.schedule | quote }}
+  {{- with $v.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ $v.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $v.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: {{ $v.activeDeadlineSeconds }}
+      backoffLimit: {{ $v.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: talos-etcd-backup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            {{- with $v.podLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ $v.serviceAccountName }}
+          automountServiceAccountToken: false
+          securityContext:
+            {{- toYaml $v.podSecurityContext | nindent 12 }}
+          {{- with $v.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $v.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $v.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: talos-backup
+              image: "{{ $v.image.repository }}:{{ $v.image.tag }}"
+              imagePullPolicy: {{ $v.image.pullPolicy }}
+              securityContext:
+                {{- toYaml $v.securityContext | nindent 16 }}
+              resources:
+                {{- toYaml $v.resources | nindent 16 }}
+              env:
+                - {name: CLUSTER_NAME, value: {{ $v.clusterName | quote }}}
+                - {name: BUCKET, value: {{ $v.s3.bucket | quote }}}
+                - {name: S3_PREFIX, value: {{ $v.s3.prefix | quote }}}
+                - {name: AWS_REGION, value: {{ $v.s3.region | quote }}}
+                {{- with $v.s3.endpoint }}
+                - {name: CUSTOM_S3_ENDPOINT, value: {{ . | quote }}}
+                {{- end }}
+                {{- if $v.s3.pathStyle }}
+                - {name: USE_PATH_STYLE, value: "true"}
+                {{- end }}
+                {{- if $v.encryption.disabled }}
+                - {name: DISABLE_ENCRYPTION, value: "true"}
+                {{- else }}
+                - {name: AGE_X25519_PUBLIC_KEY, value: {{ $v.encryption.ageRecipient | quote }}}
+                {{- end }}
+                {{- if $v.compression }}
+                - {name: ENABLE_COMPRESSION, value: "true"}
+                {{- end }}
+                {{- if $v.credentials.webIdentity.roleArn }}
+                - {name: AWS_ROLE_ARN, value: {{ $v.credentials.webIdentity.roleArn | quote }}}
+                - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+                {{- end }}
+              {{- with $v.credentials.secretName }}
+              envFrom:
+                - secretRef:
+                    name: {{ . }}
+              {{- end }}
+              volumeMounts:
+                - {name: talos-secrets, mountPath: /var/run/secrets/talos.dev, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+                {{- if $v.credentials.webIdentity.roleArn }}
+                - {name: aws-token, mountPath: /var/run/secrets/aws, readOnly: true}
+                {{- end }}
+          volumes:
+            - name: talos-secrets
+              secret:
+                secretName: {{ $v.talosServiceAccountName }}
+            - name: tmp
+              emptyDir: {}
+            {{- if $v.credentials.webIdentity.roleArn }}
+            - name: aws-token
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      audience: {{ $v.credentials.webIdentity.audience | quote }}
+                      expirationSeconds: {{ $v.credentials.webIdentity.expirationSeconds }}
+            {{- end }}

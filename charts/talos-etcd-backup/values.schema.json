@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "talos-etcd-backup values",
+  "description": "An unknown key is an error: a misspelt credential or bucket would leave the cluster without a backup while the CronJob looks fine.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": { "type": "object", "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it." },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "pattern": "^(|v?[0-9][0-9A-Za-z.+-]*)$" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "clusterName": { "type": "string", "pattern": "^(|[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)$" },
+    "schedule": { "type": "string", "minLength": 9 },
+    "timeZone": { "type": "string" },
+    "s3": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bucket": { "type": "string" },
+        "prefix": { "type": "string", "pattern": "^[^/].*[^/]$|^$" },
+        "region": { "type": "string" },
+        "endpoint": { "type": "string", "pattern": "^(|https?://[^/\\s]+(/.*)?)$" },
+        "pathStyle": { "type": "boolean" }
+      }
+    },
+    "encryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ageRecipient": { "type": "string", "pattern": "^(|age1[02-9ac-hj-np-z]{58})$" },
+        "disabled": { "type": "boolean" },
+        "disabledReason": { "type": "string" }
+      }
+    },
+    "compression": { "type": "boolean" },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "secretName": { "type": "string" },
+        "webIdentity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "roleArn": { "type": "string" },
+            "audience": { "type": "string", "minLength": 1 },
+            "expirationSeconds": { "type": "integer", "minimum": 600 }
+          }
+        }
+      }
+    },
+    "serviceAccountName": { "type": "string", "minLength": 1 },
+    "talosServiceAccountName": { "type": "string", "minLength": 1 },
+    "activeDeadlineSeconds": { "type": "integer", "minimum": 60 },
+    "backoffLimit": { "type": "integer", "minimum": 0 },
+    "successfulJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+    "failedJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+    "podSecurityContext": { "type": "object" },
+    "securityContext": { "type": "object" },
+    "resources": { "type": "object" },
+    "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+    "tolerations": { "type": "array" },
+    "affinity": { "type": "object" },
+    "podLabels": { "type": "object", "additionalProperties": { "type": "string" } }
+  }
+}

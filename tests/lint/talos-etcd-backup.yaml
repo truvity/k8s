@@ -1,0 +1,6 @@
+# The chart has required values; helm lint renders with these.
+image: {tag: v0.1.0-beta.3}
+clusterName: example
+s3: {bucket: backups, region: us-east-1}
+encryption: {ageRecipient: age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq}
+credentials: {secretName: backup-credentials}
