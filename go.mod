@@ -5,6 +5,7 @@ go 1.27.0
 toolchain go1.27.1
 
 require (
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/pulumi/pulumi-aws/sdk/v7 v7.48.0
 	github.com/pulumi/pulumi/sdk/v3 v3.267.0
 	github.com/siderolabs/talos/pkg/machinery v1.14.2
@@ -54,7 +55,6 @@ require (
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
 	github.com/go-git/go-billy/v6 v6.0.0-alpha.1 // indirect
 	github.com/go-git/go-git/v6 v6.0.0-alpha.4 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

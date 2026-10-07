@@ -913,6 +913,38 @@ role, an unknown capability, no control plane node, a repeated hostname or
 address, not exactly one install disk, and a local volume without a name,
 selector or size, or with an unknown filesystem or encryption.
 
+### `pkg/talos/oidc`
+
+`Generate(issuer, keys...)` builds the ServiceAccount issuer's discovery
+document and key set offline, as kube-apiserver serves them: `kid` is the
+unpadded base64url SHA-256 of the key's PKIX DER (`KeyID`), RSA keys are
+`RS256`, ECDSA P-256/384/521 `ES256/384/512`, the JWKS URI is
+`<issuer>/openid/v1/jwks`. Several keys (a rotation) are published together;
+a repeated key, a non-https issuer or one ending in a slash is refused.
+`PublicKeysFromPEM` reads the public half of every key in PEM data (the
+secrets bundle's ServiceAccount key, PKCS#1, PKCS#8, SEC 1 or a public key).
+
+### `pkg/aws/oidcissuer`
+
+`truvity:k8s/aws:OidcIssuer` publishes the documents and, optionally,
+registers the issuer with IAM.
+
+| Field | Meaning |
+| --- | --- |
+| `ObjectProvider` | The AWS provider the objects go through: S3, or an S3-compatible store set as the provider's S3 endpoint. Required. |
+| `Bucket` | The bucket. Required. It must serve the objects publicly at the issuer URL. |
+| `KeyPrefix` | `*string`. Nil: the issuer URL's path. |
+| `ACL`, `CacheControl` | A canned ACL (none by default); Cache-Control, default `max-age=300`. |
+| `Issuer`, `Documents` | The issuer and `oidc.Generate`'s output; the discovery document's issuer must be `Issuer`. Required. |
+| `IAMProvider` | An AWS provider to register an IAM OpenID Connect provider through. Nil: none. |
+| `Audiences`, `Tags` | The IAM provider's client IDs (default `sts.amazonaws.com`) and tags. |
+| `Names` | Naming hook. Default `<c>-discovery`, `<c>-jwks`, `<c>-iam-provider`. |
+
+Outputs: `DiscoveryKey`, `JWKSKey`, `ProviderARN` (empty without
+`IAMProvider`). `TrustPolicy(providerARN, issuer, audience, "<ns>/<sa>"...)`
+is a role trust policy for those ServiceAccounts (`StringLike` when a name
+has a `*`).
+
 ## `charts/cilium-config`
 
 The cluster network Cilium provides beyond the CNI, as data. Install a
@@ -952,7 +984,6 @@ helm install cilium cilium/cilium --version 1.20.1 -n kube-system -f values.yaml
   --set operator.skipCRDCreation=true
 helm install cilium-config oci://ghcr.io/truvity/charts/cilium-config --version <tag> -f network.yaml
 ```
-
 ## `charts/cluster-baseline`
 
 Pod Security Admission labels, per namespace, as data. Install a pinned

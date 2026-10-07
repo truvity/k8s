@@ -27,6 +27,8 @@ capabilities.
 | `pkg/talos/machineconfig` — a self-hosted Talos cluster's machine configs rendered offline from a declared cluster and its secrets, validated as Talos does; the talosconfig; the contract | Go package |
 | `pkg/talos/cilium` — the upstream Cilium chart's values for a Talos cluster | Go package |
 | `charts/cilium-config` — LoadBalancer IP pools, L2 announcements (default) and optional BGP for Cilium, as data | Helm chart, `oci://ghcr.io/truvity/charts/cilium-config` |
+| `pkg/talos/oidc` — a ServiceAccount issuer's discovery document and JWKS, generated offline | Go package |
+| `pkg/aws/oidcissuer` — publishes them to an S3-compatible bucket and registers the IAM OIDC provider (IAM roles for service accounts off EKS), `truvity:k8s/aws:OidcIssuer` | Pulumi component |
 | `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
 | `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses, PriorityClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
 | `charts/cluster-network-policies` — a cluster's own NetworkPolicies as data: selector, policy types and rules per entry, each with a required reason, sync wave and optional deletion protection | Helm chart, `oci://ghcr.io/truvity/charts/cluster-network-policies`, unreleased |
