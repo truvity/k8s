@@ -79,8 +79,14 @@ type (
 		DefaultOwner string
 		// Owners are, per company, the namespaces its projects own.
 		Owners map[string][]string
-		// PodSecurity is the cluster's Pod Security table; nil for none.
+		// PodSecurity is the cluster's Pod Security policy; nil for none.
+		// Its Namespaces are exceptions only (a name that has no row is an
+		// error): every other row takes the defaults, except the system
+		// namespaces and Kargo's own, which are labelled only when named.
 		PodSecurity *cluster.PodSecurity
+		// Components are namespaces a component renders that no other input
+		// names.
+		Components []Component
 		// Platform are the namespaces the cluster's foundation renders.
 		Platform []PlatformNamespace
 		// Tenancy is the cluster's tenant inventory; nil for none.
@@ -184,6 +190,15 @@ type (
 		Namespace string
 	}
 
+	// Component is one namespace a component of the cluster owns.
+	Component struct {
+		Name string
+		// LabelWriter is who stamps its Pod Security labels (LabelWriterOwner,
+		// the default, or LabelWriterClusterBaseline, for a namespace no
+		// chart of the consumer renders).
+		LabelWriter string
+	}
+
 	// Kargo is the management cluster's Kargo: the Project namespaces (by
 	// name, to their business project or "" for none), the controller's own
 	// namespaces, and the namespaces a component of its renders.
@@ -198,6 +213,8 @@ type (
 		in     *Inputs
 		rows   map[string]*Row
 		owners map[string]string
+		// componentWriters: the label writer a Component names.
+		componentWriters map[string]string
 	}
 )
 
@@ -261,7 +278,7 @@ func (t *Tenancy) Namespaces() []string {
 // foundation writes the platform namespaces; the distribution the system ones;
 // Kargo its Project namespaces; any other namespace is a component's own.
 func Build(in *Inputs) (*Catalog, error) {
-	b := &builder{in: in, rows: map[string]*Row{}, owners: map[string]string{}}
+	b := &builder{in: in, rows: map[string]*Row{}, owners: map[string]string{}, componentWriters: map[string]string{}}
 
 	for company, namespaces := range in.Owners {
 		for _, ns := range namespaces {
@@ -275,8 +292,8 @@ func Build(in *Inputs) (*Catalog, error) {
 		r.Guardrails.Writer = WriterSystem
 	}
 
-	b.addPodSecurity()
 	b.addPlatform()
+	b.addComponents()
 	b.addTenants()
 	b.addProducts()
 	b.addListeners()
@@ -284,6 +301,10 @@ func Build(in *Inputs) (*Catalog, error) {
 	b.addKargo()
 
 	if err := b.addAppProjects(); err != nil {
+		return nil, err
+	}
+
+	if err := b.addPodSecurity(); err != nil {
 		return nil, err
 	}
 
@@ -341,20 +362,61 @@ func (b *builder) identity(r *Row, project, application string) {
 	b.labels(r, b.in.Keys.Identity(b.in.Environment, project, application))
 }
 
-// addPodSecurity: one row per table row, with the labels its owner stamps.
-func (b *builder) addPodSecurity() {
+// addComponents: the namespaces a component owns, with no other source.
+func (b *builder) addComponents() {
+	for _, c := range b.in.Components {
+		b.row(c.Name)
+
+		if c.LabelWriter != "" {
+			b.componentWriters[c.Name] = c.LabelWriter
+		}
+	}
+}
+
+// addPodSecurity: every row takes the policy's defaults unless an exception
+// names it, and carries the labels its owner stamps. The system namespaces
+// (but for an exception, kube-system) and Kargo's controller and component
+// namespaces are not labelled. It runs last, over every row.
+func (b *builder) addPodSecurity() error {
 	ps := b.in.PodSecurity
 	if ps == nil {
-		return
+		return nil
 	}
 
 	for _, ns := range slices.Sorted(maps.Keys(ps.Namespaces)) {
-		entry := ps.Namespaces[ns]
-		r := b.row(ns)
+		if _, ok := b.rows[ns]; !ok {
+			return fmt.Errorf("cluster %s: pod security exception %q names a namespace with no catalog row", b.in.Cluster, ns)
+		}
+	}
+
+	unlabelled := map[string]bool{}
+	for _, ns := range SystemNamespaces {
+		unlabelled[ns] = true
+	}
+
+	if k := b.in.Kargo; k != nil {
+		for _, ns := range append(slices.Clone(k.ControllerNamespaces), k.ComponentNamespaces...) {
+			unlabelled[ns] = true
+		}
+	}
+
+	for _, ns := range slices.Sorted(maps.Keys(b.rows)) {
+		r := b.rows[ns]
+		entry, excepted := ps.Namespaces[ns]
+
+		if unlabelled[ns] && !excepted {
+			continue
+		}
 
 		labelWriter := LabelWriterOwner
-		if ps.IsBaselineOwned(ns) {
+
+		switch r.Guardrails.Writer {
+		case WriterSystem, WriterKargo:
 			labelWriter = LabelWriterClusterBaseline
+		case WriterComponent:
+			if w := b.componentWriters[ns]; w != "" {
+				labelWriter = w
+			}
 		}
 
 		r.Guardrails.PodSecurity = &PodSecurity{
@@ -368,6 +430,8 @@ func (b *builder) addPodSecurity() {
 
 		b.labels(r, ps.OwnerOf(entry).Labels)
 	}
+
+	return nil
 }
 
 // addPlatform: the foundation's namespaces and the labels it stamps.

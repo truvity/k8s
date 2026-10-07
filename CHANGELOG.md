@@ -6,6 +6,10 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.25.0
+
+- `pkg/nscatalog`, `pkg/cluster` (BREAKING): the Pod Security input is the cluster's defaults plus EXCEPTIONS, not a list of every namespace. `Build` now labels every row it derives with the defaults unless `PodSecurity.Namespaces` names it (a name with no row is an error); the system namespaces and Kargo's controller and component namespaces are labelled only where an exception names them. Who stamps the labels is derived from the row's writer (system and Kargo rows: the cluster-baseline chart; guardrails-projects rows and the foundation's: the owner); a namespace no other input names, or one a component owns that the cluster-baseline chart must label, comes in through the new `Inputs.Components` (`Component{Name, LabelWriter}`). Removed: `PodSecurity.BaselineOwned` and `IsBaselineOwned` (and its `Validate` rule), `Resolve`, `ResolvedPodSecurity` and `WithOwnedRow`; use `OwnerOf` on a row for what its owner stamps. To migrate: delete every row of your table that takes the defaults, keep the exceptions, pass `Components` for the namespaces nothing else names.
+
 ## v0.24.0
 
 - `pkg/aws/ekscluster`: `Args.AccessEntries` (one `STANDARD` access entry and one access policy association per principal, cluster- or namespace-scoped) and `Args.CoreDNS` (the coredns add-on; its Corefile is `StockCorefile` of `DefaultCoreDNSVersion`, or the caller's, with the `Extras` lines inserted above the `kubernetes` stanza). New child kinds `access-entry`, `access-policy`, `coredns`, default names `<c>-access-<name>`, `<c>-access-<name>-policy`, `<c>-coredns`; with `LegacyTopLevel` they carry the no-parent alias like every other child, so a stack that registered them loose adopts them with no change. Neither set: nothing changes.

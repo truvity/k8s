@@ -33,7 +33,6 @@ func buildInputs() *nscatalog.Inputs {
 				"kube-system": {Level: "privileged", Reason: "the CNI"},
 				"emp-alice":   {Modes: []string{"warn"}, Deletable: true},
 			},
-			BaselineOwned: []string{"kube-system", "shop"},
 		},
 		Platform: []nscatalog.PlatformNamespace{
 			{Name: "node-agents"},
@@ -107,7 +106,7 @@ func TestBuildProduct(t *testing.T) {
 		t.Errorf("shop: kind %s project %s writer %s", r.Kind, r.Project, r.Guardrails.Writer)
 	}
 
-	// Baseline-owned in the table, but its owner stamps the labels.
+	// Its owner (guardrails-projects) stamps the labels.
 	if ps := r.Guardrails.PodSecurity; ps == nil || ps.LabelWriter != nscatalog.LabelWriterOwner {
 		t.Errorf("shop: pod security %+v, want the owner as label writer", ps)
 	}
@@ -280,5 +279,49 @@ func TestLabelKeysIdentity(t *testing.T) {
 	got := nscatalog.LabelKeys{Environment: "e", Project: "p"}.Identity("dev", "shop", "front")
 	if want := map[string]string{"e": "dev", "p": "shop"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Identity %v, want %v", got, want)
+	}
+}
+
+func TestBuildPodSecurityDefaultsAndExceptions(t *testing.T) {
+	in := buildInputs()
+	in.Components = []nscatalog.Component{
+		{Name: "rollouts", LabelWriter: nscatalog.LabelWriterClusterBaseline},
+		{Name: "own"},
+	}
+	in.Kargo = &nscatalog.Kargo{
+		Projects:             map[string]string{"platform-x": ""},
+		ControllerNamespaces: []string{"kargo-system"},
+		ComponentNamespaces:  []string{"kargo-users"},
+	}
+
+	c := mustBuild(t, in)
+
+	// A row no exception names takes the defaults; Kargo's project namespace
+	// and a component the cluster-baseline chart labels are labelled by it.
+	for ns, writer := range map[string]string{
+		"broker": nscatalog.LabelWriterOwner, "platform-x": nscatalog.LabelWriterClusterBaseline,
+		"rollouts": nscatalog.LabelWriterClusterBaseline, "own": nscatalog.LabelWriterOwner,
+		"kube-system": nscatalog.LabelWriterClusterBaseline,
+	} {
+		ps := mustRow(t, c, ns).Guardrails.PodSecurity
+		if ps == nil || ps.LabelWriter != writer {
+			t.Errorf("%s: pod security %+v, want label writer %s", ns, ps, writer)
+		}
+	}
+
+	// Not labelled: the system namespaces without an exception and Kargo's own.
+	for _, ns := range []string{"default", "kube-public", "kube-node-lease", "kargo-system", "kargo-users"} {
+		if r := mustRow(t, c, ns); r.Guardrails.PodSecurity != nil || len(r.Labels) != 0 {
+			t.Errorf("%s: labelled %+v", ns, r)
+		}
+	}
+}
+
+func TestBuildPodSecurityExceptionWithoutRow(t *testing.T) {
+	in := buildInputs()
+	in.PodSecurity.Namespaces["ghost"] = cluster.PodSecurityNamespace{Level: "baseline", Reason: "r"}
+
+	if _, err := nscatalog.Build(in); err == nil || !strings.Contains(err.Error(), `exception "ghost"`) {
+		t.Errorf("err %v, want an exception with no row refused", err)
 	}
 }
