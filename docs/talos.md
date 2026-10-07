@@ -191,6 +191,40 @@ talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5 --dry-run
 talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5
 ```
 
+## Storage
+
+Two tiers, chosen per workload:
+
+- **Local volumes for databases.** A workload that replicates its own data
+  (a Postgres cluster, a NATS or Valkey cluster) runs one replica per node
+  on that node's disk: no network storage in the write path, and the
+  application's replication is the redundancy. Declare a Talos user volume
+  per disk (`Node.LocalVolumes`, mounted at `/var/mnt/<name>`), then one
+  PersistentVolume per replica with `charts/local-volumes`, reserved for its
+  claim. A pod follows its volume: losing the node loses that replica, which
+  the application rebuilds elsewhere. Do not use `hostPath`: a missing mount
+  turns it into a directory on the system disk.
+- **Longhorn for the rest.** Single-copy workloads that must survive a node
+  (home directories, small stateful tools) get replicated block storage from
+  Longhorn:
+  - the schematic carries `siderolabs/iscsi-tools` and
+    `siderolabs/util-linux-tools`;
+  - a user volume per node for its data (for example `longhorn`, so
+    `/var/mnt/longhorn`), set as Longhorn's `defaultSettings.defaultDataPath`;
+    check Talos' Longhorn guide for the kubelet mount it needs on your
+    version;
+  - its namespace is `privileged` in Pod Security (it runs host-level
+    agents), with the reason recorded;
+  - under Argo CD, turn off `preUpgradeChecker.jobEnabled` (a Helm hook Argo
+    does not run the same way);
+  - two replicas per volume is the usual balance for a small cluster; keep
+    Longhorn out of nodes whose disks hold the local database volumes if
+    their I/O matters.
+
+A third class of disk, slow and large (spinning disks in RAID), fits the
+same local-volume pattern: a Talos raw or user volume per array, static
+PersistentVolumes on it.
+
 ## Disaster recovery
 
 - **etcd** is backed up by `charts/talos-etcd-backup`. To restore, bootstrap

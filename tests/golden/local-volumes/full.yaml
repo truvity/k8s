@@ -1,0 +1,146 @@
+---
+# Source: local-volumes/templates/storage-classes.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-bulk
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: false
+
+---
+# Source: local-volumes/templates/storage-classes.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-db
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+
+---
+# Source: local-volumes/templates/persistent-volumes.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-1-postgres
+  labels:
+    local-volumes/node: db-1
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  capacity:
+    storage: 200Gi
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-db
+  local:
+    path: /var/mnt/local-db/postgres
+  claimRef:
+    namespace: databases
+    name: data-postgres-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - "db-1"
+
+---
+# Source: local-volumes/templates/persistent-volumes.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-1-scratch
+  labels:
+    local-volumes/node: db-1
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteOncePod
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local-bulk
+  local:
+    path: /var/mnt/bulk/scratch
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - "db-1"
+
+---
+# Source: local-volumes/templates/persistent-volumes.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-2-postgres
+  labels:
+    local-volumes/node: db-2
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  capacity:
+    storage: 200Gi
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-db
+  local:
+    path: /var/mnt/local-db/postgres
+  claimRef:
+    namespace: databases
+    name: data-postgres-1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - "db-2"
+
+---
+# Source: local-volumes/templates/persistent-volumes.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-2-raw
+  labels:
+    local-volumes/node: db-2
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    example.com/owner: data
+spec:
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-bulk
+  local:
+    path: /var/mnt/bulk/raw
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - "db-2"

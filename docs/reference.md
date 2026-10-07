@@ -1218,6 +1218,24 @@ budget of one node, so consolidation cannot move more than one node at a time;
 `fastEmptyReclaim` adds a budget that lets every empty node go at once.
 
 
+## `charts/local-volumes`
+
+Local PersistentVolumes as data, for workloads that replicate their own data.
+Install a pinned version from `oci://ghcr.io/truvity/charts/local-volumes`.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `storageClasses.<name>` | none | A `kubernetes.io/no-provisioner` class, `WaitForFirstConsumer`: `isDefault`, `reclaimPolicy` (`Retain` by default), `allowVolumeExpansion`, `syncWave`, `protect`, `annotations`. |
+| `volumes.<name>` | none | One PersistentVolume: `storageClass`, `node` (`kubernetes.io/hostname`), `path` (under `pathPrefix`, no trailing slash), `capacity`, optional `claim` (`namespace`, `name`: reserved for that claim), `accessModes` (`ReadWriteOnce` default; never `ReadWriteMany`), `volumeMode`, `reclaimPolicy`, `syncWave`, `protect`, `annotations`. Labelled `local-volumes/node`. |
+| `pathPrefix` | `/var/mnt/` | Where the nodes' user volumes are mounted; a path elsewhere is refused. |
+| `classMustExist` | `true` | Refuse a volume whose class the chart does not render. |
+| `protect` | `true` | Deletion protection on every object (they hold data). |
+
+Refused: a path outside `pathPrefix` or climbing out with `..`, the same
+node and path twice, an unknown class, a missing node, path or capacity, a
+claim without a namespace, `ReadWriteMany`, `Recycle`, and a literal
+annotation the chart computes.
+
 ## `charts/tenancy`
 
 **Deprecated.** Tenancy is becoming guidelines (a contract), thin per-tenant

@@ -1,0 +1,51 @@
+{{- /* One local PersistentVolume per entry of `volumes`, in name order. */ -}}
+{{- $root := . -}}
+{{- $classes := .Values.storageClasses | default dict -}}
+{{- $paths := dict -}}
+{{- range $name := (keys (.Values.volumes | default dict) | sortAlpha) }}
+{{- $e := index $root.Values.volumes $name }}
+{{- $where := printf "volumes.%s" $name }}
+{{- if not (hasPrefix $root.Values.pathPrefix $e.path) }}
+{{- fail (printf "%s: path %s is not under %s; a directory there lives on the system disk" $where $e.path $root.Values.pathPrefix) }}
+{{- end }}
+{{- if or (contains "/../" $e.path) (hasSuffix "/.." $e.path) }}
+{{- fail (printf "%s: path %s climbs out with .." $where $e.path) }}
+{{- end }}
+{{- $key := printf "%s:%s" $e.node (trimSuffix "/" $e.path) }}
+{{- if hasKey $paths $key }}
+{{- fail (printf "%s: %s on node %s is already volume %s" $where $e.path $e.node (index $paths $key)) }}
+{{- end }}
+{{- $_ := set $paths $key $name }}
+{{- if and $root.Values.classMustExist (not (hasKey $classes $e.storageClass)) }}
+{{- fail (printf "%s: storageClass %s is not in storageClasses (set classMustExist: false if it is managed elsewhere)" $where $e.storageClass) }}
+{{- end }}
+{{- $reclaim := $e.reclaimPolicy | default ((index $classes $e.storageClass | default dict).reclaimPolicy) | default "Retain" }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  {{- include "local-volumes.metadata" (dict "root" $root "name" $name "entry" $e "labels" (dict "local-volumes/node" $e.node) "where" $where) | nindent 2 }}
+spec:
+  capacity:
+    storage: {{ $e.capacity }}
+  accessModes:
+    {{- toYaml ($e.accessModes | default (list "ReadWriteOnce")) | nindent 4 }}
+  volumeMode: {{ $e.volumeMode | default "Filesystem" }}
+  persistentVolumeReclaimPolicy: {{ $reclaim }}
+  storageClassName: {{ $e.storageClass }}
+  local:
+    path: {{ $e.path }}
+  {{- with $e.claim }}
+  claimRef:
+    namespace: {{ .namespace }}
+    name: {{ .name }}
+  {{- end }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ $e.node | quote }}
+{{- end }}

@@ -6,6 +6,7 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `charts/local-volumes` (new, published from the next tag): no-provisioner StorageClasses and local PersistentVolumes pinned to their node and optionally reserved for one claim; paths must live under the nodes' user volumes (`/var/mnt/`). `docs/talos.md` gains the storage section (local volumes for databases, Longhorn for the rest).
 - `pkg/talos/schematic` (new): a Talos Image Factory schematic, its ID computed offline as the factory computes it, and `Installer.Reference` (the pinned installer image of a schematic and a Talos version).
 - `pkg/talos/machineconfig` (new): renders a self-hosted Talos 1.14 cluster's machine configs offline from a declared `Cluster` and its secrets bundle, with Talos' own generator and strict client-side validation: pinned installer, no CNI and no kube-proxy for Cilium by default, ServiceAccount issuer and JWKS URI, control plane VIP, node subnets, user volumes, Talos API access; caller patches per cluster, role and node; the talosconfig; and the cluster under the provider-neutral contract.
 - `charts/cilium-config` (new, published from the next tag): LoadBalancer IP pools (LB-IPAM), L2 announcements (on by default, one policy that announces every LoadBalancer address) and, as an option, the BGP control plane's cluster configs, peer configs and advertisements. Refuses a pool with no blocks, a block that is both a CIDR and a range, an L2 policy that announces nothing, BGP objects while BGP is off, and a peer config reference to nothing.

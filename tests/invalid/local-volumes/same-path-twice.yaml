@@ -1,0 +1,5 @@
+storageClasses:
+  c: {}
+volumes:
+  a: {storageClass: c, node: n1, path: /var/mnt/a, capacity: 1Gi}
+  b: {storageClass: c, node: n1, path: /var/mnt/a, capacity: 1Gi}

@@ -1,0 +1,4 @@
+storageClasses:
+  c: {}
+volumes:
+  v: {storageClass: c, node: n1, path: /var/mnt/a, capacity: 1Gi, accessModes: [ReadWriteMany]}

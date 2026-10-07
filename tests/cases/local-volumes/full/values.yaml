@@ -1,0 +1,42 @@
+# A database tier on two nodes (one volume reserved for its claim), a bulk
+# tier with Delete, an unprotected scratch volume and a block volume.
+storageClasses:
+  local-db:
+    syncWave: -1
+  local-bulk:
+    reclaimPolicy: Delete
+    protect: false
+volumes:
+  db-1-postgres:
+    storageClass: local-db
+    node: db-1
+    path: /var/mnt/local-db/postgres
+    capacity: 200Gi
+    claim:
+      namespace: databases
+      name: data-postgres-0
+  db-2-postgres:
+    storageClass: local-db
+    node: db-2
+    path: /var/mnt/local-db/postgres
+    capacity: 200Gi
+    claim:
+      namespace: databases
+      name: data-postgres-1
+    syncWave: 1
+  db-1-scratch:
+    storageClass: local-bulk
+    node: db-1
+    path: /var/mnt/bulk/scratch
+    capacity: 1Ti
+    accessModes: [ReadWriteOncePod]
+    protect: false
+  db-2-raw:
+    storageClass: local-bulk
+    node: db-2
+    path: /var/mnt/bulk/raw
+    capacity: 500Gi
+    volumeMode: Block
+    reclaimPolicy: Retain
+    annotations:
+      example.com/owner: data
