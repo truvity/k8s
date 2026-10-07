@@ -6,6 +6,10 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/cluster/clusterout` (new): `Output`, the Pulumi output of a `cluster.Outputs`, with `Name()`, `Endpoint()`, `CertificateAuthorityPEM()`, `OIDCIssuer()` and `Validated()`. Every provider component reports its contract in a `Contract` field of this type.
+- `pkg/aws/ekscluster`: `EksCluster.Contract` reports the cluster under the provider-neutral contract (endpoint, PEM certificate authority, the cluster's token issuer, `Args.Capabilities` or `DefaultCapabilities()`). `Args.UpgradePolicy` (`STANDARD` or `EXTENDED`) and `Args.DeletionProtection` set the cluster's support policy and EKS's own deletion protection. Unset (the default), the cluster's inputs are what earlier releases sent: an adopted cluster previews no change.
+- `charts/cluster-foundation`: `priorityClasses.<name>` renders PriorityClasses (`value`, required `description`, at most one `globalDefault`, `preemptionPolicy`); a `system-` name or a value above one billion is refused. Nothing renders without it.
+
 - `pkg/aws/vpc`: a test pins that a public-only VPC (no private subnet, `NATNone`) has empty `PrivateRouteTableIDs`, `NATGatewayIDs` and `NATEIPIDs`. The component already behaves so; a caller that exports a per-zone map by indexing `PrivateRouteTableIDs[az]` for every zone gets the zero `StringOutput`, which Pulumi serialises as its unknown-value sentinel, so range over the map instead.
 
 ## v0.25.0

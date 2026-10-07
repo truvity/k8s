@@ -1,6 +1,7 @@
 package ekscluster
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/kms"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+
+	"github.com/truvity/k8s/pkg/cluster"
+	"github.com/truvity/k8s/pkg/cluster/clusterout"
 )
 
 // TypeToken is the Pulumi type of the component.
@@ -37,6 +41,27 @@ func DefaultNodePools() []string { return []string{"general-purpose", "system"} 
 // Args.LogTypes is empty: all of them.
 func DefaultLogTypes() []string {
 	return []string{"api", "audit", "authenticator", "controllerManager", "scheduler"}
+}
+
+// Upgrade support policies (Args.UpgradePolicy).
+const (
+	// UpgradePolicyStandard ends support with the version's standard
+	// support: EKS upgrades the control plane itself when it ends, and the
+	// cluster never pays for extended support.
+	UpgradePolicyStandard = "STANDARD"
+	// UpgradePolicyExtended keeps an expired version running, at a cost,
+	// until extended support ends too.
+	UpgradePolicyExtended = "EXTENDED"
+)
+
+// DefaultCapabilities is what an Auto Mode cluster offers by itself, the
+// contract's capabilities when Args.Capabilities is empty: node pools, load
+// balancing, API access and workload identity. Storage and network policy
+// are not in it: an Auto Mode cluster has neither a default StorageClass nor
+// enforced NetworkPolicies until the caller applies the objects that turn
+// them on (the cluster-foundation chart does both), so the caller adds them.
+func DefaultCapabilities() []cluster.Capability {
+	return []cluster.Capability{cluster.NodePools, cluster.WorkloadIdentity, cluster.LoadBalancing, cluster.APIAccess}
 }
 
 // Kind names which child a logical name is for.
@@ -337,6 +362,22 @@ type Args struct {
 	// CoreDNS installs the coredns add-on. Nil installs none.
 	CoreDNS *CoreDNS
 
+	// UpgradePolicy is the cluster's support policy, UpgradePolicyStandard
+	// or UpgradePolicyExtended. Empty leaves it unset, so EKS keeps whatever
+	// the cluster has (EXTENDED for a new cluster). Set it to STANDARD for a
+	// cluster that must never fall into paid extended support.
+	UpgradePolicy string
+	// DeletionProtection turns on the cluster's own deletion protection: EKS
+	// refuses DeleteCluster while it is on. Nil leaves it unset (off for a new
+	// cluster), so adopting a cluster changes nothing. It is a second lock
+	// beside Protect, which only guards against this Pulumi program.
+	DeletionProtection *bool
+
+	// Capabilities is what the cluster offers, reported in Contract. Empty
+	// means DefaultCapabilities. Add cluster.Storage and
+	// cluster.NetworkPolicy once the objects that provide them are applied.
+	Capabilities []cluster.Capability
+
 	// Tags are set on the key, the roles, the log group and the cluster.
 	Tags map[string]string
 
@@ -356,6 +397,26 @@ type Args struct {
 }
 
 func (a *Args) protect() bool { return a.Protect == nil || *a.Protect }
+
+func (a *Args) capabilities() cluster.Capabilities {
+	if len(a.Capabilities) == 0 {
+		return cluster.NewCapabilities(DefaultCapabilities()...)
+	}
+
+	return cluster.NewCapabilities(a.Capabilities...)
+}
+
+// clusterArgs adds the optional settings to the cluster's arguments only when
+// they are set, so a caller that sets none sends what earlier releases sent.
+func (a *Args) optionalClusterArgs(args *eks.ClusterArgs) {
+	if a.UpgradePolicy != "" {
+		args.UpgradePolicy = &eks.ClusterUpgradePolicyArgs{SupportType: pulumi.String(a.UpgradePolicy)}
+	}
+
+	if a.DeletionProtection != nil {
+		args.DeletionProtection = pulumi.BoolPtr(*a.DeletionProtection)
+	}
+}
 
 func (a *Args) clusterRoleName() string {
 	if a.ClusterRoleName != "" {
@@ -444,6 +505,13 @@ type EksCluster struct {
 	ClusterRoleName pulumi.StringOutput
 	NodeRoleARN     pulumi.StringOutput
 	NodeRoleName    pulumi.StringOutput
+
+	// Contract is what the cluster reports under the provider-neutral
+	// contract: the name, the API endpoint, the certificate authority
+	// (decoded to PEM), the cluster's own service-account token issuer and
+	// Args.Capabilities. It is not validated; use Contract.Validated() where
+	// a consumer needs it whole.
+	Contract clusterout.Output
 }
 
 // policyKey is the last path segment of a policy ARN: the policy's name.
@@ -564,6 +632,22 @@ func (a *Args) Validate() error {
 	}
 
 	errs = append(errs, a.checkAccessEntries()...)
+
+	switch a.UpgradePolicy {
+	case "", UpgradePolicyStandard, UpgradePolicyExtended:
+	default:
+		errs = append(errs, fmt.Errorf("args: UpgradePolicy %q is neither %s nor %s", a.UpgradePolicy, UpgradePolicyStandard, UpgradePolicyExtended))
+	}
+
+	if caps := cluster.NewCapabilities(a.Capabilities...); len(caps) != len(a.Capabilities) {
+		errs = append(errs, errors.New("args: Capabilities repeats a capability"))
+	}
+
+	for _, c := range cluster.NewCapabilities(a.Capabilities...).List() {
+		if !slices.Contains(cluster.All(), c) {
+			errs = append(errs, fmt.Errorf("args: Capabilities: unknown capability %q", c))
+		}
+	}
 
 	if a.CoreDNS != nil {
 		errs = append(errs, a.CoreDNS.validate()...)
@@ -945,7 +1029,7 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 	// group: EKS validates the role's policies and writes to the group.
 	deps = append(deps, clusterRole, nodeRole, logGroup)
 
-	cluster, err := eks.NewCluster(b.ctx, b.child(Child{Kind: KindCluster}), &eks.ClusterArgs{
+	clusterArgs := &eks.ClusterArgs{
 		Name:    pulumi.String(a.Name),
 		Version: pulumi.String(a.Version),
 		RoleArn: clusterRole.Arn,
@@ -980,12 +1064,16 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 			BlockStorage: &eks.ClusterStorageConfigBlockStorageArgs{Enabled: pulumi.Bool(true)},
 		},
 		Tags: b.tags(),
-	}, b.childOpts(true, pulumi.DependsOn(deps))...)
+	}
+	a.optionalClusterArgs(clusterArgs)
+
+	cluster, err := eks.NewCluster(b.ctx, b.child(Child{Kind: KindCluster}), clusterArgs, b.childOpts(true, pulumi.DependsOn(deps))...)
 	if err != nil {
 		return fmt.Errorf("create cluster: %w", err)
 	}
 
 	c.Cluster = cluster
+	c.Contract = contract(cluster, a.capabilities())
 
 	if err := b.accessEntries(cluster); err != nil {
 		return err
@@ -1052,4 +1140,45 @@ func (b *builder) coreDNS(cluster *eks.Cluster) error {
 	}
 
 	return nil
+}
+
+// contract maps the cluster's outputs onto cluster.Outputs. EKS reports the
+// certificate authority base64-encoded; the contract carries the PEM text.
+func contract(c *eks.Cluster, caps cluster.Capabilities) clusterout.Output {
+	issuer := c.Identities.ApplyT(func(ids []eks.ClusterIdentity) string {
+		for _, id := range ids {
+			for _, o := range id.Oidcs {
+				if o.Issuer != nil && *o.Issuer != "" {
+					return *o.Issuer
+				}
+			}
+		}
+
+		return ""
+	}).(pulumi.StringOutput)
+
+	return pulumi.All(c.Name, c.Endpoint, c.CertificateAuthority.Data(), issuer).ApplyT(func(v []any) (cluster.Outputs, error) {
+		out := cluster.Outputs{
+			Provider:     cluster.ProviderEKS,
+			Name:         v[0].(string),
+			Endpoint:     v[1].(string),
+			OIDCIssuer:   v[3].(string),
+			Capabilities: caps,
+		}
+
+		if data, _ := v[2].(*string); data != nil {
+			pem, err := base64.StdEncoding.DecodeString(*data)
+			if err != nil {
+				return out, fmt.Errorf("ekscluster: certificate authority is not base64: %w", err)
+			}
+
+			out.CertificateAuthorityPEM = string(pem)
+		}
+
+		if !caps.Has(cluster.WorkloadIdentity) {
+			out.OIDCIssuer = ""
+		}
+
+		return out, nil
+	}).(clusterout.Output)
 }

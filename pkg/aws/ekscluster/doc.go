@@ -31,6 +31,10 @@
 // spans lines, and a naming hook that returns an empty or repeated name. All
 // problems are reported at once.
 //
+// EksCluster.Contract reports the cluster under the provider-neutral contract
+// of pkg/cluster. Args.UpgradePolicy and Args.DeletionProtection are sent only
+// when set, so adopting a cluster with neither changes nothing.
+//
 // The cluster, the KMS key and the two roles are protected unless Args.Protect
 // points at false: replacing any of them is an outage or a loss of the key
 // that decrypts the cluster's secrets.

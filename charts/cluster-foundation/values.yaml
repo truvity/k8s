@@ -73,6 +73,22 @@ clusterRoleBindings: {}
 #       parameters: {type: gp3, encrypted: "true"}
 storageClasses: {}
 
+# --- PriorityClasses ----------------------------------------------------------
+# Scheduling priority for the cluster's own workloads, so a platform agent
+# preempts application pods rather than the reverse. Values above one billion
+# and names starting with system- are Kubernetes' own and are refused. At most
+# one entry may be the globalDefault.
+#   priorityClasses:
+#     platform-critical:
+#       value: 1000000
+#       description: "platform agents every node needs"
+#       preemptionPolicy: PreemptLowerPriority
+#     batch-low:
+#       value: -10
+#       description: "batch work that may wait"
+#       preemptionPolicy: Never
+priorityClasses: {}
+
 # --- EKS Auto Mode ------------------------------------------------------------
 eksAuto:
   # EKS Auto Mode ships the NetworkPolicy machinery, but its controller stays

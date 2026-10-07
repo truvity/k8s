@@ -1,5 +1,6 @@
 # Every kind: a reasoned exemption, literal labels, sync waves, a binding per
-# subject kind, a default StorageClass and the EKS Auto Mode switch.
+# subject kind, a default StorageClass, PriorityClasses and the EKS Auto Mode
+# switch.
 podSecurity:
   level: restricted
   version: v1.34
@@ -41,6 +42,18 @@ storageClasses:
   archive:
     provisioner: ebs.csi.eks.amazonaws.com
     reclaimPolicy: Retain
+    protect: false
+priorityClasses:
+  platform-critical:
+    value: 1000000
+    description: "platform agents every node needs"
+    preemptionPolicy: PreemptLowerPriority
+    syncWave: 5
+  batch-low:
+    value: -10
+    description: "batch work that may wait"
+    preemptionPolicy: Never
+    globalDefault: false
     protect: false
 eksAuto:
   networkPolicyController:

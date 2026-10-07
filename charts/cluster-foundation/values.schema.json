@@ -45,6 +45,12 @@
       "propertyNames": { "$ref": "#/definitions/objectNamePattern" },
       "additionalProperties": { "$ref": "#/definitions/storageClass" }
     },
+    "priorityClasses": {
+      "type": "object",
+      "description": "PriorityClasses by name. A name starting with system- is refused: Kubernetes reserves the prefix.",
+      "propertyNames": { "allOf": [{ "$ref": "#/definitions/objectNamePattern" }, { "not": { "pattern": "^system-" } }] },
+      "additionalProperties": { "$ref": "#/definitions/priorityClass" }
+    },
     "eksAuto": {
       "type": "object",
       "additionalProperties": false,
@@ -117,6 +123,20 @@
         "volumeBindingMode": { "enum": ["Immediate", "WaitForFirstConsumer"] },
         "allowVolumeExpansion": { "type": "boolean" },
         "parameters": { "$ref": "#/definitions/stringMap" },
+        "syncWave": { "$ref": "#/definitions/syncWave" },
+        "protect": { "type": ["boolean", "null"] },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "priorityClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "description"],
+      "properties": {
+        "value": { "type": "integer", "minimum": -2147483648, "maximum": 1000000000 },
+        "description": { "type": "string", "minLength": 1 },
+        "globalDefault": { "type": "boolean" },
+        "preemptionPolicy": { "enum": ["PreemptLowerPriority", "Never"] },
         "syncWave": { "$ref": "#/definitions/syncWave" },
         "protect": { "type": ["boolean", "null"] },
         "annotations": { "$ref": "#/definitions/stringMap" }
