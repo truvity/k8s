@@ -1,0 +1,7 @@
+loadBalancerIPPools:
+  lan:
+    blocks:
+      - {cidr: 10.0.0.0/28}
+    annotations:
+      argocd.argoproj.io/sync-wave: "1"
+    syncWave: 2

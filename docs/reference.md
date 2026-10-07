@@ -913,6 +913,46 @@ role, an unknown capability, no control plane node, a repeated hostname or
 address, not exactly one install disk, and a local volume without a name,
 selector or size, or with an unknown filesystem or encryption.
 
+## `charts/cilium-config`
+
+The cluster network Cilium provides beyond the CNI, as data. Install a
+pinned version from `oci://ghcr.io/truvity/charts/cilium-config` after Cilium
+itself (the upstream chart) and its CRDs (`charts/cilium-crds`, the same
+Cilium version).
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `loadBalancerIPPools.<name>` | none | One `CiliumLoadBalancerIPPool` (`cilium.io/v2`): `blocks` (each a `cidr`, or a `start` and `stop`; at least one), `serviceSelector`, `allowFirstLastIPs`, `disabled`, `syncWave`, `protect`, `annotations`. |
+| `l2Announcements.enabled` | `true` | Render the L2 announcement policies. |
+| `l2Announcements.policies.<name>` | `default` (every node, every interface, LoadBalancer addresses) | One `CiliumL2AnnouncementPolicy` (`cilium.io/v2alpha1`): `interfaces` (regexes), `nodeSelector`, `serviceSelector`, `loadBalancerIPs`, `externalIPs` (at least one true). |
+| `bgp.enabled` | `false` | Render the BGP objects; refused with no `clusterConfigs`, and objects listed while off are refused. |
+| `bgp.clusterConfigs.<name>.spec` | none | A `CiliumBGPClusterConfig` spec, verbatim (`bgpInstances` with `localASN`, peers); every `peerConfigRef` must name a `peerConfigs` entry. |
+| `bgp.peerConfigs.<name>.spec` | none | A `CiliumBGPPeerConfig` spec, verbatim. |
+| `bgp.advertisements.<name>` | none | `labels` (what peer configs select) and a `CiliumBGPAdvertisement` spec. |
+| `protect`, `helmKeep` | `false` | Deletion protection on every object; an entry's `protect` overrides it. |
+
+Name the L2 interfaces whenever a node has a VPN or overlay link: the
+default policy answers ARP on every interface. Pools must not overlap and
+must stay out of every DHCP scope.
+
+### `pkg/talos/cilium`
+
+`Values(Options)` returns the upstream Cilium chart's values for a Talos
+node: the API through KubePrism (`localhost:7445`), kube-proxy replacement,
+Kubernetes IPAM, no cgroup automount, the agent's capabilities without
+`SYS_MODULE`, BPF masquerading, L2 announcements with their API rate limit
+(unless `DisableL2Announcements`, which needs `BGP`), and as options BGP,
+native routing (`NativeRoutingCIDR`), `Devices`, Hubble, operator replicas,
+policy audit mode and top-level `Overrides`. Install it before the nodes go
+Ready:
+
+```sh
+helm install cilium-crds oci://ghcr.io/truvity/charts/cilium-crds --version 1.20.1
+helm install cilium cilium/cilium --version 1.20.1 -n kube-system -f values.yaml \
+  --set operator.skipCRDCreation=true
+helm install cilium-config oci://ghcr.io/truvity/charts/cilium-config --version <tag> -f network.yaml
+```
+
 ## `charts/cluster-baseline`
 
 Pod Security Admission labels, per namespace, as data. Install a pinned

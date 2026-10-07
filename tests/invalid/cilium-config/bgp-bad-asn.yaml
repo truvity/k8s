@@ -1,0 +1,8 @@
+bgp:
+  enabled: true
+  clusterConfigs:
+    racks:
+      spec:
+        bgpInstances:
+          - name: main
+            localASN: 0

@@ -1,0 +1,4 @@
+bgp:
+  peerConfigs:
+    tor:
+      spec: {}

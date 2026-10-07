@@ -1,0 +1,31 @@
+{{- /* One CiliumL2AnnouncementPolicy per entry of `l2Announcements.policies`, in name order, when enabled. */ -}}
+{{- $root := . -}}
+{{- $l2 := .Values.l2Announcements -}}
+{{- if $l2.enabled }}
+{{- range $name := (keys ($l2.policies | default dict) | sortAlpha) }}
+{{- $e := index $l2.policies $name }}
+{{- if not (or $e.loadBalancerIPs $e.externalIPs) }}
+{{- fail (printf "l2Announcements.policies.%s announces neither loadBalancerIPs nor externalIPs" $name) }}
+{{- end }}
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  {{- include "cilium-config.metadata" (dict "root" $root "name" $name "entry" $e "where" (printf "l2Announcements.policies.%s" $name)) | nindent 2 }}
+spec:
+  {{- with $e.interfaces }}
+  interfaces:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $e.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $e.serviceSelector }}
+  serviceSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  loadBalancerIPs: {{ $e.loadBalancerIPs | default false }}
+  externalIPs: {{ $e.externalIPs | default false }}
+{{- end }}
+{{- end }}

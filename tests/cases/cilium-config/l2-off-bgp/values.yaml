@@ -1,0 +1,52 @@
+# BGP instead of L2: peers through a shared peer config, Services' LoadBalancer
+# addresses advertised.
+loadBalancerIPPools:
+  routed:
+    blocks:
+      - {cidr: 10.10.0.0/24}
+l2Announcements:
+  enabled: false
+bgp:
+  enabled: true
+  clusterConfigs:
+    racks:
+      syncWave: 2
+      spec:
+        nodeSelector:
+          matchLabels:
+            example.com/bgp: "true"
+        bgpInstances:
+          - name: main
+            localASN: 64512
+            peers:
+              - name: tor-a
+                peerAddress: 10.0.0.1
+                peerASN: 64513
+                peerConfigRef: {name: tor}
+              - name: tor-b
+                peerAddress: 10.0.0.2
+                peerASN: 64513
+                peerConfigRef: {name: tor}
+  peerConfigs:
+    tor:
+      spec:
+        gracefulRestart:
+          enabled: true
+        families:
+          - afi: ipv4
+            safi: unicast
+            advertisements:
+              matchLabels:
+                advertise: bgp
+  advertisements:
+    services:
+      labels:
+        advertise: bgp
+      spec:
+        advertisements:
+          - advertisementType: Service
+            service:
+              addresses: [LoadBalancerIP]
+            selector:
+              matchExpressions:
+                - {key: example.com/no-bgp, operator: DoesNotExist}

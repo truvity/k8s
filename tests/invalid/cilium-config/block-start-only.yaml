@@ -1,0 +1,4 @@
+loadBalancerIPPools:
+  lan:
+    blocks:
+      - {start: 10.0.0.1}
