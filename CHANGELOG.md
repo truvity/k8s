@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- **Change:** the `values.schema.json` of `cluster-network-policies`, `eks-auto-node-pools` and `guardrails-projects` are now generated from Pkl contracts in `contracts/` (the second use of [truvity/pkl-contracts](https://github.com/truvity/pkl-contracts), v0.6.0), and `just contract-check` (a CI job) fails when a committed schema is not what its contract generates. One intended tightening, otherwise no behaviour change: an IAM role ARN (`guardrails-projects` `projects[].ackRoleARN` and `podIdentities.associations.<name>.roleARN`) can no longer contain a line break. Apart from that the schemas accept and refuse exactly what the hand-written ones did (every golden render is byte-identical, every negative fixture is still refused, and 745 thousand probe documents got the same verdict from both). What differs is the dialect and the spelling: draft 2020-12 instead of draft-07, `$defs` instead of `definitions`, `anyOf` for the one `oneOf`. `cilium-config`, `cluster-baseline`, `cluster-foundation` and `tenancy` keep their hand-written schema (a rule each cannot yet be said in the contracts). See `docs/contracts.md`.
+
 ## v0.26.0
 
 - `charts/cluster-pki` (new, published from the next tag): the cluster's internal CA as cert-manager objects: a self-signed or offline-minted root, an optional intermediate, the ClusterIssuer workloads use; CA keys never rotated on renewal, objects protected. `docs/talos.md` gains the cluster PKI section (the bundle's CAs and their rotation, the workloads' CA).

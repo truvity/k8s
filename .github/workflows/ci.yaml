@@ -28,7 +28,7 @@ jobs:
       # pull request red (the contract's C10).
       policy-conformance: true
       policy-conformance-strict: true
-      recipes: '["build","test","lint","crd-charts-lint","crds-check","leak-canary"]'
+      recipes: '["build","test","lint","contract-check","crd-charts-lint","crds-check","leak-canary"]'
 
   # Stable name for branch protection: the matrix reports as
   # "recipes / lint" and so on, so a required context called "check"
