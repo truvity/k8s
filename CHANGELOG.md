@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.24.0
+
 - `pkg/aws/ekscluster`: `Args.AccessEntries` (one `STANDARD` access entry and one access policy association per principal, cluster- or namespace-scoped) and `Args.CoreDNS` (the coredns add-on; its Corefile is `StockCorefile` of `DefaultCoreDNSVersion`, or the caller's, with the `Extras` lines inserted above the `kubernetes` stanza). New child kinds `access-entry`, `access-policy`, `coredns`, default names `<c>-access-<name>`, `<c>-access-<name>-policy`, `<c>-coredns`; with `LegacyTopLevel` they carry the no-parent alias like every other child, so a stack that registered them loose adopts them with no change. Neither set: nothing changes.
 
 ## v0.23.0
