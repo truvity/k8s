@@ -61,15 +61,14 @@ spec:
                 - {name: CUSTOM_S3_ENDPOINT, value: {{ . | quote }}}
                 {{- end }}
                 {{- if $v.s3.pathStyle }}
-                - {name: USE_PATH_STYLE, value: "true"}
+                # talos-backup v0.1.0-beta.2 turns path-style addressing ON
+                # when USE_PATH_STYLE is "false" (pkg/config: == "false").
+                - {name: USE_PATH_STYLE, value: "false"}
                 {{- end }}
                 {{- if $v.encryption.disabled }}
                 - {name: DISABLE_ENCRYPTION, value: "true"}
                 {{- else }}
                 - {name: AGE_X25519_PUBLIC_KEY, value: {{ $v.encryption.ageRecipient | quote }}}
-                {{- end }}
-                {{- if $v.compression }}
-                - {name: ENABLE_COMPRESSION, value: "true"}
                 {{- end }}
                 {{- if $v.credentials.webIdentity.roleArn }}
                 - {name: AWS_ROLE_ARN, value: {{ $v.credentials.webIdentity.roleArn | quote }}}
