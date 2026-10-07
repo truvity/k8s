@@ -64,6 +64,14 @@ const (
 	KindLogGroup Kind = "log-group"
 	// KindCluster is the eks.Cluster.
 	KindCluster Kind = "cluster"
+	// KindAccessEntry is the eks.AccessEntry of one of Args.AccessEntries;
+	// Child.Key is its Name.
+	KindAccessEntry Kind = "access-entry"
+	// KindAccessPolicy is the eks.AccessPolicyAssociation of one of
+	// Args.AccessEntries; Child.Key is its Name.
+	KindAccessPolicy Kind = "access-policy"
+	// KindCoreDNS is the coredns eks.Addon (Args.CoreDNS).
+	KindCoreDNS Kind = "coredns"
 )
 
 // Child identifies one child for a NameFunc.
@@ -72,7 +80,8 @@ type Child struct {
 	Component string
 	Kind      Kind
 	// Key says which policy a KindClusterPolicy, KindNodePolicy or
-	// KindNodeInlinePolicy is for. Empty otherwise.
+	// KindNodeInlinePolicy is for, and which access entry a KindAccessEntry
+	// or KindAccessPolicy is for. Empty otherwise.
 	Key string
 }
 
@@ -83,7 +92,8 @@ type NameFunc func(Child) string
 // DefaultName names the children from the component name: "<c>-key",
 // "<c>-key-alias", "<c>-cluster-role", "<c>-cluster-role-<key>",
 // "<c>-node-role", "<c>-node-role-<key>", "<c>-node-role-policy-<name>",
-// "<c>-logs" and "<c>-cluster". These names are API.
+// "<c>-logs", "<c>-cluster", "<c>-access-<name>", "<c>-access-<name>-policy"
+// and "<c>-coredns". These names are API.
 func DefaultName(c Child) string {
 	switch c.Kind {
 	case KindKey:
@@ -102,6 +112,12 @@ func DefaultName(c Child) string {
 		return c.Component + "-node-role-policy-" + c.Key
 	case KindLogGroup:
 		return c.Component + "-logs"
+	case KindAccessEntry:
+		return c.Component + "-access-" + c.Key
+	case KindAccessPolicy:
+		return c.Component + "-access-" + c.Key + "-policy"
+	case KindCoreDNS:
+		return c.Component + "-coredns"
 	default:
 		return c.Component + "-cluster"
 	}
@@ -113,6 +129,135 @@ type InlinePolicy struct {
 	Name string
 	// Document is the policy JSON. Required.
 	Document pulumi.StringInput
+}
+
+// AccessEntry grants one IAM principal access to the cluster through the API
+// authentication mode: an eks.AccessEntry of type STANDARD and the
+// eks.AccessPolicyAssociation of one EKS access policy.
+type AccessEntry struct {
+	// Name identifies the entry among the component's (Child.Key). Required,
+	// unique.
+	Name string
+	// PrincipalARN is the IAM principal (role or user) given access.
+	// Required, unique: EKS admits one entry per principal.
+	PrincipalARN string
+	// PolicyARN is the ARN of the EKS access policy associated with the
+	// principal (AmazonEKSClusterAdminPolicy, say). Required.
+	PolicyARN string
+	// Namespaces scopes the association to these namespaces. Empty: the
+	// whole cluster.
+	Namespaces []string
+}
+
+// CoreDNS installs the coredns EKS add-on with a Corefile the component
+// renders: Corefile with every line of Extras inserted above its kubernetes
+// stanza. The add-on's configuration replaces the WHOLE Corefile, so Corefile
+// must be the stock file of Version.
+//
+// On an Auto Mode cluster the add-on serves nothing through the cluster DNS
+// address: the node-local resolver answers it first. It is for a cluster
+// that is not Auto Mode, or a resolver queried directly.
+type CoreDNS struct {
+	// Version is the add-on version. Empty means DefaultCoreDNSVersion.
+	Version string
+	// Corefile is the stock Corefile of Version. Empty means
+	// StockCorefile, which is the stock file of DefaultCoreDNSVersion only:
+	// another Version with no Corefile is refused.
+	Corefile string
+	// Extras are Corefile lines (one directive each, no newline) inserted, in
+	// order and indented like the stock directives, above the kubernetes
+	// stanza. CoreDNS runs plugins in its compiled order, so where a line
+	// sits does not change when it runs.
+	Extras []string
+}
+
+// DefaultCoreDNSVersion is the coredns add-on version CoreDNS.Version
+// defaults to, and the version StockCorefile is the stock file of.
+const DefaultCoreDNSVersion = "v1.14.3-eksbuild.14"
+
+// StockCorefile is DefaultCoreDNSVersion's stock Corefile, byte for byte as
+// the freshly installed add-on writes it to the kube-system/coredns
+// ConfigMap, odd indentation included.
+const StockCorefile = `.:53 {
+    errors
+    health {
+        lameduck 5s
+      }
+    ready
+    kubernetes cluster.local in-addr.arpa ip6.arpa {
+      pods insecure
+      fallthrough in-addr.arpa ip6.arpa
+    }
+    prometheus :9153
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}`
+
+// corefileAnchor is the line start the Extras are inserted above.
+const corefileAnchor = "    kubernetes "
+
+func (c *CoreDNS) version() string {
+	if c.Version != "" {
+		return c.Version
+	}
+
+	return DefaultCoreDNSVersion
+}
+
+func (c *CoreDNS) corefile() string {
+	if c.Corefile != "" {
+		return c.Corefile
+	}
+
+	return StockCorefile
+}
+
+// configurationValues renders the add-on's configurationValues JSON:
+// {"corefile": <Corefile with Extras above the kubernetes stanza>}.
+func (c *CoreDNS) configurationValues() (string, error) {
+	base := c.corefile()
+
+	var lines strings.Builder
+	for _, e := range c.Extras {
+		lines.WriteString("    " + e + "\n")
+	}
+
+	corefile := strings.Replace(base, corefileAnchor, lines.String()+corefileAnchor, 1)
+
+	raw, err := json.Marshal(map[string]string{"corefile": corefile})
+	if err != nil {
+		return "", fmt.Errorf("render coredns configuration values: %w", err)
+	}
+
+	return string(raw), nil
+}
+
+func (c *CoreDNS) validate() []error {
+	var errs []error
+
+	if c.Version != "" && c.Version != DefaultCoreDNSVersion && c.Corefile == "" {
+		errs = append(errs, fmt.Errorf(
+			"args: CoreDNS.Version %q needs its stock CoreDNS.Corefile: StockCorefile is %s's, and the configuration replaces the whole file",
+			c.Version, DefaultCoreDNSVersion))
+	}
+
+	if len(c.Extras) > 0 && !strings.Contains(c.corefile(), corefileAnchor) {
+		errs = append(errs, fmt.Errorf("args: CoreDNS.Corefile has no %q stanza to insert the extras above", strings.TrimSpace(corefileAnchor)))
+	}
+
+	for i, e := range c.Extras {
+		switch {
+		case strings.TrimSpace(e) == "":
+			errs = append(errs, fmt.Errorf("args: CoreDNS.Extras[%d] is empty", i))
+		case strings.ContainsAny(e, "\r\n"):
+			errs = append(errs, fmt.Errorf("args: CoreDNS.Extras[%d] spans more than one line", i))
+		}
+	}
+
+	return errs
 }
 
 // Args configures the component.
@@ -183,6 +328,14 @@ type Args struct {
 	// LogRetentionDays is the log group's retention. Zero means
 	// DefaultLogRetentionDays.
 	LogRetentionDays int
+
+	// AccessEntries are the principals given access to the cluster through
+	// the API authentication mode, each an access entry and one access policy
+	// association. The cluster has no other admin: with no entry, nobody
+	// reaches its API.
+	AccessEntries []AccessEntry
+	// CoreDNS installs the coredns add-on. Nil installs none.
+	CoreDNS *CoreDNS
 
 	// Tags are set on the key, the roles, the log group and the cluster.
 	Tags map[string]string
@@ -324,10 +477,23 @@ func (a *Args) plan(component string) []Child {
 		out = append(out, Child{Component: component, Kind: KindNodeInlinePolicy, Key: p.Name})
 	}
 
-	return append(out,
+	out = append(out,
 		Child{Component: component, Kind: KindLogGroup},
 		Child{Component: component, Kind: KindCluster},
 	)
+
+	for _, e := range a.AccessEntries {
+		out = append(out,
+			Child{Component: component, Kind: KindAccessEntry, Key: e.Name},
+			Child{Component: component, Kind: KindAccessPolicy, Key: e.Name},
+		)
+	}
+
+	if a.CoreDNS != nil {
+		out = append(out, Child{Component: component, Kind: KindCoreDNS})
+	}
+
+	return out
 }
 
 // Validate reports every problem with args at once, or returns nil.
@@ -397,9 +563,53 @@ func (a *Args) Validate() error {
 		errs = append(errs, fmt.Errorf("args: LogRetentionDays %d is negative", a.LogRetentionDays))
 	}
 
+	errs = append(errs, a.checkAccessEntries()...)
+
+	if a.CoreDNS != nil {
+		errs = append(errs, a.CoreDNS.validate()...)
+	}
+
 	errs = append(errs, a.checkNames("")...)
 
 	return errors.Join(errs...)
+}
+
+func (a *Args) checkAccessEntries() []error {
+	var errs []error
+
+	names, principals := map[string]bool{}, map[string]bool{}
+
+	for i, e := range a.AccessEntries {
+		switch {
+		case e.Name == "":
+			errs = append(errs, fmt.Errorf("args: AccessEntries[%d].Name is empty", i))
+		case names[e.Name]:
+			errs = append(errs, fmt.Errorf("args: AccessEntries[%d]: duplicate name %q", i, e.Name))
+		}
+
+		names[e.Name] = true
+
+		switch {
+		case e.PrincipalARN == "":
+			errs = append(errs, fmt.Errorf("args: AccessEntries[%d].PrincipalARN is empty", i))
+		case principals[e.PrincipalARN]:
+			errs = append(errs, fmt.Errorf("args: AccessEntries[%d]: principal %q already has an entry (EKS admits one per principal)", i, e.PrincipalARN))
+		}
+
+		principals[e.PrincipalARN] = true
+
+		if e.PolicyARN == "" {
+			errs = append(errs, fmt.Errorf("args: AccessEntries[%d].PolicyARN is empty", i))
+		}
+
+		for j, ns := range e.Namespaces {
+			if ns == "" {
+				errs = append(errs, fmt.Errorf("args: AccessEntries[%d].Namespaces[%d] is empty", i, j))
+			}
+		}
+	}
+
+	return errs
 }
 
 func (a *Args) checkSubnets() []error {
@@ -776,6 +986,70 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 	}
 
 	c.Cluster = cluster
+
+	if err := b.accessEntries(cluster); err != nil {
+		return err
+	}
+
+	return b.coreDNS(cluster)
+}
+
+func (b *builder) accessEntries(cluster *eks.Cluster) error {
+	for _, e := range b.args.AccessEntries {
+		entry, err := eks.NewAccessEntry(b.ctx, b.child(Child{Kind: KindAccessEntry, Key: e.Name}), &eks.AccessEntryArgs{
+			ClusterName:  cluster.Name,
+			PrincipalArn: pulumi.String(e.PrincipalARN),
+			Type:         pulumi.String("STANDARD"),
+		}, b.childOpts(false)...)
+		if err != nil {
+			return fmt.Errorf("create access entry %s: %w", e.Name, err)
+		}
+
+		scope := &eks.AccessPolicyAssociationAccessScopeArgs{Type: pulumi.String("cluster")}
+		if len(e.Namespaces) > 0 {
+			scope = &eks.AccessPolicyAssociationAccessScopeArgs{
+				Type:       pulumi.String("namespace"),
+				Namespaces: pulumi.ToStringArray(e.Namespaces),
+			}
+		}
+
+		if _, err := eks.NewAccessPolicyAssociation(b.ctx, b.child(Child{Kind: KindAccessPolicy, Key: e.Name}), &eks.AccessPolicyAssociationArgs{
+			ClusterName:  cluster.Name,
+			PrincipalArn: pulumi.String(e.PrincipalARN),
+			PolicyArn:    pulumi.String(e.PolicyARN),
+			AccessScope:  scope,
+		}, b.childOpts(false, pulumi.DependsOn([]pulumi.Resource{entry}))...); err != nil {
+			return fmt.Errorf("create access policy association %s: %w", e.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// coreDNS installs the add-on. OVERWRITE both ways: on create because the
+// fields of a CoreDNS already running must yield to the add-on, on update so
+// the rendered Corefile is never half-merged with a default no longer seen.
+func (b *builder) coreDNS(cluster *eks.Cluster) error {
+	cd := b.args.CoreDNS
+	if cd == nil {
+		return nil
+	}
+
+	values, err := cd.configurationValues()
+	if err != nil {
+		return err
+	}
+
+	if _, err := eks.NewAddon(b.ctx, b.child(Child{Kind: KindCoreDNS}), &eks.AddonArgs{
+		ClusterName:              cluster.Name,
+		AddonName:                pulumi.String("coredns"),
+		AddonVersion:             pulumi.String(cd.version()),
+		ConfigurationValues:      pulumi.String(values),
+		ResolveConflictsOnCreate: pulumi.String("OVERWRITE"),
+		ResolveConflictsOnUpdate: pulumi.String("OVERWRITE"),
+	}, b.childOpts(false)...); err != nil {
+		return fmt.Errorf("create coredns addon: %w", err)
+	}
 
 	return nil
 }

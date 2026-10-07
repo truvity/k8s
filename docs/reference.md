@@ -542,7 +542,8 @@ Auto Mode node role with their policies, and the CloudWatch log group of the
 control plane. The shape is fixed: API authentication mode, no bootstrap
 creator-admin, no self-managed add-ons, a rotated customer-managed key,
 control-plane logs on, EKS-managed compute, load balancing and block storage.
-Access entries, security group rules, DNS records and add-ons are the
+Access entries (`AccessEntries`) and the coredns add-on (`CoreDNS`) are
+children too; security group rules, DNS records and other add-ons are the
 caller's, attached to `Cluster`. It takes its AWS provider in `Args.Provider`,
 never from `pulumi.Providers`.
 
@@ -556,6 +557,11 @@ c, err := ekscluster.New(ctx, "main", &ekscluster.Args{
 	ClusterPolicies: clusterPolicyARNs,
 	NodePolicies:    nodePolicyARNs,
 	NodeInlinePolicies: []ekscluster.InlinePolicy{{Name: "pull", Document: doc}},
+	AccessEntries: []ekscluster.AccessEntry{{
+		Name:         "admin",
+		PrincipalARN: adminRoleARN,
+		PolicyARN:    clusterAdminPolicyARN, // an EKS access policy
+	}},
 	Names: func(ch ekscluster.Child) string { /* the names your stack already uses */ },
 })
 // c.Cluster, c.KeyARN, c.NodeRoleARN: use and export them under the names you choose.
@@ -581,6 +587,8 @@ c, err := ekscluster.New(ctx, "main", &ekscluster.Args{
 | `KeyDescription`, `KeyAlias` | Default `EKS <Name> cluster secrets encryption` and `alias/eks-<Name>-secrets`. |
 | `KeyRotationDays` | 90 to 2560. Default 365. Rotation is always on. |
 | `LogGroupName`, `LogRetentionDays` | Default `/aws/eks/<Name>/cluster` (the group EKS writes to) and 90 days. |
+| `AccessEntries` | `Name`, `PrincipalARN`, `PolicyARN`, `Namespaces`: one `STANDARD` access entry and one access policy association per principal, scoped to the cluster, or to `Namespaces` when set. Names and principals are unique. The cluster has no bootstrap admin: with no entry nobody reaches its API. |
+| `CoreDNS` | `*CoreDNS`: `Version`, `Corefile`, `Extras`. Nil installs no add-on. See below. |
 | `Tags` | Set on the key, the roles, the log group and the cluster. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
 | `LegacyTopLevel` | Adopt loose resources by alias. |
@@ -592,11 +600,37 @@ subnet or service CIDR, a service CIDR that is not IPv4 or has host bits set,
 an empty or repeated subnet or policy ARN, no cluster policy, an inline policy
 with no name, no document or a repeated name, one name for both roles, an
 unknown log type, an empty node pool, a key rotation period outside 90 to
-2560 days, a negative retention, and a naming hook that returns an empty or
-repeated name.
+2560 days, a negative retention, an access entry with no name, principal or
+policy, a repeated access entry name or principal, an empty namespace, a
+`CoreDNS.Version` other than `DefaultCoreDNSVersion` with no `Corefile`, extras
+with no `kubernetes` stanza to insert them above, an empty or multi-line extra,
+and a naming hook that returns an empty or repeated name.
 
 The cluster is created after both roles, every policy attachment and the log
-group.
+group; the access entries and the add-on after the cluster, each policy
+association after its entry.
+
+### CoreDNS
+
+The add-on's `configurationValues` is `{"corefile": ...}`, which replaces the
+WHOLE Corefile. The component renders it from `Corefile` (default
+`StockCorefile`, the stock file of `DefaultCoreDNSVersion`, byte for byte)
+with every line of `Extras` inserted, in order and indented four spaces, above
+the `kubernetes` stanza. CoreDNS runs plugins in its compiled order, so the
+position does not change when a line runs. A `Version` other than
+`DefaultCoreDNSVersion` needs its own stock `Corefile`: re-read the new
+version's default before a bump. Conflicts resolve with `OVERWRITE` on create
+and on update.
+
+```go
+CoreDNS: &ekscluster.CoreDNS{
+	Extras: []string{"rewrite name suffix .c1.example. .example. answer auto"},
+},
+```
+
+On an EKS Auto Mode cluster the node-local resolver answers the cluster DNS
+address ahead of the add-on's Service, so the add-on serves only what queries
+it directly.
 
 ### Children
 
@@ -616,6 +650,9 @@ API.
 | node inline policy | `aws:iam/rolePolicy:RolePolicy` | `<c>-node-role-policy-<name>` | one per `NodeInlinePolicies` entry |
 | log group | `aws:cloudwatch/logGroup:LogGroup` | `<c>-logs` | always |
 | cluster | `aws:eks/cluster:Cluster` | `<c>-cluster` | always |
+| access entry | `aws:eks/accessEntry:AccessEntry` | `<c>-access-<name>` | one per `AccessEntries` entry (`Key` is its `Name`) |
+| access policy | `aws:eks/accessPolicyAssociation:AccessPolicyAssociation` | `<c>-access-<name>-policy` | one per `AccessEntries` entry |
+| coredns | `aws:eks/addon:Addon` | `<c>-coredns` | `CoreDNS` set |
 
 ### Aliases
 
@@ -631,7 +668,8 @@ The cluster, the KMS key and both roles are protected unless `Protect` points
 at false: replacing the cluster is an outage, deleting the key loses what
 decrypts the cluster's secrets, and the roles are what the cluster runs as. A
 preview that would delete or replace one fails instead. No other child is
-protected; they are rebuilt from the program. Point `Protect` at false only
+protected (access entries and the add-on included); they are rebuilt from the
+program. Point `Protect` at false only
 for a cluster that is meant to be torn down.
 
 ### Outputs
