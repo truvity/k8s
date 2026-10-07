@@ -1,0 +1,4 @@
+storageClasses:
+  c: {}
+volumes:
+  v: {storageClass: c, path: /var/mnt/a, capacity: 1Gi}

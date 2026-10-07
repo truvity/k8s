@@ -1,0 +1,59 @@
+# Nothing here names an estate: every class and volume is the caller's.
+#
+# A local PersistentVolume is a directory on one node's disk. The pod that
+# claims it is scheduled to that node and nowhere else; the node's loss is the
+# volume's loss. Use it for workloads that replicate at the application level
+# (a database cluster with one replica per node), not for a single copy.
+
+# Volumes hold data, so they are protected by default: each object carries
+#   argocd.argoproj.io/sync-options: Prune=false,Delete=false
+# An entry's own `protect` overrides it.
+protect: true
+# Also render helm.sh/resource-policy: keep on protected objects.
+helmKeep: false
+
+# Every volume path must start with this prefix: where the node's user
+# volumes are mounted (Talos: /var/mnt/<volume>). A path elsewhere would be a
+# directory on the system disk.
+pathPrefix: /var/mnt/
+
+# --- StorageClasses -----------------------------------------------------------
+# One no-provisioner StorageClass per entry. Binding waits for the first
+# consumer (the only mode a local volume works with); reclaim is Retain unless
+# said otherwise (Delete on a local volume only releases it: nothing wipes
+# the directory).
+#
+#   storageClasses:
+#     local-db:
+#       isDefault: false
+#       reclaimPolicy: Retain
+#       allowVolumeExpansion: false
+storageClasses: {}
+
+# --- PersistentVolumes --------------------------------------------------------
+# One PersistentVolume per entry, by name:
+#
+#   volumes:
+#     db-1-postgres:
+#       storageClass: local-db           # required; a class above, or one
+#                                        # that exists (classMustExist: false)
+#       node: db-1                       # required: kubernetes.io/hostname
+#       path: /var/mnt/local-db/postgres # required, under pathPrefix
+#       capacity: 200Gi                  # required: what a claim can ask for
+#       claim:                           # optional: reserve it for one claim
+#         namespace: databases
+#         name: data-postgres-0
+#       accessModes: [ReadWriteOnce]     # optional
+#       volumeMode: Filesystem           # optional: Filesystem or Block
+#       reclaimPolicy: Retain            # optional: the class's by default
+#       syncWave: 0
+#       protect: true
+#
+# The directory must exist before a pod mounts the volume; a pod that finds it
+# missing stays ContainerCreating (MountVolume.NewMounter failed), which is the
+# point. Create it once per volume (a privileged one-off pod, or a Talos
+# machine config that pre-creates it).
+volumes: {}
+# Refuse a volume whose storageClass is not in `storageClasses`. Off only when
+# the class is managed elsewhere.
+classMustExist: true
