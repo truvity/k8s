@@ -1218,6 +1218,34 @@ budget of one node, so consolidation cannot move more than one node at a time;
 `fastEmptyReclaim` adds a budget that lets every empty node go at once.
 
 
+## `charts/talos-etcd-backup`
+
+Scheduled, age-encrypted etcd snapshots of a Talos cluster to an
+S3-compatible bucket, with
+[siderolabs/talos-backup](https://github.com/siderolabs/talos-backup).
+Install a pinned version from `oci://ghcr.io/truvity/charts/talos-etcd-backup`
+into a namespace the machine config grants `os:etcd:backup`
+(`machineconfig.Cluster.TalosAPIAccess`).
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `image.tag` | required | The talos-backup tag. Its environment contract (`CLUSTER_NAME`, `BUCKET`, `S3_PREFIX`, `AWS_REGION`, `CUSTOM_S3_ENDPOINT`, `USE_PATH_STYLE`, `AGE_X25519_PUBLIC_KEY`, `DISABLE_ENCRYPTION`, `ENABLE_COMPRESSION`) is what the chart writes; re-check it on a bump. |
+| `clusterName` | required | Part of every snapshot's key. |
+| `schedule`, `timeZone` | `17 3 * * *`, none | The CronJob's. Runs never overlap. |
+| `s3.bucket`, `s3.region` | required | The bucket and region. |
+| `s3.prefix`, `s3.endpoint`, `s3.pathStyle` | `etcd`, AWS, `false` | Key prefix; a non-AWS store's URL and its addressing. |
+| `encryption.ageRecipient` | required | The age X25519 recipient (`age1...`). Its private key stays off the cluster. |
+| `encryption.disabled`, `disabledReason` | `false` | Plaintext, only with a reason. |
+| `compression` | `true` | Compress before encrypting. |
+| `credentials.secretName` | none | A Secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. |
+| `credentials.webIdentity.roleArn` | none | A role assumed with a token the pod projects itself (audience `sts.amazonaws.com`): no webhook in the path of the recovery backup. Exactly one of the two credentials. |
+| `serviceAccountName`, `talosServiceAccountName` | `talos-etcd-backup`, `talos-etcd-backup-talos` | The pod's ServiceAccount (what a trust policy names) and the `talos.dev` ServiceAccount whose Secret carries the Talos API credentials; they must differ. |
+| `podSecurityContext`, `securityContext` | restricted | Non-root, read-only root, no capabilities, RuntimeDefault seccomp. |
+
+Refused: a missing tag, cluster name, bucket or region, no recipient (or
+plaintext without a reason, or both), a malformed recipient or endpoint,
+zero or two credentials, the same name for both ServiceAccounts.
+
 ## `charts/tenancy`
 
 **Deprecated.** Tenancy is becoming guidelines (a contract), thin per-tenant

@@ -1,7 +1,7 @@
 # Development commands. Everything CI runs is a recipe here — the shared
 # check workflow (truvity/ci-workflows) runs each one as its own job.
 
-charts := "cilium-config cluster-baseline cluster-foundation cluster-network-policies eks-auto-node-pools guardrails-projects tenancy"
+charts := "cilium-config cluster-baseline cluster-foundation cluster-network-policies eks-auto-node-pools guardrails-projects talos-etcd-backup tenancy"
 crd-charts := "volume-snapshot-crds cilium-crds"
 
 # Format Go files.
@@ -29,10 +29,13 @@ lint:
     golangci-lint config verify
     golangci-lint run ./...
     for chart in {{ charts }}; do
-      helm lint "charts/$chart"
+      # A chart with required values lints with tests/lint/<chart>.yaml.
+      lintvalues=()
+      if [ -f "tests/lint/$chart.yaml" ]; then lintvalues=(-f "tests/lint/$chart.yaml"); fi
+      helm lint "charts/$chart" "${lintvalues[@]}"
       # Not `! helm template ...`: bash's `set -e` ignores a negated
       # command, so such a probe could never fail the recipe.
-      if helm template x "charts/$chart" --set bogusKey=1 >/dev/null 2>&1; then
+      if helm template x "charts/$chart" "${lintvalues[@]}" --set bogusKey=1 >/dev/null 2>&1; then
         echo "$chart: an unknown key rendered" >&2
         exit 1
       fi

@@ -193,10 +193,24 @@ talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5
 
 ## Disaster recovery
 
-- **etcd** is backed up by `charts/talos-etcd-backup`. To restore, bootstrap
-  one control plane node from the snapshot
-  (`talosctl bootstrap --recover-from=./db.snapshot`) and let the others
-  rejoin; see that chart's guide.
+- **etcd** is backed up by `charts/talos-etcd-backup`: a CronJob that asks
+  the Talos API (role `os:etcd:backup`, granted to its namespace by
+  `Cluster.TalosAPIAccess`) for a snapshot, encrypts it to an age recipient
+  and uploads it. Keep the age private key in break-glass storage, not in
+  the cluster the snapshot describes. Restore when the cluster cannot be
+  rebuilt from git and the databases' own backups alone:
+
+  ```sh
+  aws s3 cp s3://<bucket>/<prefix>/<cluster>/<snapshot>.age ./db.age
+  age --decrypt -i break-glass.key -o db.snapshot db.age   # (zstd -d first or after, if compressed)
+  # every control plane node reset or freshly installed, configs applied;
+  # bootstrap ONE of them from the snapshot, the others join it:
+  talosctl -n 10.0.0.11 -e 10.0.0.11 bootstrap --recover-from=./db.snapshot
+  ```
+
+  Rehearse it on a throwaway cluster: a backup never restored is a hope.
+  A snapshot taken by `talosctl etcd snapshot` (not copied from disk) needs
+  no `--recover-skip-hash-check`.
 - **The secrets bundle** is the other half of a rebuild: with it and the
   declaration, the same cluster (same CAs, same issuer keys) is re-rendered.
 - **Workload identity** survives a rebuild unchanged when the bundle does:

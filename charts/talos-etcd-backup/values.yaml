@@ -1,0 +1,83 @@
+# Nothing here names an estate: the bucket, the region, the key and the
+# cluster's name are the caller's and required.
+#
+# Prerequisite in the machine config: Talos API access for this chart's
+# namespace with the os:etcd:backup role (machineconfig.Cluster.TalosAPIAccess
+# = {Roles: [os:etcd:backup], Namespaces: [<this namespace>]}). Without it the
+# talos.dev ServiceAccount never gets its Secret and the job cannot start.
+
+# siderolabs/talos-backup, pinned. Its environment contract is what this
+# chart writes; re-check it against the README of a new tag before bumping.
+image:
+  repository: ghcr.io/siderolabs/talos-backup
+  tag: ""          # required, e.g. v0.1.0-beta.3
+  pullPolicy: IfNotPresent
+
+# The cluster's name, part of every snapshot's object key. Required.
+clusterName: ""
+
+# Cron schedule (the controller's time zone unless timeZone is set).
+schedule: "17 3 * * *"
+timeZone: ""
+
+s3:
+  bucket: ""       # required
+  prefix: etcd     # object key prefix
+  region: ""       # required (any value an S3-compatible store accepts)
+  endpoint: ""     # a non-AWS store's URL (https://s3.example.com); empty: AWS
+  pathStyle: false # path-style addressing, which most non-AWS stores need
+
+# Snapshots are encrypted to this age recipient (an X25519 public key,
+# age1...). Keep its private key OFF the cluster, in break-glass storage: a
+# snapshot holds every Secret of the cluster.
+encryption:
+  ageRecipient: ""
+  # Plaintext snapshots only with a reason, which the render requires.
+  disabled: false
+  disabledReason: ""
+
+compression: true
+
+# Exactly one way to reach the bucket:
+credentials:
+  # A Secret in this namespace with AWS_ACCESS_KEY_ID and
+  # AWS_SECRET_ACCESS_KEY (an S3-compatible store's keys).
+  secretName: ""
+  # Or a role assumed with the pod's own ServiceAccount token (IAM roles for
+  # service accounts): the token is projected here, not by a webhook.
+  webIdentity:
+    roleArn: ""
+    audience: sts.amazonaws.com
+    expirationSeconds: 3600
+
+# The Kubernetes ServiceAccount the job runs as (the one a role's trust
+# policy names) and the talos.dev ServiceAccount whose Secret carries the
+# Talos API credentials.
+serviceAccountName: talos-etcd-backup
+talosServiceAccountName: talos-etcd-backup-talos
+
+activeDeadlineSeconds: 1800
+backoffLimit: 2
+successfulJobsHistoryLimit: 1
+failedJobsHistoryLimit: 3
+
+# Pod Security restricted by default.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {memory: 512Mi}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podLabels: {}

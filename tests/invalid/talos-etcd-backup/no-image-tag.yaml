@@ -1,0 +1,4 @@
+clusterName: example
+s3: {bucket: backups, region: us-east-1}
+encryption: {ageRecipient: age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq}
+credentials: {secretName: s}
