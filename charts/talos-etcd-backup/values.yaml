@@ -7,10 +7,11 @@
 # talos.dev ServiceAccount never gets its Secret and the job cannot start.
 
 # siderolabs/talos-backup, pinned. Its environment contract is what this
-# chart writes; re-check it against the README of a new tag before bumping.
+# chart writes, verified against v0.1.0-beta.2's source (pkg/config); re-check
+# it on a new tag before bumping: the tool is beta and its names may shift.
 image:
   repository: ghcr.io/siderolabs/talos-backup
-  tag: ""          # required, e.g. v0.1.0-beta.3
+  tag: ""          # required, e.g. v0.1.0-beta.2
   pullPolicy: IfNotPresent
 
 # The cluster's name, part of every snapshot's object key. Required.
@@ -35,8 +36,6 @@ encryption:
   # Plaintext snapshots only with a reason, which the render requires.
   disabled: false
   disabledReason: ""
-
-compression: true
 
 # Exactly one way to reach the bucket:
 credentials:

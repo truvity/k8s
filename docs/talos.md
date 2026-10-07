@@ -323,7 +323,7 @@ PersistentVolumes on it.
 
   ```sh
   aws s3 cp s3://<bucket>/<prefix>/<cluster>/<snapshot>.age ./db.age
-  age --decrypt -i break-glass.key -o db.snapshot db.age   # (zstd -d first or after, if compressed)
+  age --decrypt -i break-glass.key -o db.snapshot db.age
   # every control plane node reset or freshly installed, configs applied;
   # bootstrap ONE of them from the snapshot, the others join it:
   talosctl -n 10.0.0.11 -e 10.0.0.11 bootstrap --recover-from=./db.snapshot
