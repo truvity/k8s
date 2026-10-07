@@ -1186,6 +1186,28 @@ until the ConfigMap exists: without it every NetworkPolicy in the cluster is
 silently ignored. Enabling it changes nothing until a policy selects a pod.
 Deleting it turns every policy off, which is why it is protected like a Namespace.
 
+## `charts/cluster-pki`
+
+A cluster's internal CA as cert-manager objects. Install a pinned version
+from `oci://ghcr.io/truvity/charts/cluster-pki` into cert-manager's cluster
+resource namespace, after cert-manager.
+
+| Value | Default | Meaning |
+| --- | --- | --- |
+| `issuer.name` | `internal-ca` | The CA ClusterIssuer workloads use. |
+| `root.mode` | `self-signed` | `self-signed`: a bootstrap `<issuer>-selfsigned` ClusterIssuer and a root CA Certificate. `existing-secret`: the root was minted offline, `root.existingSecret` holds it, nothing is minted for it. |
+| `root.commonName`, `organization`, `secretName` | `Cluster Internal Root CA`, none, `internal-root-ca` | The root's subject and Secret. |
+| `root.duration`, `renewBefore` | `87600h`, `8760h` | Ten years, renewed a year ahead. |
+| `root.privateKey` | ECDSA 384 | `ECDSA` (256, 384, 521), `RSA` (3072 or more) or `Ed25519`; `rotationPolicy: Never`, so a renewal keeps the key and every issued certificate keeps chaining. |
+| `root.nameConstraints` | none | cert-manager's name constraints (its `NameConstraints` feature gate). |
+| `intermediate.*` | off | The same settings for an intermediate signed by `<issuer>-root`; when on, `issuer.name` signs with the intermediate. |
+| `protect`, `helmKeep`, `syncWave` | `true`, `false`, none | Deletion protection and an Argo CD wave on every object. |
+
+Refused: a self-signed root without a common name or with an existing
+Secret, an existing-secret root without one, an ECDSA size that is not a
+curve, RSA under 3072, an enabled intermediate without a name or sharing
+the root's Secret, a duration that is not a Go duration.
+
 ## `charts/cluster-network-policies`
 
 A cluster's own NetworkPolicies, as data: the policies that contain its platform

@@ -1,0 +1,58 @@
+# Nothing here names an estate. Install into cert-manager's cluster resource
+# namespace (where a ClusterIssuer reads its CA Secret; cert-manager's own
+# namespace unless its --cluster-resource-namespace says otherwise), after
+# cert-manager and its CRDs.
+
+# The issuer workloads use: a CA ClusterIssuer signing with the root (or the
+# intermediate, when `intermediate.enabled`).
+issuer:
+  name: internal-ca
+
+# The root CA.
+root:
+  # self-signed: cert-manager mints the root in the cluster (a bootstrap
+  #   self-signed ClusterIssuer, then a CA Certificate). Simple; the root key
+  #   lives in a cluster Secret.
+  # existing-secret: the root was minted offline; `existingSecret` holds its
+  #   tls.crt and tls.key (a kubernetes.io/tls Secret in this namespace). The
+  #   chart then mints nothing for the root.
+  mode: self-signed
+  existingSecret: ""
+  # The root Certificate (self-signed mode).
+  commonName: Cluster Internal Root CA
+  organization: []
+  secretName: internal-root-ca
+  duration: 87600h          # 10 years
+  renewBefore: 8760h        # 1 year
+  privateKey:
+    algorithm: ECDSA        # ECDSA, RSA or Ed25519
+    size: 384               # P-384; RSA 3072/4096
+  # Name constraints (cert-manager's NameConstraints feature gate): what the
+  # CA may sign for. Empty: unconstrained.
+  nameConstraints: {}
+  #   critical: true
+  #   permitted:
+  #     dnsDomains: [example.com, svc.cluster.local]
+
+# An intermediate CA under the root, so the root key can stay offline (with
+# `root.mode: existing-secret`, delete the root's key from the Secret after the
+# intermediate is issued) and a compromised issuing key is revocable alone.
+intermediate:
+  enabled: false
+  commonName: Cluster Internal Intermediate CA
+  organization: []
+  secretName: internal-intermediate-ca
+  duration: 26280h          # 3 years
+  renewBefore: 4380h        # 6 months
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+  nameConstraints: {}
+
+# Protection: every object carries
+#   argocd.argoproj.io/sync-options: Prune=false,Delete=false
+# (losing the root Secret means re-issuing and re-trusting every certificate).
+protect: true
+helmKeep: false
+# Optional argocd sync wave for every object (the CA before its consumers).
+syncWave: null

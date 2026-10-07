@@ -1,0 +1,2 @@
+root:
+  privateKey: {algorithm: RSA, size: 2048}

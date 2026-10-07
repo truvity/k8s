@@ -1,0 +1,17 @@
+# A root minted offline (its Secret imported), an intermediate issued in the
+# cluster with name constraints, RSA, a sync wave, unprotected.
+issuer: {name: example-ca}
+root:
+  mode: existing-secret
+  existingSecret: example-offline-root
+intermediate:
+  enabled: true
+  commonName: Example Issuing CA
+  organization: [Example]
+  privateKey: {algorithm: RSA, size: 4096}
+  nameConstraints:
+    critical: true
+    permitted:
+      dnsDomains: [example.com, svc.cluster.local]
+protect: false
+syncWave: -5

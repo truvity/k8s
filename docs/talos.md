@@ -191,6 +191,27 @@ talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5 --dry-run
 talosctl upgrade-k8s -n 10.0.0.11 --to 1.36.5
 ```
 
+## Cluster PKI
+
+Two layers, with different owners:
+
+- **The cluster's own CAs** are in the secrets bundle: the Talos API CA, the
+  Kubernetes CA (the contract's `CertificateAuthorityPEM`), the aggregator
+  and etcd CAs, and the ServiceAccount key. Talos issues every component
+  certificate from them and renews those itself. The CAs are valid for ten
+  years; rotate one with `talosctl rotate-ca` (dry run first, then
+  `--dry-run=false`, Talos API and Kubernetes separately), then re-export the
+  bundle from the new machine configs so a re-render keeps the new CAs.
+  Rotating the ServiceAccount key is a workload-identity rotation as well:
+  publish the new key beside the old one first (`pkg/talos/oidc`).
+- **The workloads' CA** is cert-manager's: `charts/cluster-pki` gives every
+  in-cluster service one ClusterIssuer (`internal-ca` by default), backed by
+  a self-signed root or by a root minted offline, optionally through an
+  intermediate so the root key can leave the cluster. Distribute the root
+  to clients (trust-manager's Bundle, or the nodes' trusted roots through a
+  machine config patch for registry mirrors) and plan its rotation the same
+  way: a new root trusted beside the old one before anything is re-issued.
+
 ## Workload identity (IAM roles for service accounts)
 
 A pod gets AWS credentials by presenting a ServiceAccount token that AWS STS

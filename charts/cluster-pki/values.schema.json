@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cluster-pki values",
+  "description": "An unknown key is an error: a misspelt lifetime or key setting would mint a CA nobody asked for.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": { "type": "object", "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it." },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "name": { "$ref": "#/definitions/name" } }
+    },
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["self-signed", "existing-secret"] },
+        "existingSecret": { "type": "string" },
+        "commonName": { "type": "string" },
+        "organization": { "type": "array", "items": { "type": "string" } },
+        "secretName": { "$ref": "#/definitions/name" },
+        "duration": { "$ref": "#/definitions/duration" },
+        "renewBefore": { "$ref": "#/definitions/duration" },
+        "privateKey": { "$ref": "#/definitions/privateKey" },
+        "nameConstraints": { "type": "object" }
+      }
+    },
+    "intermediate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "commonName": { "type": "string" },
+        "organization": { "type": "array", "items": { "type": "string" } },
+        "secretName": { "$ref": "#/definitions/name" },
+        "duration": { "$ref": "#/definitions/duration" },
+        "renewBefore": { "$ref": "#/definitions/duration" },
+        "privateKey": { "$ref": "#/definitions/privateKey" },
+        "nameConstraints": { "type": "object" }
+      }
+    },
+    "protect": { "type": "boolean" },
+    "helmKeep": { "type": "boolean" },
+    "syncWave": { "type": ["integer", "null"] }
+  },
+  "definitions": {
+    "name": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$" },
+    "duration": { "type": "string", "pattern": "^([0-9]+(\\.[0-9]+)?(h|m|s))+$" },
+    "privateKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "enum": ["ECDSA", "RSA", "Ed25519"] },
+        "size": { "type": "integer" }
+      }
+    }
+  }
+}

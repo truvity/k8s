@@ -1,0 +1,24 @@
+apiVersion: v2
+name: cluster-pki
+description: >-
+  A cluster's internal certificate authority as cert-manager objects: a root
+  CA (self-signed in the cluster, or imported from an offline root) and the
+  ClusterIssuer that signs workload certificates with it, protected from
+  pruning and with a root key that is never rotated by accident. Nothing
+  here belongs to an estate: names, key type and lifetimes are values.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag (truvity/ci-workflows
+# release-public.yaml).
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/k8s
+sources:
+  - https://github.com/truvity/k8s
+keywords:
+  - cert-manager
+  - pki
+  - ca
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

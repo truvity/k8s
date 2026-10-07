@@ -1,0 +1,2 @@
+root:
+  privateKey: {algorithm: ECDSA, size: 512}
