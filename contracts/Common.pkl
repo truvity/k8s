@@ -1,0 +1,56 @@
+/// Types two or more of the charts' value contracts share: the string map and
+/// Kubernetes object names. Every rule here is today's hand-written rule, word
+/// for word (the contract is a no-behaviour-change move of
+/// `values.schema.json`); where the vocabulary has a near type, the alias says
+/// how it differs.
+module k8s.contracts.Common
+
+import "@vocab/Annotations.pkl" as A
+
+local const objectNameRe = #"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"#
+
+/// A map of strings (labels, annotations, tags).
+@A.Def { name = "stringMap" }
+typealias StringMap = Mapping<String, String>
+
+/// The name of a rendered object, as the charts have always accepted it: dot
+/// separated lower-case alphanumerics and hyphens, 1 to 253 characters. The
+/// length lives in the pattern. Not the vocabulary's `DnsSubdomain` (which is
+/// stricter: each dotted part is a label) nor `DnsName` (no upper bound), and a
+/// map key keeps only a pattern, so the bound stays in the expression.
+@A.Def { name = "objectName" }
+@A.Pattern {
+  regex = objectNameRe
+  valid { "a"; "a.b-c"; "a1" }
+  invalid { ""; "-a"; "A"; "a_b"; "a-" }
+}
+typealias ObjectName = String(contains(Regex(objectNameRe)))
+
+local const annotationKeyRe =
+  #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"#
+local const versionRe = #"^(|latest|v1\.[0-9]+)$"#
+
+/// The key of an annotation.
+@A.Pattern {
+  regex = annotationKeyRe
+  valid { "a"; "example.io/key"; "a.b/c_d" }
+  invalid { ""; "/a"; "a/"; "-a"; "A b" }
+}
+typealias AnnotationKey = String(contains(Regex(annotationKeyRe)))
+
+/// A Kubernetes minor such as `v1.34`, `latest`, or empty (no version label).
+@A.Pattern {
+  regex = versionRe
+  valid { ""; "latest"; "v1.34" }
+  invalid { "v2.1"; "v1"; "1.34"; "Latest" }
+}
+typealias Version = String(contains(Regex(versionRe)))
+
+/// The Pod Security level of a Namespace.
+typealias Level = "privileged" | "baseline" | "restricted"
+
+/// The same, or empty (none).
+typealias OptionalLevel = "" | "privileged" | "baseline" | "restricted"
+
+/// The Pod Security label kinds.
+typealias Mode = "warn" | "audit" | "enforce"

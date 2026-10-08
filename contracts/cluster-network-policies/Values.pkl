@@ -1,0 +1,77 @@
+/// An unknown key is an error, not a silent no-op: a misspelt `egres` would otherwise render a policy that denies all egress instead of the rules meant.
+@A.Chart { title = "cluster-network-policies values" }
+module k8s.contracts.ClusterNetworkPolicies
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Helm's shared values. Unused by this chart; allowed so a parent chart can set it.
+global: Dynamic?
+
+protect: Boolean?
+helmKeep: Boolean?
+policies: Listing<Policy>?
+
+local const annotationKeyRe =
+  #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"#
+
+/// An annotation key: an optional DNS prefix and a name.
+@A.Def { name = "annotationKey" }
+@A.Pattern {
+  regex = annotationKeyRe
+  valid { "a"; "example.io/a"; "a/b" }
+  invalid { ""; "/a"; "a/"; "-a"; "a/b/c" }
+}
+typealias AnnotationKey = String(contains(Regex(annotationKeyRe)))
+
+typealias PolicyType = "Ingress" | "Egress"
+
+typealias Operator = "In" | "NotIn" | "Exists" | "DoesNotExist"
+
+/// NetworkPolicy ingress or egress rules, rendered verbatim.
+@A.Def { name = "rules" }
+typealias Rules = Listing<Dynamic>
+
+@A.Def { name = "labelSelector" }
+class LabelSelector {
+  matchLabels: Mapping<String, String>?
+  matchExpressions: Listing<MatchExpression>?
+}
+
+class MatchExpression {
+  key: V.NonEmptyString
+  operator: Operator
+  values: Listing<String>?
+}
+
+@A.Def { name = "policy" }
+class Policy {
+  name: Common.ObjectName
+  namespace: V.DnsLabel
+
+  @A.Length { min = 10 }
+  reason: String
+
+  @A.Required
+  podSelector: LabelSelector?
+
+  @A.Items { min = 1; unique = true }
+  @A.Required
+  policyTypes: Listing<PolicyType>?
+
+  /// NetworkPolicy ingress or egress rules, rendered verbatim. An empty rule ({}) allows everything in that direction.
+  ingress: Rules?
+
+  /// NetworkPolicy ingress or egress rules, rendered verbatim. An empty rule ({}) allows everything in that direction.
+  egress: Rules?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Mapping<AnnotationKey, String>?
+}
