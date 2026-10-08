@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cluster-foundation values",
   "description": "An unknown key is an error, not a silent no-op: a typo in a mode or in `protect` would otherwise leave a namespace unlabelled or unprotected and the rollout would look finished.",
   "type": "object",
@@ -13,43 +13,281 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "level": { "enum": ["", "privileged", "baseline", "restricted"] },
+        "level": {
+          "enum": [
+            "",
+            "privileged",
+            "baseline",
+            "restricted"
+          ]
+        },
         "version": {
           "type": "string",
-          "pattern": "^(|latest|v1\\.[0-9]+)$"
+          "pattern": "^(|latest|v1\\.[0-9]+)$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
         },
         "modes": {
           "type": "array",
-          "uniqueItems": true,
-          "items": { "enum": ["warn", "audit", "enforce"] }
+          "items": {
+            "enum": [
+              "warn",
+              "audit",
+              "enforce"
+            ]
+          },
+          "uniqueItems": true
         },
-        "unenforced": { "type": "boolean" },
-        "reasonAnnotation": { "$ref": "#/definitions/annotationKey" }
+        "unenforced": {
+          "type": "boolean"
+        },
+        "reasonAnnotation": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        }
       }
     },
-    "protect": { "type": "boolean" },
-    "helmKeep": { "type": "boolean" },
+    "protect": {
+      "type": "boolean"
+    },
+    "helmKeep": {
+      "type": "boolean"
+    },
     "namespaces": {
       "type": "object",
-      "description": "Namespaces by name. The name must be a DNS label.",
-      "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
-      "additionalProperties": { "$ref": "#/definitions/namespace" }
+      "propertyNames": {
+        "maxLength": 63,
+        "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+        "not": {
+          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "enum": [
+              "privileged",
+              "baseline",
+              "restricted"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "syncWave": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "protect": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Overrides the chart's protect for this namespace."
+          },
+          "labels": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          }
+        }
+      },
+      "description": "Namespaces by name. The name must be a DNS label."
     },
     "clusterRoleBindings": {
       "type": "object",
-      "propertyNames": { "$ref": "#/definitions/objectNamePattern" },
-      "additionalProperties": { "$ref": "#/definitions/clusterRoleBinding" }
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+        "not": {
+          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clusterRole",
+          "subjects"
+        ],
+        "properties": {
+          "clusterRole": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "name"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "Group",
+                    "User",
+                    "ServiceAccount"
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "namespace": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "minItems": 1
+          },
+          "syncWave": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "protect": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          }
+        }
+      }
     },
     "storageClasses": {
       "type": "object",
-      "propertyNames": { "$ref": "#/definitions/objectNamePattern" },
-      "additionalProperties": { "$ref": "#/definitions/storageClass" }
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+        "not": {
+          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provisioner"
+        ],
+        "properties": {
+          "provisioner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "reclaimPolicy": {
+            "enum": [
+              "Delete",
+              "Retain"
+            ]
+          },
+          "volumeBindingMode": {
+            "enum": [
+              "Immediate",
+              "WaitForFirstConsumer"
+            ]
+          },
+          "allowVolumeExpansion": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "syncWave": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "protect": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          }
+        }
+      }
     },
     "priorityClasses": {
       "type": "object",
-      "description": "PriorityClasses by name. A name starting with system- is refused: Kubernetes reserves the prefix.",
-      "propertyNames": { "allOf": [{ "$ref": "#/definitions/objectNamePattern" }, { "not": { "pattern": "^system-" } }] },
-      "additionalProperties": { "$ref": "#/definitions/priorityClass" }
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+        "not": {
+          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+        },
+        "allOf": [
+          {
+            "not": {
+              "pattern": "^system-"
+            }
+          }
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value",
+          "description"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 1000000000
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "globalDefault": {
+            "type": "boolean"
+          },
+          "preemptionPolicy": {
+            "enum": [
+              "PreemptLowerPriority",
+              "Never"
+            ]
+          },
+          "syncWave": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "protect": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          }
+        }
+      },
+      "description": "PriorityClasses by name. A name starting with system- is refused: Kubernetes reserves the prefix."
     },
     "eksAuto": {
       "type": "object",
@@ -59,87 +297,38 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "syncWave": { "$ref": "#/definitions/syncWave" },
-            "protect": { "type": ["boolean", "null"] }
+            "enabled": {
+              "type": "boolean"
+            },
+            "syncWave": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "protect": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
           }
         }
       }
     }
   },
-  "definitions": {
-    "objectNamePattern": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$" },
-    "annotationKey": {
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "objectName": {
       "type": "string",
-      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
-    },
-    "syncWave": { "type": ["integer", "null"] },
-    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
-    "namespace": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "level": { "enum": ["privileged", "baseline", "restricted"] },
-        "reason": { "type": "string", "minLength": 1 },
-        "syncWave": { "$ref": "#/definitions/syncWave" },
-        "protect": { "type": ["boolean", "null"], "description": "Overrides the chart's protect for this namespace." },
-        "labels": { "$ref": "#/definitions/stringMap" },
-        "annotations": { "$ref": "#/definitions/stringMap" }
-      }
-    },
-    "clusterRoleBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["clusterRole", "subjects"],
-      "properties": {
-        "clusterRole": { "type": "string", "minLength": 1 },
-        "subjects": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["kind", "name"],
-            "properties": {
-              "kind": { "enum": ["Group", "User", "ServiceAccount"] },
-              "name": { "type": "string", "minLength": 1 },
-              "namespace": { "type": "string", "minLength": 1 }
-            }
-          }
-        },
-        "syncWave": { "$ref": "#/definitions/syncWave" },
-        "protect": { "type": ["boolean", "null"] },
-        "annotations": { "$ref": "#/definitions/stringMap" }
-      }
-    },
-    "storageClass": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["provisioner"],
-      "properties": {
-        "provisioner": { "type": "string", "minLength": 1 },
-        "isDefault": { "type": "boolean" },
-        "reclaimPolicy": { "enum": ["Delete", "Retain"] },
-        "volumeBindingMode": { "enum": ["Immediate", "WaitForFirstConsumer"] },
-        "allowVolumeExpansion": { "type": "boolean" },
-        "parameters": { "$ref": "#/definitions/stringMap" },
-        "syncWave": { "$ref": "#/definitions/syncWave" },
-        "protect": { "type": ["boolean", "null"] },
-        "annotations": { "$ref": "#/definitions/stringMap" }
-      }
-    },
-    "priorityClass": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["value", "description"],
-      "properties": {
-        "value": { "type": "integer", "minimum": -2147483648, "maximum": 1000000000 },
-        "description": { "type": "string", "minLength": 1 },
-        "globalDefault": { "type": "boolean" },
-        "preemptionPolicy": { "enum": ["PreemptLowerPriority", "Never"] },
-        "syncWave": { "$ref": "#/definitions/syncWave" },
-        "protect": { "type": ["boolean", "null"] },
-        "annotations": { "$ref": "#/definitions/stringMap" }
+      "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
       }
     }
   }

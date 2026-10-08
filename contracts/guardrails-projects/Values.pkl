@@ -17,22 +17,10 @@ ackRoleSelectors: AckRoleSelectors?
 projects: Listing<Project>?
 podIdentities: PodIdentities?
 
-local const namespaceNameRe = #"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"#
 local const objectNameRe = #"^[a-z0-9]([-a-z0-9.:]{0,251}[a-z0-9])?$"#
 local const versionRe = #"^(|latest|v1\.[0-9]+)$"#
 local const namePrefixRe = #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?-?$"#
 local const roleArnRe = #"^arn:[a-z-]+:iam::[^:]*:role/.+$"#
-
-/// A namespace name: an RFC 1123 label of 1 to 63 characters. The same
-/// language as the vocabulary's `DnsLabel`, which says the bound as a length
-/// rather than in the pattern (and a map key keeps only the pattern).
-@A.Def { name = "namespaceName" }
-@A.Pattern {
-  regex = namespaceNameRe
-  valid { "a"; "kube-system"; "a1-b2" }
-  invalid { ""; "-a"; "a-"; "A"; "a.b" }
-}
-typealias NamespaceName = String(contains(Regex(namespaceNameRe)))
 
 /// The name of a rendered object. Unlike the other charts' object name it admits
 /// a colon (RBAC names such as `system:...` are valid Kubernetes names).
@@ -162,7 +150,7 @@ class PolicyRule {
 class Subject {
   kind: SubjectKind
   name: V.NonEmptyString
-  namespace: NamespaceName?
+  namespace: V.DnsLabel?
 }
 
 class AckRoleSelectors {
@@ -170,7 +158,7 @@ class AckRoleSelectors {
 }
 
 class Project {
-  name: NamespaceName
+  name: V.DnsLabel
   kind: V.NonEmptyString
   labels: Mapping<String, LabelValue>?
   podSecurity: ProjectPodSecurity?
@@ -212,5 +200,5 @@ class PodIdentities {
 
 class Association {
   roleARN: RoleArn
-  associationNamespace: NamespaceName
+  associationNamespace: V.DnsLabel
 }

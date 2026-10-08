@@ -160,7 +160,12 @@
         ],
         "properties": {
           "name": {
-            "$ref": "#/$defs/namespaceName"
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
           },
           "kind": {
             "type": "string",
@@ -294,7 +299,12 @@
                 }
               },
               "associationNamespace": {
-                "$ref": "#/$defs/namespaceName"
+                "type": "string",
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                "not": {
+                  "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                }
               }
             }
           }
@@ -421,13 +431,6 @@
       },
       "minItems": 1
     },
-    "namespaceName": {
-      "type": "string",
-      "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
-      "not": {
-        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
-      }
-    },
     "subject": {
       "type": "object",
       "additionalProperties": false,
@@ -448,7 +451,12 @@
           "minLength": 1
         },
         "namespace": {
-          "$ref": "#/$defs/namespaceName"
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
         }
       }
     }

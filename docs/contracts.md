@@ -2,24 +2,24 @@
 
 The `values.schema.json` of the charts below is generated from a Pkl contract in
 [`contracts/`](../contracts) with the generators of
-[truvity/pkl-contracts](https://github.com/truvity/pkl-contracts) v0.6.0. The
+[truvity/pkl-contracts](https://github.com/truvity/pkl-contracts) v0.7.0. The
 contract is the single source; the committed schema is its output, and CI fails
 when the two differ.
 
-| Chart | Schema |
+| Chart | Contract |
 |---|---|
-| `cluster-network-policies` | generated from `contracts/cluster-network-policies/Values.pkl` |
-| `eks-auto-node-pools` | generated from `contracts/eks-auto-node-pools/Values.pkl` |
-| `guardrails-projects` | generated from `contracts/guardrails-projects/Values.pkl` |
-| `cilium-config` | hand-written (see "Not converted yet") |
-| `cluster-baseline` | hand-written |
-| `cluster-foundation` | hand-written |
-| `tenancy` | hand-written |
+| `cilium-config` | `contracts/cilium-config/Values.pkl` |
+| `cluster-baseline` | `contracts/cluster-baseline/Values.pkl` |
+| `cluster-foundation` | `contracts/cluster-foundation/Values.pkl` |
+| `cluster-network-policies` | `contracts/cluster-network-policies/Values.pkl` |
+| `eks-auto-node-pools` | `contracts/eks-auto-node-pools/Values.pkl` |
+| `guardrails-projects` | `contracts/guardrails-projects/Values.pkl` |
+| `tenancy` | `contracts/tenancy/Values.pkl` |
 
 `cilium-crds` and `volume-snapshot-crds` are not here: their (empty) schema
 belongs to the upstream CRD mirror.
 
-A chart whose schema says something v0.6.0 cannot is left as it was, whole: the
+A chart whose schema says something v0.7.0 cannot is left as it was, whole: the
 generated output is never patched, and `contract-check` covers only the
 converted charts.
 
@@ -42,8 +42,8 @@ packages are pinned by checksum in `contracts/PklProject.deps.json`.
 
 One Pkl project at the repository root, not a `contract/` directory in each
 chart: Helm packages a chart's directory, so Pkl sources inside a chart would
-ship in every `.tgz`, and the shared types (`Common.pkl`: the string map and the
-object name) want one lock file and one set of pins.
+ship in every `.tgz`, and the shared types (`Common.pkl`: the string map, object and
+annotation names, Pod Security levels) want one lock file and one set of pins.
 
 ```
 contracts/
@@ -73,147 +73,98 @@ unique }`, `@A.Properties`, `@A.Range`, `@A.Length`.
 | `minimum`, `maximum`, `minLength` | `@A.Range`, `@A.Length`, `V.NonEmptyString` |
 | `definitions` + `$ref` | `@A.Def` |
 | a required list, map or object, no default | `@A.Required` |
-| a closed object whose four optional keys share one value type, with `minProperties: 1` (`limitRange`) | `Mapping<"default" \| ... , QuantityMap>` and `@A.Properties`, see below |
+| `propertyNames` with a pattern, `not` pattern (`system-`), length | the key alias's `@A.Pattern`, `@A.NotPattern`, `@A.Length` |
+| a typed object that stays open (BGP specs) | `@A.Open` |
+| `oneOf [{const: false}, namespace]` | `(V.FalseOnly \| Namespace)?` |
+| `if deny contains egress then require dnsEgress else forbid it` | `@A.RequiredWhen { contains }` with `@A.ForbiddenUnless { contains }` |
+| `anyOf [{required: [reason]}, {required: [owner]}]` | `@A.RequiredAnyOf` |
+| a namespace entry whose `level` differs from the default needs `reason` | `@A.RequiredWhenDiffers` |
+| a closed object whose optional keys share one value type, with `minProperties: 1` (`limitRange`) | `Mapping<"default" \| ..., QuantityMap>` and `@A.Properties` |
+| a namespace name | `V.DnsLabel` (the same language; a key's `@A.Length` now renders) |
 
 ## Parity with the hand-written schemas
 
-No behaviour changes except the one tightening below. How that was shown, for
-the three converted charts:
+No behaviour changes except the line-break guard below. The reference is the
+hand-written schemas of `master` before this change. How it was shown, for all
+seven charts:
 
 1. **Structure.** Both schemas with every `$ref` inlined, `description`, `title`
-   and the line-break guard left out, compared apart. The differences left are
-   the ones listed in the next section.
-2. **Fixtures.** Every golden case (`tests/cases/*`, 8 `helm template` renders:
-   byte-identical output), every negative fixture of the three charts
-   (`tests/invalid/*`, 40 files: all still refused, 20 of them by the schema
-   alone) and the `bogusKey` and `helm lint` checks of `just lint` give the same
-   result with the old and the new schema.
+   and the guard left out, compared apart; the differences left are the ones in
+   the table below.
+2. **Fixtures.** Every golden case (`tests/cases/*`: 29 `helm template` renders,
+   byte-identical), every negative fixture (`tests/invalid/*`: 166 files, all
+   still refused, 92 of them by the schema alone), and the `bogusKey` and
+   `helm lint` checks of `just lint` give the same result with the old and the
+   new schema.
 3. **Differential run.** The Helm validation engine (santhosh-tekuri/jsonschema
-   v6) asked both schemas about 745,358 documents: every fixture, every
+   v6) asked both schemas about 4,020,821 documents: every fixture, every
    fixture merged over the chart's defaults, and each of those with every value
    replaced in turn by about 200 probes (wrong types, `null`, empty, boundary
    numbers, pattern near-misses, line breaks, lists with a duplicate, whole maps
    and lists), an unknown key, the key removed, and a new map key from a list of
-   valid and invalid names. Everything but one kind of verdict is the same: 24
-   documents differ, all of them the line-break guard below. The same run
-   flags a schema with a pattern widened by one or a `minItems` dropped, so it
-   can see a difference.
+   valid and invalid names. Zero verdict differences except 216 documents, all
+   the line-break guard below. The run flags a schema with a pattern widened by
+   one or a `minItems` dropped, so it can see a difference.
+
+| Chart | Goldens | Negatives (by schema alone) | Documents | Differences | Guard only |
+|---|---|---|---|---|---|
+| `cilium-config` | 3 | 14 (9) | 231,512 | 0 | 0 |
+| `cluster-baseline` | 9 | 37 (19) | 1,468,378 | 0 | 160 |
+| `cluster-foundation` | 4 | 22 (12) | 321,922 | 0 | 0 |
+| `cluster-network-policies` | 3 | 13 (9) | 203,840 | 0 | 0 |
+| `eks-auto-node-pools` | 3 | 19 (10) | 308,170 | 0 | 0 |
+| `guardrails-projects` | 2 | 8 (1) | 233,348 | 0 | 24 |
+| `tenancy` | 5 | 53 (32) | 1,253,651 | 0 | 32 |
 
 ### What changed in each file, and why it does not matter
 
 | Change | Where | Why behaviour is the same |
 |---|---|---|
-| `$schema` draft-07 to 2020-12 | all three | the keywords in use (`type`, `properties`, `required`, `additionalProperties`, `propertyNames`, `items` as one schema, `enum`, `pattern`, `minLength`, `minimum`/`maximum`, `minItems`, `uniqueItems`, `minProperties`, `$ref`, `anyOf`) mean the same in both; no `$ref` has a sibling keyword |
-| `definitions` to `$defs`, `#/definitions/x` to `#/$defs/x` | all three | resolved against the document root |
-| `oneOf` to `anyOf` | `guardrails-projects`: a quantity is a non-empty string or a number | the members are disjoint, so exactly-one and at-least-one accept the same documents |
-| a string `enum` loses `type: string` | all three | every member is a string |
-| `propertyNames` loses `type: string` | all three | a property name is always a string |
-| `items: {}` stated | `guardrails-projects`: `from`, `to`, `ports` | the same as no `items` |
-| `limitRange`: `additionalProperties: false` + four typed properties becomes `propertyNames: {enum}` + one `additionalProperties` | `guardrails-projects` | the four properties have the same schema, so the closed object and the enum-keyed map accept the same documents |
-| a line-break guard (`not: { pattern: <line breaks> }`) beside each `pattern` | every patterned string | see "The one tightening" |
-| `$defs` order, property order; an unused `annotationKey` definition | all | JSON objects are unordered; the key pattern is inlined as well |
-| `rules` description moved from the definition to `ingress` and `egress` | `cluster-network-policies` | a description is not validation |
+| `$schema` draft-07 to 2020-12; `definitions` to `$defs` | all | the keywords in use mean the same in both; no `$ref` has a sibling keyword |
+| `oneOf` to `anyOf` | quantities, `protect`, `namespace` | the members are disjoint (a string and a number; a boolean and a string; `false` and an object) |
+| `const: "prune-only"` becomes `enum: ["prune-only"]` | `tenancy` | one member |
+| a string `enum` loses `type: string`; `propertyNames` loses `type: string` | all | a member or a name is always a string |
+| `items: {}` stated | free-form lists | the same as no `items` |
+| `limitRange`/`container`: `additionalProperties: false` + four typed properties becomes `propertyNames: {enum}` + one `additionalProperties` | `guardrails-projects`, `cluster-baseline` | the four properties have the same schema |
+| a namespace name: `{0,61}` in the pattern becomes `*` and `maxLength: 63` (`V.DnsLabel`) | wherever a namespace name is | the same language, 1 to 63 characters |
+| `cilium-config` `block`: `oneOf` of `required` clauses becomes `anyOf` of two closed classes (`cidr`, or `start` + `stop`) | `cilium-config` | each class refuses the other's keys, so exactly the old pairs are accepted |
+| the PSA conditional (three pasted `if`/`then`) becomes one rule per level; `contains`/`else` becomes `allOf` of `if`/`then` | `cluster-baseline` | checked by the 160-case rule matrix and the differential run |
+| principal `minLength: 1` dropped | `cluster-baseline` `labelGuard` | the pattern needs at least one character |
+| `rules` description moved from the definition to its properties | `cluster-network-policies` | a description is not validation |
+| a line-break guard (`not: { pattern: <line breaks> }`) beside each `pattern` | every patterned string | see below |
+| `$defs` order, property order | all | JSON objects are unordered |
 
-### The one tightening
+### The line-break guard
 
 The generator refuses a line break (CR, FF, VT, NEL, U+2028, U+2029, and LF) in
-every patterned string. The differential run found two fields where the
-hand-written pattern admitted one, both the IAM role ARN
-`^arn:[a-z-]+:iam::[^:]*:role/.+$` (`[^:]*` matches a line break, and `.`
-matches CR, NEL and U+2028):
+every patterned string. Where the hand-written pattern admitted one, the
+contract now refuses it. The differential run found these fields, none of which
+can legitimately hold a line break (an IAM role ARN, a user, group or user prefix
+of the label guard):
 
-- `guardrails-projects`: `projects[].ackRoleARN`
-- `guardrails-projects`: `podIdentities.associations.<name>.roleARN`
+- `ackRoleSelectors.namespaces.<name>.roleARN` (`cluster-baseline`)
+- `labelGuard.allowedUsers[]`, `allowedUserPrefixes[]`, `allowedGroups[]` (`cluster-baseline`)
+- `projects[].ackRoleARN`, `podIdentities.associations.<name>.roleARN` (`guardrails-projects`)
+- `podIdentities.associations.<name>.roleARN` (`tenancy`)
 
-A line break in an ARN is invalid anyway. No field needed `@A.MultiLine`.
+No field needed `@A.MultiLine`.
 
 ## Differences from the vocabulary, kept on purpose
 
 The contract keeps today's rule wherever the vocabulary differs. Each is a
 follow-up: change the rule, deliberately, in a PR of its own.
 
-- Names are local patterns. The namespace name (`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
-  admits the same strings as `DnsLabel`, but says the bound in the expression;
-  a map key keeps only a `pattern` (the generator writes a key's `@A.Length`
-  nowhere), so `DnsLabel` as a key would drop the 63-character bound. The object
-  name is a 1 to 253 character dotted name (stricter than `DnsName`, looser than
-  `DnsSubdomain`), and `guardrails-projects` admits a colon in it.
-- The annotation key, the Pod Security `version` (`""` is a member), the role ARN
-  and the ACK name prefix (`""` is a member) have no vocabulary type.
-- A quantity is a non-empty string or a number, not the vocabulary's `Quantity`
-  (a string with a unit).
-- `V.KarpenterDuration` (`eks-auto-node-pools`), `V.NonEmptyString`: the same
-  expression as today's; used as is.
+- Object names are local patterns: 1 to 253 characters, dotted, stricter than
+  `DnsName` and looser than `DnsSubdomain` (`guardrails-projects` also admits a
+  colon).
+- The annotation key, label key and prefix, domain, role ARN, NATS URL, CIDR,
+  Pod Security `version` (`""` is a member), the ACK name prefix (`""` is a
+  member) and quantities have local patterns; none equals a vocabulary type.
+  Quantities are a string or, in some places, a whole number.
+- `V.KarpenterDuration`, `V.NonEmptyString`, `V.DnsLabel`: the same rule as
+  today's; used as is.
 - `syncWave` and `protect` admit `null`; the vocabulary never does.
-- `""` is a member of the `version` pattern and of the name prefix, and
-  `values.yaml` defaults those strings to `""` where the vocabulary says
-  "absent".
-- `limitRange` is an enum-keyed map in the contract (no annotation counts the
-  properties of a class).
-
-## Not converted yet
-
-Four charts keep their hand-written schema, each for a rule v0.6.0 has no
-annotation for. The missing feature is named so that pkl-contracts can add it.
-
-### `cilium-config`: an open typed object
-
-`bgpClusterConfig.spec`, the instance and peer items under it, and
-`bgpAdvertisement.spec` are objects with typed or required properties that stay
-open (no `additionalProperties: false`), because the chart renders the Cilium
-CRD's spec verbatim:
-
-```json
-"spec": { "type": "object", "required": ["bgpInstances"],
-  "properties": { "bgpInstances": { "type": "array", "minItems": 1,
-    "items": { "type": "object", "required": ["name", "localASN"],
-      "properties": { "name": { "type": "string", "minLength": 1 },
-                      "localASN": { "type": "integer", "minimum": 1, "maximum": 4294967295 } } } } } }
-```
-
-A nested class is always closed (`additionalProperties: false`); only a
-`@Schema` document class can be `open`. Needed: an annotation or modifier that
-leaves a nested class open. (The block's `oneOf` of `cidr` or `start`+`stop` is
-expressible as a union of two closed classes.)
-
-### `cluster-baseline`: rules across fields
-
-1. A condition through a map, on a value that is not one: for every namespace
-   under `podSecurity.namespaces`, a `level` different from the default
-   `level` requires `reason`:
-
-   ```json
-   "if": { "properties": { "level": { "const": "privileged" } }, "required": ["level"] },
-   "then": { "properties": { "namespaces": { "additionalProperties": {
-     "if": { "properties": { "level": { "not": { "const": "privileged" } } }, "required": ["level"] },
-     "then": { "required": ["reason"] } } } } }
-   ```
-
-   `@RequiredWhen` takes a dotted path through blocks only (never a map) and its
-   condition is "is one of", never "is not".
-2. A condition on an array that contains a value, with the other branch
-   forbidding the key: `networkPolicyNamespace`
-   `if deny contains "egress" then required [dnsEgress] else not required [dnsEgress]`.
-3. At least one of two optional keys: `anyOf: [{required: [reason]}, {required: [owner]}]`
-   (`quotaNamespace`, `limitRangeNamespace`).
-
-### `cluster-foundation`: a pattern a key must not match
-
-```json
-"priorityClasses": { "type": "object",
-  "propertyNames": { "allOf": [ { "$ref": "#/definitions/objectNamePattern" },
-                                { "not": { "pattern": "^system-" } } ] } }
-```
-
-`@NotPattern` on a `Mapping` key alias is accepted by the model and then not
-written: the generated `propertyNames` has the `pattern` and no `not`, so the
-contract would admit `system-x`. `@DenyKeys` refuses exact names, not a prefix.
-
-### `tenancy`: a boolean constant
-
-```json
-"namespace": { "oneOf": [ { "const": false }, { "$ref": "#/definitions/namespace" } ] }
-```
-
-Pkl has no boolean literal type (`false | Namespace` does not parse) and
-v0.6.0 has no `const` annotation; `Boolean | Namespace` would admit `true`.
+- `""` is a member of several enums and patterns (`podSecurity.level`,
+  `version`, name prefixes), and `values.yaml` defaults those strings to `""`
+  where the vocabulary says "absent".
+- `limitRange` is an enum-keyed map in the contract.

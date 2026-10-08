@@ -14,20 +14,8 @@ protect: Boolean?
 helmKeep: Boolean?
 policies: Listing<Policy>?
 
-local const dnsLabelRe = #"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"#
 local const annotationKeyRe =
   #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"#
-
-/// A namespace name: an RFC 1123 label of 1 to 63 characters. The same
-/// language as the vocabulary's `DnsLabel`, which says the bound as a length
-/// rather than in the pattern.
-@A.Def { name = "dnsLabel" }
-@A.Pattern {
-  regex = dnsLabelRe
-  valid { "a"; "kube-system"; "a1-b2" }
-  invalid { ""; "-a"; "a-"; "A"; "a.b" }
-}
-typealias DnsLabel = String(contains(Regex(dnsLabelRe)))
 
 /// An annotation key: an optional DNS prefix and a name.
 @A.Def { name = "annotationKey" }
@@ -61,7 +49,7 @@ class MatchExpression {
 @A.Def { name = "policy" }
 class Policy {
   name: Common.ObjectName
-  namespace: DnsLabel
+  namespace: V.DnsLabel
 
   @A.Length { min = 10 }
   reason: String

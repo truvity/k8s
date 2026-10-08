@@ -1,0 +1,384 @@
+/// An unknown key is an error, not a silent no-op: a typo in a mode name would otherwise leave a namespace unlabelled and the rollout would look finished.
+@A.Chart { title = "cluster-baseline values" }
+module k8s.contracts.ClusterBaseline
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Helm's shared values. Unused by this chart; allowed so a parent chart can set it.
+global: Dynamic?
+
+podSecurity: PodSecurity?
+protect: Boolean?
+reasonAnnotation: Common.AnnotationKey?
+
+/// A ValidatingAdmissionPolicy and its binding that warn when a Namespace is created, or updated to drop its labels, with no Pod Security label.
+guard: Guard?
+
+/// A ValidatingAdmissionPolicy and its binding that let only the named principals set, change or remove the protected namespace labels.
+labelGuard: LabelGuard?
+
+networkPolicy: NetworkPolicy?
+resourceQuota: ResourceQuota?
+limitRange: LimitRange?
+rbac: Rbac?
+ackRoleSelectors: AckRoleSelectors?
+
+local const prefixRe = #"^[a-z0-9]([-a-z0-9.]*[a-z0-9])?/$"#
+local const domainRe = #"^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$"#
+local const namePrefixRe = #"^[a-z0-9]([-a-z0-9]{0,61})?$"#
+local const principalRe = #"^[^'"\\]+$"#
+local const labelKeyRe =
+  #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$"#
+local const quantityRe = #"^[0-9]+(\.[0-9]+)?([KMGTPE]i?|[numkMGTPE]|[eE][0-9]+)?$"#
+local const quantityKeyRe = #"^[A-Za-z0-9][-A-Za-z0-9_./]*$"#
+local const ackPrefixRe = #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?-?$"#
+local const roleArnRe = #"^arn:[a-z-]+:iam::[^:]*:role/.+$"#
+
+@A.Pattern {
+  regex = prefixRe
+  valid { "example.io/"; "a/" }
+  invalid { ""; "example.io"; "/"; "-a/" }
+}
+typealias LabelPrefix = String(contains(Regex(prefixRe)))
+
+@A.Pattern {
+  regex = domainRe
+  valid { "example.io"; "a.b.c" }
+  invalid { ""; "example"; "a..b"; "-a.b" }
+}
+typealias Domain = String(contains(Regex(domainRe)))
+
+@A.Pattern {
+  regex = namePrefixRe
+  valid { "kube-"; "a"; "kube" }
+  invalid { ""; "-a"; "A" }
+}
+typealias NamePrefix = String(contains(Regex(namePrefixRe)))
+
+@A.Pattern {
+  regex = principalRe
+  valid { "alice"; "system:masters" }
+  invalid { ""; "a'b"; "a\"b"; "a\\b" }
+}
+typealias Principal = String(contains(Regex(principalRe)))
+
+@A.Pattern {
+  regex = labelKeyRe
+  valid { "a"; "example.io/key"; "a-b" }
+  invalid { ""; "/a"; "a/"; "-a" }
+}
+typealias LabelKey = String(contains(Regex(labelKeyRe)))
+
+@A.Pattern {
+  regex = quantityRe
+  valid { "500m"; "2Gi"; "1"; "1.5" }
+  invalid { ""; "Gi"; "1 Gi"; "-1" }
+}
+typealias QuantityString = String(contains(Regex(quantityRe)))
+
+@A.Pattern {
+  regex = quantityKeyRe
+  valid { "cpu"; "requests.cpu"; "example.com/gpu" }
+  invalid { ""; "-cpu"; "cpu key" }
+}
+typealias QuantityKey = String(contains(Regex(quantityKeyRe)))
+
+@A.Pattern {
+  regex = ackPrefixRe
+  valid { ""; "ack-"; "ack" }
+  invalid { "-a"; "A"; "a--" }
+}
+typealias AckPrefix = String(contains(Regex(ackPrefixRe)))
+
+@A.Pattern {
+  regex = roleArnRe
+  valid { "arn:p:iam::acct:role/x"; "arn:p:iam::acct:role/a/b" }
+  invalid { ""; "arn:p:iam::acct:user/x"; "arn:p:iam::a:b:role/x"; "arn:p:iam::acct:role/" }
+}
+typealias RoleArn = String(contains(Regex(roleArnRe)))
+
+/// A Kubernetes quantity, as a string ("500m", "2Gi") or a whole number.
+typealias Quantity = V.NonNegativeInt | QuantityString
+
+/// Resource quantities by resource name; at least one.
+@A.Properties { min = 1 }
+typealias QuantityMap = Mapping<QuantityKey, Quantity>
+
+typealias Action = "Warn" | "Audit" | "Deny"
+
+@A.Items { min = 1; unique = true }
+typealias Actions = Listing<Action>
+
+typealias FailurePolicy = "Ignore" | "Fail"
+
+@A.Items { unique = true }
+typealias PrincipalList = Listing<Principal>
+
+/// The rules of a Role or ClusterRole.
+@A.Items { min = 1 }
+typealias PolicyRules = Listing<PolicyRule>
+
+/// A namespace whose level departs from the default level needs a reason, so the exemption can be reviewed and retired. The template refuses the departures a schema cannot see: a mode switched off, a per-mode level.
+@A.RequiredWhenDiffers {
+  property = "level"
+  each = "namespaces"
+  require { "reason" }
+}
+class PodSecurity {
+  level: Common.Level?
+  version: Common.Version?
+  modes: Modes?
+
+  /// Namespaces by name. The name must be a DNS label.
+  namespaces: Mapping<V.DnsLabel, Namespace>?
+}
+
+class Modes {
+  warn: Mode?
+  audit: Mode?
+  enforce: Mode?
+}
+
+class Mode {
+  enabled: Boolean?
+  level: Common.OptionalLevel?
+  version: Common.Version?
+}
+
+class Namespace {
+  /// Labels the Namespace object carries beside the Pod Security ones (which the chart refuses here).
+  labels: Mapping<LabelKey, Label63>?
+
+  level: Common.Level?
+  version: Common.Version?
+  reason: V.NonEmptyString?
+  modes: ModeOverrides?
+}
+
+@A.Length { max = 63 }
+typealias Label63 = String(length <= 63)
+
+class ModeOverrides {
+  warn: ModeOverride?
+  audit: ModeOverride?
+  enforce: ModeOverride?
+}
+
+class ModeOverride {
+  /// false: this namespace carries no label of this kind (needs a reason when the mode is on).
+  enabled: Boolean?
+
+  level: Common.Level?
+  version: Common.Version?
+}
+
+class LabelSelector {
+  matchLabels: Mapping<String, String>?
+  matchExpressions: Listing<MatchExpression>?
+}
+
+class MatchExpression {
+  key: V.NonEmptyString
+  operator: "In" | "NotIn" | "Exists" | "DoesNotExist"
+  values: Listing<String>?
+}
+
+class Guard {
+  enabled: Boolean?
+  name: Common.ObjectName?
+  validationActions: Actions?
+  failurePolicy: FailurePolicy?
+
+  satisfiedBy: SatisfiedBy?
+
+  @A.Items { unique = true }
+  excludeNamespaces: Listing<V.DnsLabel>?
+
+  @A.Items { unique = true }
+  excludeNamePrefixes: Listing<NamePrefix>?
+
+  namespaceSelector: LabelSelector?
+}
+
+@A.Items { min = 1; unique = true }
+typealias SatisfiedBy = Listing<Common.Mode>
+
+class LabelGuard {
+  enabled: Boolean?
+  name: Common.ObjectName?
+  validationActions: Actions?
+  failurePolicy: FailurePolicy?
+
+  @A.Items { unique = true }
+  protectedPrefixes: Listing<LabelPrefix>?
+
+  @A.Items { unique = true }
+  protectedDomains: Listing<Domain>?
+
+  allowedUsers: PrincipalList?
+  allowedUserPrefixes: PrincipalList?
+  allowedGroups: PrincipalList?
+}
+
+class NetworkPolicy {
+  name: Common.ObjectName?
+  protect: Boolean?
+  dns: Dns?
+  namespaces: Mapping<V.DnsLabel, NetworkPolicyNamespace>?
+}
+
+class Dns {
+  namespace: V.DnsLabel?
+  podLabelKey: V.NonEmptyString?
+  podLabelValue: V.NonEmptyString?
+}
+
+/// A NetworkPolicy ingress (from) or egress (to) rule, verbatim, with a description that is rendered as a comment.
+class NetworkPolicyRule {
+  description: V.NonEmptyString
+  from: Listing<Any>?
+  to: Listing<Any>?
+  ports: Listing<Any>?
+}
+
+/// Egress needs a DNS decision, and only egress does.
+@A.RequiredWhen {
+  property = "deny"
+  contains { "egress" }
+  require { "dnsEgress" }
+}
+@A.ForbiddenUnless {
+  property = "deny"
+  contains { "egress" }
+  forbid { "dnsEgress" }
+}
+class NetworkPolicyNamespace {
+  /// Let the namespace's own pods through, each denied direction.
+  intraNamespace: Boolean?
+
+  ingress: Listing<NetworkPolicyRule>?
+  egress: Listing<NetworkPolicyRule>?
+  name: Common.ObjectName?
+
+  /// Overrides the kind's protect default for this object.
+  protect: Boolean?
+
+  @A.Items { min = 1; unique = true }
+  @A.Required
+  deny: Listing<"ingress" | "egress">?
+
+  /// Required when egress is denied: true adds a DNS allow, false is a deliberate total egress deny.
+  dnsEgress: Boolean?
+}
+
+class ResourceQuota {
+  name: Common.ObjectName?
+  protect: Boolean?
+  reasonAnnotation: Common.AnnotationKey?
+  ownerAnnotation: Common.AnnotationKey?
+  namespaces: Mapping<V.DnsLabel, QuotaNamespace>?
+}
+
+@A.RequiredAnyOf { paths { "reason"; "owner" } }
+class QuotaNamespace {
+  name: Common.ObjectName?
+  reason: V.NonEmptyString?
+  owner: V.NonEmptyString?
+
+  /// Overrides the kind's protect default for this object.
+  protect: Boolean?
+
+  @A.Required
+  hard: QuantityMap?
+}
+
+class LimitRange {
+  name: Common.ObjectName?
+  protect: Boolean?
+  reasonAnnotation: Common.AnnotationKey?
+  ownerAnnotation: Common.AnnotationKey?
+  namespaces: Mapping<V.DnsLabel, LimitRangeNamespace>?
+}
+
+@A.RequiredAnyOf { paths { "reason"; "owner" } }
+class LimitRangeNamespace {
+  name: Common.ObjectName?
+  reason: V.NonEmptyString?
+  owner: V.NonEmptyString?
+
+  /// Overrides the kind's protect default for this object.
+  protect: Boolean?
+
+  /// At least one of the four kinds.
+  @A.Properties { min = 1 }
+  @A.Required
+  container: Mapping<LimitKey, QuantityMap>?
+}
+
+typealias LimitKey = "default" | "defaultRequest" | "min" | "max"
+
+class Rbac {
+  protect: Boolean?
+  clusterRoles: Mapping<Common.ObjectName, ClusterRole>?
+  namespaces: Mapping<V.DnsLabel, RbacNamespace>?
+}
+
+class ClusterRole {
+  protect: Boolean?
+
+  @A.Items { unique = true }
+  aggregateTo: Listing<"admin" | "edit" | "view">?
+
+  @A.Required
+  rules: PolicyRules?
+}
+
+class PolicyRule {
+  apiGroups: Listing<String>?
+  resources: Listing<String>?
+  resourceNames: Listing<String>?
+  nonResourceURLs: Listing<String>?
+
+  @A.Items { min = 1 }
+  @A.Required
+  verbs: Listing<String>?
+}
+
+class RbacNamespace {
+  roles: Mapping<Common.ObjectName, Role>?
+  roleBindings: Mapping<Common.ObjectName, RoleBinding>?
+}
+
+class Role {
+  @A.Required
+  rules: PolicyRules?
+}
+
+class RoleBinding {
+  clusterRole: V.NonEmptyString?
+  role: Common.ObjectName?
+
+  @A.Items { min = 1 }
+  @A.Required
+  subjects: Listing<Subject>?
+}
+
+class Subject {
+  kind: "User" | "Group" | "ServiceAccount"
+  name: V.NonEmptyString
+  namespace: V.DnsLabel?
+}
+
+class AckRoleSelectors {
+  namePrefix: AckPrefix?
+  protect: Boolean?
+  namespaces: Mapping<V.DnsLabel, AckSelector>?
+}
+
+class AckSelector {
+  roleARN: RoleArn
+  protect: Boolean?
+}

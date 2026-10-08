@@ -83,11 +83,11 @@ crds-check: crds
 # values.schema.json of the charts listed in contract-charts: `just contract`
 # regenerates them, and `contract-check` (CI) regenerates into a temporary
 # directory and fails when a committed schema differs, or a contract is not
-# formatted. The other charts keep a hand-written schema until their rules can
-# be said in the contracts (docs/contracts.md). The CRD mirror charts are not
-# here: their (empty) schema belongs to the upstream mirror.
+# formatted. Charts not listed keep a hand-written schema (the CRD mirror
+# charts: their empty schema belongs to the upstream mirror; newer charts not
+# yet moved: docs/contracts.md).
 # Pkl comes from hack/pkl (a pinned wrapper, until nixpkgs ships Pkl 0.32).
-contract-charts := "cluster-network-policies eks-auto-node-pools guardrails-projects"
+contract-charts := "cilium-config cluster-baseline cluster-foundation cluster-network-policies eks-auto-node-pools guardrails-projects tenancy"
 
 contract:
     #!/usr/bin/env bash
