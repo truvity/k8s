@@ -27,7 +27,7 @@ lint:
     #!/usr/bin/env bash
     set -euo pipefail
     golangci-lint config verify
-    golangci-lint run ./...
+    GOTOOLCHAIN=local golangci-lint run ./...
     for chart in {{ charts }}; do
       # A chart with required values lints with tests/lint/<chart>.yaml.
       lintvalues=()
