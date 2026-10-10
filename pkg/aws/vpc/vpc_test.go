@@ -903,6 +903,69 @@ func TestDefaultNACLPeerEgressAppendsAfterTheExistingRules(t *testing.T) {
 	}
 }
 
+func TestDefaultNACLPeerIngressAppendsAfterTheExistingIngressRules(t *testing.T) {
+	ingress := func(a *vpc.Args) []string {
+		t.Helper()
+
+		res, err := run(t, a)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		nacl := find(t, res.regs, "aws:ec2/defaultNetworkAcl:DefaultNetworkAcl", "net-default-nacl")
+
+		var out []string
+
+		for _, rule := range nacl.inputs["ingress"].ArrayValue() {
+			o := rule.ObjectValue()
+
+			cidr := o["ipv6CidrBlock"]
+			if c, ok := o["cidrBlock"]; ok {
+				cidr = c
+			}
+
+			out = append(out, fmt.Sprintf("%d %s %v %d-%d", int(o["ruleNo"].NumberValue()), o["protocol"].StringValue(),
+				cidr.V, int(o["fromPort"].NumberValue()), int(o["toPort"].NumberValue())))
+		}
+
+		return out
+	}
+
+	a := base()
+	a.DefaultNACLHTTPSIngress = []string{"10.0.0.0/14", "192.168.0.0/16"}
+	before := ingress(a)
+
+	a = base()
+	a.DefaultNACLHTTPSIngress = []string{"10.0.0.0/14", "192.168.0.0/16"}
+	a.DefaultNACLPeerIngress = []vpc.PeerIngress{{CIDR: "10.9.0.0/22", Port: 22}, {CIDR: "10.9.0.0/22", Port: 80}}
+
+	want := append(slices.Clone(before), "160 6 10.9.0.0/22 22-22", "161 6 10.9.0.0/22 80-80")
+	if after := ingress(a); fmt.Sprint(after) != fmt.Sprint(want) {
+		t.Errorf("ingress rules\n%v\nwant\n%v", after, want)
+	}
+
+	// Egress is untouched.
+	b := base()
+	b.DefaultNACLPeerIngress = a.DefaultNACLPeerIngress
+
+	res, err := run(t, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res0, err := run(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e1 := find(t, res.regs, "aws:ec2/defaultNetworkAcl:DefaultNetworkAcl", "net-default-nacl").inputs["egress"]
+	e0 := find(t, res0.regs, "aws:ec2/defaultNetworkAcl:DefaultNetworkAcl", "net-default-nacl").inputs["egress"]
+
+	if fmt.Sprint(e1) != fmt.Sprint(e0) {
+		t.Error("peer ingress changed the egress rules")
+	}
+}
+
 func TestKeepDefaults(t *testing.T) {
 	a := base()
 	a.KeepDefaultNACL, a.KeepDefaultSecurityGroup = true, true
@@ -1137,6 +1200,15 @@ func TestRefusals(t *testing.T) {
 		"too many HTTPS": {func(a *vpc.Args) {
 			a.DefaultNACLHTTPSIngress = []string{"10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16", "10.4.0.0/16", "10.5.0.0/16", "10.6.0.0/16", "10.7.0.0/16"}
 		}, "at most 6"},
+		"peer ingress too many": {func(a *vpc.Args) {
+			for i := 0; i < 21; i++ {
+				a.DefaultNACLPeerIngress = append(a.DefaultNACLPeerIngress, vpc.PeerIngress{CIDR: "10.1.0.0/16", Port: 22})
+			}
+		}, "at most 20"},
+		"peer ingress CIDR bad":   {func(a *vpc.Args) { a.DefaultNACLPeerIngress = []vpc.PeerIngress{{CIDR: "x", Port: 22}} }, "not an IPv4 CIDR"},
+		"peer ingress internet":   {func(a *vpc.Args) { a.DefaultNACLPeerIngress = []vpc.PeerIngress{{CIDR: "0.0.0.0/0", Port: 22}} }, "whole internet"},
+		"peer ingress port zero":  {func(a *vpc.Args) { a.DefaultNACLPeerIngress = []vpc.PeerIngress{{CIDR: "10.1.0.0/16"}} }, "not a port"},
+		"peer ingress port large": {func(a *vpc.Args) { a.DefaultNACLPeerIngress = []vpc.PeerIngress{{CIDR: "10.1.0.0/16", Port: 65536}} }, "not a port"},
 		"peer egress too many": {func(a *vpc.Args) {
 			for i := 0; i < 21; i++ {
 				a.DefaultNACLPeerEgress = append(a.DefaultNACLPeerEgress, vpc.PeerEgress{CIDR: "10.1.0.0/16", Port: 22})

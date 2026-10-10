@@ -110,7 +110,20 @@ const maxHTTPSIngress = 6
 // default network ACL's outbound rules 160 to 179.
 const maxPeerEgress = 20
 
+// maxPeerIngress is how many entries Args.DefaultNACLPeerIngress takes: the
+// default network ACL's inbound rules 160 to 179.
+const maxPeerIngress = 20
+
 type (
+	// PeerIngress is one inbound TCP allowance of the default network ACL:
+	// connections from one IPv4 CIDR to one port in the VPC.
+	PeerIngress struct {
+		// CIDR is the source, an IPv4 CIDR; 0.0.0.0/0 is refused.
+		CIDR string
+		// Port is the destination TCP port, 1 to 65535.
+		Port int
+	}
+
 	// PeerEgress is one outbound TCP allowance of the default network ACL:
 	// connections from the VPC to one port of one IPv4 CIDR.
 	PeerEgress struct {
@@ -297,6 +310,12 @@ type Args struct {
 	// for low ports the ephemeral range does not cover (SSH, HTTP) on a
 	// peered VPC. Empty adds nothing. Ignored with KeepDefaultNACL.
 	DefaultNACLPeerEgress []PeerEgress
+	// DefaultNACLPeerIngress lists inbound TCP allowances (at most twenty)
+	// from one IPv4 CIDR to one port, as rules 160 to 179 of the default
+	// network ACL, in the order given, after all the other inbound rules.
+	// Use it for low ports (SSH, HTTP) reached from a peered VPC. Empty adds
+	// nothing. Ignored with KeepDefaultNACL.
+	DefaultNACLPeerIngress []PeerIngress
 
 	// FlowLogs configures the flow logs. The zero value is the defaults.
 	FlowLogs FlowLogs
@@ -628,6 +647,24 @@ func (a *Args) checkMisc() []error {
 
 	for i, e := range a.DefaultNACLPeerEgress {
 		field := fmt.Sprintf("DefaultNACLPeerEgress[%d]", i)
+
+		if p, err := parseV4(field+".CIDR", e.CIDR); err != nil {
+			errs = append(errs, err)
+		} else if p.Bits() == 0 {
+			errs = append(errs, fmt.Errorf("args: %s.CIDR %q is the whole internet", field, e.CIDR))
+		}
+
+		if e.Port < 1 || e.Port > 65535 {
+			errs = append(errs, fmt.Errorf("args: %s.Port %d is not a port from 1 to 65535", field, e.Port))
+		}
+	}
+
+	if len(a.DefaultNACLPeerIngress) > maxPeerIngress {
+		errs = append(errs, fmt.Errorf("args: DefaultNACLPeerIngress has %d entries, at most %d fit", len(a.DefaultNACLPeerIngress), maxPeerIngress))
+	}
+
+	for i, e := range a.DefaultNACLPeerIngress {
+		field := fmt.Sprintf("DefaultNACLPeerIngress[%d]", i)
 
 		if p, err := parseV4(field+".CIDR", e.CIDR); err != nil {
 			errs = append(errs, err)
