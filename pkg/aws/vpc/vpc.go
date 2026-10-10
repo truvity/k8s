@@ -106,6 +106,21 @@ const (
 // takes: the default network ACL's rules 114 to 119.
 const maxHTTPSIngress = 6
 
+// maxPeerEgress is how many entries Args.DefaultNACLPeerEgress takes: the
+// default network ACL's outbound rules 160 to 179.
+const maxPeerEgress = 20
+
+type (
+	// PeerEgress is one outbound TCP allowance of the default network ACL:
+	// connections from the VPC to one port of one IPv4 CIDR.
+	PeerEgress struct {
+		// CIDR is the destination, an IPv4 CIDR; 0.0.0.0/0 is refused.
+		CIDR string
+		// Port is the destination TCP port, 1 to 65535.
+		Port int
+	}
+)
+
 // Child identifies one child for a NameFunc or a tag hook.
 type Child struct {
 	// Component is the logical name the component was registered with.
@@ -276,6 +291,12 @@ type Args struct {
 	// reach port 443 inside the VPC, as rules 114 to 119 of the default
 	// network ACL. Use it for peered VPCs. Ignored with KeepDefaultNACL.
 	DefaultNACLHTTPSIngress []string
+	// DefaultNACLPeerEgress lists outbound TCP allowances (at most twenty)
+	// to one port of one IPv4 CIDR, as rules 160 to 179 of the default
+	// network ACL, in the order given, after all the other rules. Use it
+	// for low ports the ephemeral range does not cover (SSH, HTTP) on a
+	// peered VPC. Empty adds nothing. Ignored with KeepDefaultNACL.
+	DefaultNACLPeerEgress []PeerEgress
 
 	// FlowLogs configures the flow logs. The zero value is the defaults.
 	FlowLogs FlowLogs
@@ -598,6 +619,24 @@ func (a *Args) checkMisc() []error {
 	for i, c := range a.DefaultNACLHTTPSIngress {
 		if _, err := parseV4(fmt.Sprintf("DefaultNACLHTTPSIngress[%d]", i), c); err != nil {
 			errs = append(errs, err)
+		}
+	}
+
+	if len(a.DefaultNACLPeerEgress) > maxPeerEgress {
+		errs = append(errs, fmt.Errorf("args: DefaultNACLPeerEgress has %d entries, at most %d fit", len(a.DefaultNACLPeerEgress), maxPeerEgress))
+	}
+
+	for i, e := range a.DefaultNACLPeerEgress {
+		field := fmt.Sprintf("DefaultNACLPeerEgress[%d]", i)
+
+		if p, err := parseV4(field+".CIDR", e.CIDR); err != nil {
+			errs = append(errs, err)
+		} else if p.Bits() == 0 {
+			errs = append(errs, fmt.Errorf("args: %s.CIDR %q is the whole internet", field, e.CIDR))
+		}
+
+		if e.Port < 1 || e.Port > 65535 {
+			errs = append(errs, fmt.Errorf("args: %s.Port %d is not a port from 1 to 65535", field, e.Port))
 		}
 	}
 

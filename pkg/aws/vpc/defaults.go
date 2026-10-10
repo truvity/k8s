@@ -108,6 +108,7 @@ func (b *builder) naclIngress() ec2.DefaultNetworkAclIngressArray {
 //	130: NTP (123/UDP) anywhere
 //	140-143: ephemeral TCP, split around 3389
 //	150-153: ephemeral UDP, split around 3389
+//	160-179: TCP to each DefaultNACLPeerEgress entry's CIDR and port
 func (b *builder) naclEgress() ec2.DefaultNetworkAclEgressArray {
 	a := b.args
 	v6 := a.ipv6()
@@ -146,6 +147,10 @@ func (b *builder) naclEgress() ec2.DefaultNetworkAclEgressArray {
 		if v6 {
 			rules = append(rules, egressRule(p.base+3, p.proto, "", "::/0", 3390, 65535))
 		}
+	}
+
+	for i, e := range a.DefaultNACLPeerEgress {
+		rules = append(rules, egressRule(160+i, "6", e.CIDR, "", e.Port, e.Port))
 	}
 
 	return rules
