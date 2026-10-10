@@ -860,6 +860,49 @@ func TestDefaultSecurityGroupAndNACL(t *testing.T) {
 	}
 }
 
+func TestDefaultNACLPeerEgressAppendsAfterTheExistingRules(t *testing.T) {
+	naclRules := func(a *vpc.Args) []string {
+		t.Helper()
+
+		res, err := run(t, a)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		nacl := find(t, res.regs, "aws:ec2/defaultNetworkAcl:DefaultNetworkAcl", "net-default-nacl")
+
+		var out []string
+
+		for _, dir := range []string{"ingress", "egress"} {
+			for _, rule := range nacl.inputs[resource.PropertyKey(dir)].ArrayValue() {
+				o := rule.ObjectValue()
+
+				cidr := o["ipv6CidrBlock"]
+				if c, ok := o["cidrBlock"]; ok {
+					cidr = c
+				}
+
+				out = append(out, fmt.Sprintf("%s %d %s %v %d-%d", dir, int(o["ruleNo"].NumberValue()), o["protocol"].StringValue(),
+					cidr.V, int(o["fromPort"].NumberValue()), int(o["toPort"].NumberValue())))
+			}
+		}
+
+		return out
+	}
+
+	before := naclRules(base())
+
+	a := base()
+	a.DefaultNACLPeerEgress = []vpc.PeerEgress{{CIDR: "10.9.0.0/16", Port: 22}, {CIDR: "10.9.0.0/16", Port: 80}}
+	after := naclRules(a)
+
+	want := append(slices.Clone(before), "egress 160 6 10.9.0.0/16 22-22", "egress 161 6 10.9.0.0/16 80-80")
+	// egress rules are the tail of the list, so the additions go last.
+	if fmt.Sprint(after) != fmt.Sprint(want) {
+		t.Errorf("rules\n%v\nwant the old rules unchanged, then\n%v", after, want[len(before):])
+	}
+}
+
 func TestKeepDefaults(t *testing.T) {
 	a := base()
 	a.KeepDefaultNACL, a.KeepDefaultSecurityGroup = true, true
@@ -1094,12 +1137,21 @@ func TestRefusals(t *testing.T) {
 		"too many HTTPS": {func(a *vpc.Args) {
 			a.DefaultNACLHTTPSIngress = []string{"10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16", "10.4.0.0/16", "10.5.0.0/16", "10.6.0.0/16", "10.7.0.0/16"}
 		}, "at most 6"},
-		"HTTPS CIDR bad":     {func(a *vpc.Args) { a.DefaultNACLHTTPSIngress = []string{"x"} }, "not an IPv4 CIDR"},
-		"retention negative": {func(a *vpc.Args) { a.FlowLogs.RetentionDays = -1 }, "negative"},
-		"traffic type":       {func(a *vpc.Args) { a.FlowLogs.TrafficType = "SOME" }, "TrafficType"},
-		"aggregation":        {func(a *vpc.Args) { a.FlowLogs.AggregationSeconds = 30 }, "AggregationSeconds"},
-		"empty name":         {func(a *vpc.Args) { a.Names = func(vpc.Child) string { return "" } }, "empty name"},
-		"repeated name":      {func(a *vpc.Args) { a.Names = func(vpc.Child) string { return "same" } }, "for both"},
+		"peer egress too many": {func(a *vpc.Args) {
+			for i := 0; i < 21; i++ {
+				a.DefaultNACLPeerEgress = append(a.DefaultNACLPeerEgress, vpc.PeerEgress{CIDR: "10.1.0.0/16", Port: 22})
+			}
+		}, "at most 20"},
+		"peer egress CIDR bad":   {func(a *vpc.Args) { a.DefaultNACLPeerEgress = []vpc.PeerEgress{{CIDR: "x", Port: 22}} }, "not an IPv4 CIDR"},
+		"peer egress internet":   {func(a *vpc.Args) { a.DefaultNACLPeerEgress = []vpc.PeerEgress{{CIDR: "0.0.0.0/0", Port: 22}} }, "whole internet"},
+		"peer egress port zero":  {func(a *vpc.Args) { a.DefaultNACLPeerEgress = []vpc.PeerEgress{{CIDR: "10.1.0.0/16"}} }, "not a port"},
+		"peer egress port large": {func(a *vpc.Args) { a.DefaultNACLPeerEgress = []vpc.PeerEgress{{CIDR: "10.1.0.0/16", Port: 65536}} }, "not a port"},
+		"HTTPS CIDR bad":         {func(a *vpc.Args) { a.DefaultNACLHTTPSIngress = []string{"x"} }, "not an IPv4 CIDR"},
+		"retention negative":     {func(a *vpc.Args) { a.FlowLogs.RetentionDays = -1 }, "negative"},
+		"traffic type":           {func(a *vpc.Args) { a.FlowLogs.TrafficType = "SOME" }, "TrafficType"},
+		"aggregation":            {func(a *vpc.Args) { a.FlowLogs.AggregationSeconds = 30 }, "AggregationSeconds"},
+		"empty name":             {func(a *vpc.Args) { a.Names = func(vpc.Child) string { return "" } }, "empty name"},
+		"repeated name":          {func(a *vpc.Args) { a.Names = func(vpc.Child) string { return "same" } }, "for both"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			res, err := run(t, base(), tc.mut)

@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/vpc`: `Args.DefaultNACLPeerEgress` (new, optional, at most twenty `PeerEgress{CIDR, Port}`) adds outbound TCP allowances to one port of one IPv4 CIDR, as rules 160 to 179 of the default network ACL, appended after every other rule. For low ports the ephemeral range does not cover (SSH, HTTP) on a peered VPC. Empty keeps the rule set as it was; 0.0.0.0/0 and ports outside 1 to 65535 are refused.
+
 ## v0.26.0
 
 - `charts/cluster-pki` (new, published from the next tag): the cluster's internal CA as cert-manager objects: a self-signed or offline-minted root, an optional intermediate, the ClusterIssuer workloads use; CA keys never rotated on renewal, objects protected. `docs/talos.md` gains the cluster PKI section (the bundle's CAs and their rotation, the workloads' CA).
