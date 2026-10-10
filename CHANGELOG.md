@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/vpc`: `Args.DefaultNACLPeerIngress` (new, optional, at most twenty `PeerIngress{CIDR, Port}`), the inbound twin of `DefaultNACLPeerEgress`: TCP allowances from one IPv4 CIDR to one port, as rules 160 to 179 of the default network ACL, appended after every other inbound rule. For low ports (SSH, HTTP) reached from a peered VPC. Empty keeps the rule set as it was; 0.0.0.0/0 and ports outside 1 to 65535 are refused.
+
 ## v0.27.0
 
 - `pkg/aws/vpc`: `Args.DefaultNACLPeerEgress` (new, optional, at most twenty `PeerEgress{CIDR, Port}`) adds outbound TCP allowances to one port of one IPv4 CIDR, as rules 160 to 179 of the default network ACL, appended after every other rule. For low ports the ephemeral range does not cover (SSH, HTTP) on a peered VPC. Empty keeps the rule set as it was; 0.0.0.0/0 and ports outside 1 to 65535 are refused.

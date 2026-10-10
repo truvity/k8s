@@ -51,6 +51,7 @@ func (b *builder) defaults() error {
 //	120-121: DNS (53/UDP) return traffic
 //	130: NTP (123/UDP) return traffic
 //	140-143: ephemeral UDP return traffic, split around 3389
+//	160-179: TCP from each DefaultNACLPeerIngress entry's CIDR to its port
 //
 // Everything else is denied by the ACL's implicit final rule. The ephemeral
 // ranges skip RDP (3389) so that no rule admits an admin port from anywhere.
@@ -95,6 +96,10 @@ func (b *builder) naclIngress() ec2.DefaultNetworkAclIngressArray {
 	rules = append(rules, ingressRule(142, "17", "0.0.0.0/0", "", 3390, 65535))
 	if v6 {
 		rules = append(rules, ingressRule(143, "17", "", "::/0", 3390, 65535))
+	}
+
+	for i, e := range a.DefaultNACLPeerIngress {
+		rules = append(rules, ingressRule(160+i, "6", e.CIDR, "", e.Port, e.Port))
 	}
 
 	return rules
