@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "eks-auto-node-pools values",
   "description": "An unknown key is an error, not a silent no-op: a typo in a pool's key would otherwise render a pool that quietly lacks the setting.",
   "type": "object",
@@ -9,102 +9,265 @@
       "type": "object",
       "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it."
     },
-    "clusterName": { "type": "string" },
-    "subnetSelectorTags": { "$ref": "#/definitions/stringMap" },
-    "podSubnetSelectorTags": { "$ref": "#/definitions/stringMap" },
-    "protect": { "type": "boolean" },
+    "clusterName": {
+      "type": "string"
+    },
+    "subnetSelectorTags": {
+      "$ref": "#/$defs/stringMap"
+    },
+    "podSubnetSelectorTags": {
+      "$ref": "#/$defs/stringMap"
+    },
+    "protect": {
+      "type": "boolean"
+    },
     "poolDefaults": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "expireAfter": { "$ref": "#/definitions/duration" },
-        "terminationGracePeriod": { "$ref": "#/definitions/duration" },
-        "consolidationPolicy": { "enum": ["WhenEmpty", "WhenEmptyOrUnderutilized"] },
-        "consolidateAfter": { "$ref": "#/definitions/duration" }
+        "expireAfter": {
+          "$ref": "#/$defs/duration"
+        },
+        "terminationGracePeriod": {
+          "$ref": "#/$defs/duration"
+        },
+        "consolidationPolicy": {
+          "enum": [
+            "WhenEmpty",
+            "WhenEmptyOrUnderutilized"
+          ]
+        },
+        "consolidateAfter": {
+          "$ref": "#/$defs/duration"
+        }
       }
     },
     "classDefaults": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "networkPolicy": { "enum": ["DefaultAllow", "DefaultDeny"] },
-        "networkPolicyEventLogs": { "enum": ["Enabled", "Disabled"] },
-        "snatPolicy": { "enum": ["Random", "Disabled"] }
+        "networkPolicy": {
+          "enum": [
+            "DefaultAllow",
+            "DefaultDeny"
+          ]
+        },
+        "networkPolicyEventLogs": {
+          "enum": [
+            "Enabled",
+            "Disabled"
+          ]
+        },
+        "snatPolicy": {
+          "enum": [
+            "Random",
+            "Disabled"
+          ]
+        }
       }
     },
     "nodePools": {
       "type": "array",
-      "items": { "$ref": "#/definitions/nodePool" }
+      "items": {
+        "$ref": "#/$defs/nodePool"
+      }
     },
     "nodeClasses": {
       "type": "array",
-      "items": { "$ref": "#/definitions/nodeClass" }
+      "items": {
+        "$ref": "#/$defs/nodeClass"
+      }
     }
   },
-  "definitions": {
-    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
-    "name": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$" },
-    "duration": { "type": "string", "pattern": "^([0-9]+(h|m|s))+$" },
-    "stringList": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^([0-9]+(h|m|s))+$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
+    },
     "nodePool": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "archs", "capacityTypes", "categories"],
+      "required": [
+        "name",
+        "archs",
+        "capacityTypes",
+        "categories"
+      ],
       "properties": {
-        "name": { "$ref": "#/definitions/name" },
-        "weight": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
         "archs": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "enum": ["arm64", "amd64"] }
+          "type": "array",
+          "items": {
+            "enum": [
+              "arm64",
+              "amd64"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
         },
         "capacityTypes": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "enum": ["on-demand", "spot"] }
+          "type": "array",
+          "items": {
+            "enum": [
+              "on-demand",
+              "spot"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
         },
         "categories": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "enum": ["c", "m", "r", "t"] }
+          "type": "array",
+          "items": {
+            "enum": [
+              "c",
+              "m",
+              "r",
+              "t"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
         },
-        "zones": { "$ref": "#/definitions/stringList" },
+        "zones": {
+          "$ref": "#/$defs/stringList"
+        },
         "taints": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["key", "effect"],
+            "required": [
+              "key",
+              "effect"
+            ],
             "properties": {
-              "key": { "type": "string", "minLength": 1 },
-              "value": { "type": "string" },
-              "effect": { "enum": ["NoSchedule", "PreferNoSchedule", "NoExecute"] }
+              "key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "string"
+              },
+              "effect": {
+                "enum": [
+                  "NoSchedule",
+                  "PreferNoSchedule",
+                  "NoExecute"
+                ]
+              }
             }
           }
         },
-        "cpuLimit": { "type": "integer", "minimum": 1 },
-        "maxInstanceCpu": { "type": "integer", "minimum": 2 },
-        "expireAfter": { "$ref": "#/definitions/duration" },
-        "terminationGracePeriod": { "$ref": "#/definitions/duration" },
-        "consolidationPolicy": { "enum": ["WhenEmpty", "WhenEmptyOrUnderutilized"] },
-        "fastEmptyReclaim": { "type": "boolean" },
-        "nodeClassName": { "$ref": "#/definitions/name" },
-        "nodeClass": { "$ref": "#/definitions/nodeClass" }
+        "cpuLimit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxInstanceCpu": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "expireAfter": {
+          "$ref": "#/$defs/duration"
+        },
+        "terminationGracePeriod": {
+          "$ref": "#/$defs/duration"
+        },
+        "consolidationPolicy": {
+          "enum": [
+            "WhenEmpty",
+            "WhenEmptyOrUnderutilized"
+          ]
+        },
+        "fastEmptyReclaim": {
+          "type": "boolean"
+        },
+        "nodeClassName": {
+          "$ref": "#/$defs/objectName"
+        },
+        "nodeClass": {
+          "$ref": "#/$defs/nodeClass"
+        }
       }
+    },
+    "objectName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
     },
     "nodeClass": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "role", "ephemeralStorage"],
+      "required": [
+        "name",
+        "role",
+        "ephemeralStorage"
+      ],
       "properties": {
-        "name": { "$ref": "#/definitions/name" },
-        "role": { "type": "string", "minLength": 1 },
-        "podSubnets": { "type": "boolean" },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "podSubnets": {
+          "type": "boolean"
+        },
         "ephemeralStorage": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["size", "iops", "throughput"],
+          "required": [
+            "size",
+            "iops",
+            "throughput"
+          ],
           "properties": {
-            "size": { "type": "string", "pattern": "^[0-9]+(Gi|Ti)$" },
-            "iops": { "type": "integer", "minimum": 3000, "maximum": 16000 },
-            "throughput": { "type": "integer", "minimum": 125, "maximum": 1000 }
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(Gi|Ti)$",
+              "not": {
+                "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+              }
+            },
+            "iops": {
+              "type": "integer",
+              "minimum": 3000,
+              "maximum": 16000
+            },
+            "throughput": {
+              "type": "integer",
+              "minimum": 125,
+              "maximum": 1000
+            }
           }
         }
       }

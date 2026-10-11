@@ -1,0 +1,129 @@
+/// An unknown key is an error, not a silent no-op: a typo in a pool's key would otherwise render a pool that quietly lacks the setting.
+@A.Chart { title = "eks-auto-node-pools values" }
+module k8s.contracts.EksAutoNodePools
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Helm's shared values. Unused by this chart; allowed so a parent chart can set it.
+global: Dynamic?
+
+clusterName: String?
+subnetSelectorTags: Common.StringMap?
+podSubnetSelectorTags: Common.StringMap?
+protect: Boolean?
+poolDefaults: PoolDefaults?
+classDefaults: ClassDefaults?
+nodePools: Listing<NodePool>?
+nodeClasses: Listing<NodeClass>?
+
+local const storageSizeRe = #"^[0-9]+(Gi|Ti)$"#
+
+/// A Karpenter duration: one or more `<digits><unit>` parts, units `h m s`.
+/// This is the vocabulary's `KarpenterDuration`, with the same expression.
+@A.Def { name = "duration" }
+typealias Duration = V.KarpenterDuration
+
+/// A volume size in Gi or Ti.
+@A.Pattern {
+  regex = storageSizeRe
+  valid { "80Gi"; "1Ti" }
+  invalid { ""; "80"; "1.5Gi"; "80Mi" }
+}
+typealias StorageSize = String(contains(Regex(storageSizeRe)))
+
+typealias ConsolidationPolicy = "WhenEmpty" | "WhenEmptyOrUnderutilized"
+
+typealias Arch = "arm64" | "amd64"
+
+typealias CapacityType = "on-demand" | "spot"
+
+typealias Category = "c" | "m" | "r" | "t"
+
+typealias TaintEffect = "NoSchedule" | "PreferNoSchedule" | "NoExecute"
+
+typealias NetworkPolicy = "DefaultAllow" | "DefaultDeny"
+
+typealias EventLogs = "Enabled" | "Disabled"
+
+typealias SnatPolicy = "Random" | "Disabled"
+
+/// A non-empty set of strings.
+@A.Def { name = "stringList" }
+@A.Items { min = 1; unique = true }
+typealias StringList = Listing<V.NonEmptyString>
+
+class PoolDefaults {
+  expireAfter: Duration?
+  terminationGracePeriod: Duration?
+  consolidationPolicy: ConsolidationPolicy?
+  consolidateAfter: Duration?
+}
+
+class ClassDefaults {
+  networkPolicy: NetworkPolicy?
+  networkPolicyEventLogs: EventLogs?
+  snatPolicy: SnatPolicy?
+}
+
+@A.Def { name = "nodePool" }
+class NodePool {
+  name: Common.ObjectName
+
+  @A.Range { min = 1; max = 100 }
+  weight: Int?
+
+  @A.Items { min = 1; unique = true }
+  @A.Required
+  archs: Listing<Arch>?
+
+  @A.Items { min = 1; unique = true }
+  @A.Required
+  capacityTypes: Listing<CapacityType>?
+
+  @A.Items { min = 1; unique = true }
+  @A.Required
+  categories: Listing<Category>?
+
+  zones: StringList?
+  taints: Listing<Taint>?
+
+  @A.Range { min = 1 }
+  cpuLimit: Int?
+
+  @A.Range { min = 2 }
+  maxInstanceCpu: Int?
+
+  expireAfter: Duration?
+  terminationGracePeriod: Duration?
+  consolidationPolicy: ConsolidationPolicy?
+  fastEmptyReclaim: Boolean?
+  nodeClassName: Common.ObjectName?
+  nodeClass: NodeClass?
+}
+
+class Taint {
+  key: V.NonEmptyString
+  value: String?
+  effect: TaintEffect
+}
+
+@A.Def { name = "nodeClass" }
+class NodeClass {
+  name: Common.ObjectName
+  role: V.NonEmptyString
+  podSubnets: Boolean?
+  ephemeralStorage: EphemeralStorage
+}
+
+class EphemeralStorage {
+  size: StorageSize
+
+  @A.Range { min = 3000; max = 16000 }
+  iops: Int
+
+  @A.Range { min = 125; max = 1000 }
+  throughput: Int
+}

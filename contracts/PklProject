@@ -1,0 +1,19 @@
+amends "pkl:Project"
+
+dependencies {
+  ["vocab"] {
+    uri =
+      "package://github.com/truvity/pkl-contracts/releases/download/v0.7.0/contracts.vocab@0.7.0"
+  }
+  ["model"] {
+    uri =
+      "package://github.com/truvity/pkl-contracts/releases/download/v0.7.0/contracts.model@0.7.0"
+  }
+  ["jsonschema"] {
+    uri =
+      "package://github.com/truvity/pkl-contracts/releases/download/v0.7.0/contracts.jsonschema@0.7.0"
+  }
+  ["helm"] {
+    uri = "package://github.com/truvity/pkl-contracts/releases/download/v0.7.0/contracts.helm@0.7.0"
+  }
+}

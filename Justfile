@@ -79,6 +79,39 @@ crds:
 crds-check: crds
     git diff --exit-code -- 'charts/*/templates/crds.yaml' 'charts/*/Chart.yaml'
 
+# The value contracts (contracts/, Pkl) are the single source of the
+# values.schema.json of the charts listed in contract-charts: `just contract`
+# regenerates them, and `contract-check` (CI) regenerates into a temporary
+# directory and fails when a committed schema differs, or a contract is not
+# formatted. Charts not listed keep a hand-written schema (the CRD mirror
+# charts: their empty schema belongs to the upstream mirror; newer charts not
+# yet moved: docs/contracts.md).
+# Pkl comes from hack/pkl (a pinned wrapper, until nixpkgs ships Pkl 0.32).
+contract-charts := "cilium-config cluster-baseline cluster-foundation cluster-network-policies eks-auto-node-pools guardrails-projects tenancy"
+
+contract:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for chart in {{ contract-charts }}; do
+      hack/pkl run --project-dir contracts contracts/Generate.pkl -- --dir "charts/$chart" "contracts/$chart/Values.pkl" >/dev/null
+    done
+    echo "contract: wrote the values.schema.json of {{ contract-charts }}"
+
+contract-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    hack/pkl format --diff-name-only contracts
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    for chart in {{ contract-charts }}; do
+      hack/pkl run --project-dir contracts contracts/Generate.pkl -- --dir "$tmp/$chart" "contracts/$chart/Values.pkl" >/dev/null
+      if ! diff -u "charts/$chart/values.schema.json" "$tmp/$chart/values.schema.json"; then
+        echo "$chart: values.schema.json is not what contracts/$chart/Values.pkl generates (run just contract)" >&2
+        exit 1
+      fi
+    done
+    echo "contract-check: the values.schema.json of {{ contract-charts }} are what the contracts generate"
+
 # Lint the CRD mirror charts: they take no values, so any key must be refused
 # (values.schema.json; one negative fixture per chart under tests/invalid/), and
 # the render must contain CRDs only.
@@ -149,4 +182,4 @@ clean:
     rm -rf bin/ dist/ coverage.out
 
 # Everything CI runs on a pull request.
-check: build test lint crd-charts-lint crds-check leak-canary
+check: build test lint contract-check crd-charts-lint crds-check leak-canary

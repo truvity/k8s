@@ -1,0 +1,337 @@
+/// An unknown key is an error, not a silent no-op: a typo in `protect` or in a feature name would otherwise leave a tenant unprotected or without a policy and the rollout would look finished.
+@A.Chart { title = "tenancy values" }
+module k8s.contracts.Tenancy
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Helm's shared values. Unused by this chart; allowed so a parent chart can set it.
+global: Dynamic?
+
+protect: Protect?
+helmKeep: Boolean?
+syncWaves: SyncWaves?
+
+/// The Pod Security labels of the Namespaces this chart renders: required once a tenant asks for one.
+podSecurity: PodSecurity?
+
+profiles: Mapping<V.DnsLabel, Profile>?
+networkPolicy: NetworkPolicy?
+
+/// Tenants by namespace name. The name must be a DNS label.
+tenants: Mapping<V.DnsLabel, Tenant>?
+
+clusterRoles: Mapping<Common.ObjectName, ClusterRole>?
+nats: Nats?
+podIdentities: PodIdentities?
+
+local const versionRe = #"^(|latest|v[0-9]+\.[0-9]+)$"#
+local const policyNameRe = #"^([a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?)?$"#
+local const natsRe = #"^(nats|tls)://.+"#
+local const cidrRe = #"^[0-9a-fA-F.:]+/[0-9]{1,3}$"#
+local const quantityRe = #"^[0-9]+(\.[0-9]+)?(m|k|Ki|Mi|Gi|Ti|Pi|Ei|M|G|T|P|E)?$"#
+local const roleArnRe = #"^arn:[a-z-]+:iam::[^:]*:role/.+$"#
+
+@A.Pattern {
+  regex = versionRe
+  valid { ""; "latest"; "v1.34" }
+  invalid { "v1"; "1.34"; "Latest" }
+}
+typealias Version = String(contains(Regex(versionRe)))
+
+@A.Pattern {
+  regex = policyNameRe
+  valid { ""; "a"; "a.b-c" }
+  invalid { "-a"; "A"; "a-" }
+}
+typealias PolicyName = String(contains(Regex(policyNameRe)))
+
+@A.Pattern {
+  regex = natsRe
+  valid { "nats://h:4222"; "tls://h" }
+  invalid { ""; "http://h"; "nats:/h" }
+}
+typealias NatsUrl = String(contains(Regex(natsRe)))
+
+@A.Pattern {
+  regex = cidrRe
+  valid { "10.0.0.0/8"; "fd00::/8" }
+  invalid { ""; "10.0.0.0"; "x/8" }
+}
+typealias Cidr = String(contains(Regex(cidrRe)))
+
+@A.Pattern {
+  regex = quantityRe
+  valid { "500m"; "2Gi"; "1"; "1.5" }
+  invalid { ""; "Gi"; "-1" }
+}
+typealias Quantity = String(contains(Regex(quantityRe)))
+
+@A.Pattern {
+  regex = roleArnRe
+  valid { "arn:p:iam::acct:role/x" }
+  invalid { ""; "arn:p:iam::acct:user/x"; "arn:p:iam::acct:role/" }
+}
+typealias RoleArn = String(contains(Regex(roleArnRe)))
+
+/// true: Prune=false,Delete=false. "prune-only": Prune=false. false: no sync-options annotation.
+typealias Protect = Boolean | "prune-only"
+
+typealias PsaLevel = "privileged" | "baseline" | "restricted"
+
+@A.Items { min = 1; unique = true }
+typealias PsaModes = Listing<Common.Mode>
+
+@A.Items { min = 1 }
+typealias Ports = Listing<PortSpec>
+
+typealias QuantityMap = Mapping<String, Quantity>
+
+class SyncWaves {
+  @A.Nullable
+  clusterRoles: Int?
+
+  @A.Nullable
+  networkPolicy: Int?
+
+  @A.Nullable
+  quota: Int?
+
+  @A.Nullable
+  rbac: Int?
+
+  @A.Nullable
+  nats: Int?
+
+  @A.Nullable
+  podIdentities: Int?
+
+  @A.Nullable
+  namespaces: Int?
+}
+
+class PodSecurity {
+  level: Common.OptionalLevel?
+  version: Version?
+
+  @A.Items { unique = true }
+  modes: Listing<Common.Mode>?
+
+  /// Says on purpose that the default modes have no enforce.
+  unenforced: Boolean?
+
+  reasonAnnotation: String?
+}
+
+/// Labels per feature; `default` for a feature that has no map of its own.
+class LabelsByFeature {
+  `default`: Common.StringMap?
+  networkPolicy: Common.StringMap?
+  quota: Common.StringMap?
+  rbac: Common.StringMap?
+  nats: Common.StringMap?
+  podIdentities: Common.StringMap?
+  namespace: Common.StringMap?
+}
+
+/// The Namespace of a tenant. Its presence on a profile (or a tenant) is what asks for one.
+class Namespace {
+  level: PsaLevel?
+  reason: V.NonEmptyString?
+  modes: PsaModes?
+
+  /// Says on purpose that this namespace's modes have no enforce (a warn-first rollout).
+  unenforced: Boolean?
+
+  @A.Nullable
+  syncWave: Int?
+
+  protect: Protect?
+  annotations: Common.StringMap?
+}
+
+class Profile {
+  labels: LabelsByFeature?
+  networkPolicy: Boolean?
+  protect: ProfileProtect?
+  namespace: Namespace?
+  quota: ProfileQuota?
+  limitRange: ProfileLimitRange?
+}
+
+class ProfileProtect {
+  networkPolicy: Protect?
+  quota: Protect?
+  rbac: Protect?
+  nats: Protect?
+  podIdentities: Protect?
+  namespace: Protect?
+}
+
+class ProfileQuota {
+  name: Common.ObjectName
+
+  @A.Properties { min = 1 }
+  @A.Required
+  hard: QuantityMap?
+}
+
+class ProfileLimitRange {
+  name: Common.ObjectName
+
+  @A.Items { min = 1 }
+  @A.Required
+  limits: Listing<Limit>?
+}
+
+class Limit {
+  type: "Container" | "Pod" | "PersistentVolumeClaim"
+  `default`: QuantityMap?
+  defaultRequest: QuantityMap?
+  min: QuantityMap?
+  max: QuantityMap?
+  maxLimitRequestRatio: QuantityMap?
+}
+
+class NetworkPolicy {
+  name: PolicyName?
+  intraNamespace: Boolean?
+  ingress: Listing<IngressRule>?
+  egress: Listing<EgressRule>?
+}
+
+class Peer {
+  podSelector: Dynamic?
+  namespaceSelector: Dynamic?
+  ipBlock: IpBlock?
+}
+
+class IpBlock {
+  cidr: Cidr
+  except: Listing<Cidr>?
+}
+
+class PortSpec {
+  port: Int | String
+  endPort: Int?
+  protocol: ("TCP" | "UDP" | "SCTP")?
+}
+
+class IngressRule {
+  description: String?
+
+  @A.Items { min = 1; unique = true }
+  profiles: Listing<V.DnsLabel>?
+
+  @A.Items { min = 1 }
+  @A.Required
+  from: Listing<Peer>?
+
+  ports: Ports?
+}
+
+class EgressRule {
+  description: String?
+
+  @A.Items { min = 1; unique = true }
+  profiles: Listing<V.DnsLabel>?
+
+  @A.Items { min = 1 }
+  @A.Required
+  to: Listing<Peer>?
+
+  ports: Ports?
+}
+
+class PolicyRule {
+  @A.Required
+  apiGroups: Listing<String>?
+
+  @A.Items { min = 1 }
+  @A.Required
+  resources: Listing<String>?
+
+  resourceNames: Listing<String>?
+
+  @A.Items { min = 1 }
+  @A.Required
+  verbs: Listing<String>?
+}
+
+class Subject {
+  kind: "Group" | "User" | "ServiceAccount"
+  name: V.NonEmptyString
+  namespace: V.DnsLabel?
+}
+
+class Role {
+  @A.Items { min = 1 }
+  @A.Required
+  rules: Listing<PolicyRule>?
+
+  labels: Common.StringMap?
+  protect: Protect?
+}
+
+class RoleBinding {
+  clusterRole: Common.ObjectName?
+  role: Common.ObjectName?
+
+  @A.Items { min = 1 }
+  @A.Required
+  subjects: Listing<Subject>?
+
+  labels: Common.StringMap?
+  protect: Protect?
+}
+
+class Tenant {
+  profile: V.DnsLabel
+  labels: LabelsByFeature?
+
+  /// false: the namespace is someone else's; a map: this tenant's Namespace, merged over the profile's.
+  namespace: (V.FalseOnly | Namespace)?
+
+  nats: Boolean?
+
+  @A.Items { unique = true }
+  podIdentities: Listing<Common.ObjectName>?
+
+  roles: Mapping<Common.ObjectName, Role>?
+  roleBindings: Mapping<Common.ObjectName, RoleBinding>?
+}
+
+class ClusterRole {
+  @A.Items { min = 1 }
+  @A.Required
+  rules: Listing<PolicyRule>?
+
+  @A.Items { unique = true }
+  aggregateTo: Listing<"admin" | "edit" | "view">?
+
+  labels: Common.StringMap?
+
+  @A.Nullable
+  syncWave: Int?
+
+  protect: Protect?
+}
+
+class Nats {
+  servers: Listing<NatsUrl>?
+  serviceAccount: Common.ObjectName?
+  tokenSecret: Common.ObjectName?
+  tokenKey: V.NonEmptyString?
+}
+
+class PodIdentities {
+  clusterName: String?
+  associations: Mapping<Common.ObjectName, Association>?
+}
+
+class Association {
+  roleARN: RoleArn
+  associationNamespace: V.DnsLabel
+}

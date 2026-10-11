@@ -1,0 +1,187 @@
+/// An unknown key is an error, not a silent no-op: a misspelt selector or block would leave Services without an address and the rollout would look finished.
+@A.Chart { title = "cilium-config values" }
+module k8s.contracts.CiliumConfig
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Helm's shared values. Unused by this chart; allowed so a parent chart can set it.
+global: Dynamic?
+
+protect: Boolean?
+helmKeep: Boolean?
+loadBalancerIPPools: Mapping<Common.ObjectName, Pool>?
+l2Announcements: L2Announcements?
+bgp: Bgp?
+
+local const cidrRe = #"^[0-9a-fA-F:.]+/[0-9]{1,3}$"#
+local const addressRe = #"^[0-9a-fA-F:.]+$"#
+
+@A.Pattern {
+  regex = cidrRe
+  valid { "10.0.0.0/24"; "fd00::/64" }
+  invalid { ""; "10.0.0.0"; "10.0.0.0/"; "x/24" }
+}
+typealias Cidr = String(contains(Regex(cidrRe)))
+
+@A.Pattern {
+  regex = addressRe
+  valid { "10.0.0.1"; "fd00::1" }
+  invalid { ""; "10.0.0.1/24"; "host" }
+}
+typealias Address = String(contains(Regex(addressRe)))
+
+class L2Announcements {
+  enabled: Boolean?
+  policies: Mapping<Common.ObjectName, L2Policy>?
+}
+
+class Bgp {
+  enabled: Boolean?
+  clusterConfigs: Mapping<Common.ObjectName, BgpClusterConfig>?
+  peerConfigs: Mapping<Common.ObjectName, BgpObject>?
+  advertisements: Mapping<Common.ObjectName, BgpAdvertisement>?
+}
+
+class LabelSelector {
+  matchLabels: Common.StringMap?
+  matchExpressions: Listing<MatchExpression>?
+}
+
+class MatchExpression {
+  key: V.NonEmptyString
+  operator: "In" | "NotIn" | "Exists" | "DoesNotExist"
+  values: Listing<String>?
+}
+
+/// One block of a pool: a CIDR, or a start and a stop; not both.
+class CidrBlock {
+  cidr: Cidr
+}
+
+class RangeBlock {
+  start: Address
+  stop: Address
+}
+
+class Pool {
+  @A.Items { min = 1 }
+  @A.Required
+  blocks: Listing<CidrBlock | RangeBlock>?
+
+  serviceSelector: LabelSelector?
+  allowFirstLastIPs: Boolean?
+  disabled: Boolean?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+class L2Policy {
+  interfaces: Listing<V.NonEmptyString>?
+  nodeSelector: LabelSelector?
+  serviceSelector: LabelSelector?
+  loadBalancerIPs: Boolean?
+  externalIPs: Boolean?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+/// An object whose spec the chart renders verbatim.
+class BgpObject {
+  @A.Required
+  spec: Dynamic?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+class BgpClusterConfig {
+  spec: BgpClusterSpec
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+/// The spec of a CiliumBGPClusterConfig: the fields the chart needs are typed, the
+/// rest is the CRD's.
+@A.Open
+class BgpClusterSpec {
+  nodeSelector: LabelSelector?
+
+  @A.Items { min = 1 }
+  @A.Required
+  bgpInstances: Listing<BgpInstance>?
+}
+
+@A.Open
+class BgpInstance {
+  name: V.NonEmptyString
+
+  @A.Range { min = 1; max = 4294967295 }
+  localASN: Int
+
+  peers: Listing<BgpPeer>?
+}
+
+@A.Open
+class BgpPeer {
+  name: V.NonEmptyString
+
+  @A.Range { min = 0; max = 4294967295 }
+  peerASN: Int?
+
+  peerAddress: String?
+  peerConfigRef: PeerConfigRef?
+}
+
+@A.Open
+class PeerConfigRef {
+  name: String
+}
+
+class BgpAdvertisement {
+  spec: BgpAdvertisementSpec
+
+  @A.Properties { min = 1 }
+  @A.Required
+  labels: Common.StringMap?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+@A.Open
+class BgpAdvertisementSpec {
+  @A.Items { min = 1 }
+  @A.Required
+  advertisements: Listing<Any>?
+}

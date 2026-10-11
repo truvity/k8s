@@ -1,0 +1,204 @@
+/// An unknown key is an error, not a silent no-op.
+@A.Chart { title = "guardrails-projects values" }
+module k8s.contracts.GuardrailsProjects
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+global: Dynamic?
+helmKeep: Boolean?
+podSecurity: PodSecurity?
+networkPolicy: NetworkPolicy?
+quotas: Mapping<ObjectName, Quota>?
+quotaName: ObjectName?
+limitRangeName: ObjectName?
+clusterRoles: Mapping<ObjectName, ClusterRole>?
+ackRoleSelectors: AckRoleSelectors?
+projects: Listing<Project>?
+podIdentities: PodIdentities?
+
+local const objectNameRe = #"^[a-z0-9]([-a-z0-9.:]{0,251}[a-z0-9])?$"#
+local const versionRe = #"^(|latest|v1\.[0-9]+)$"#
+local const namePrefixRe = #"^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?-?$"#
+local const roleArnRe = #"^arn:[a-z-]+:iam::[^:]*:role/.+$"#
+
+/// The name of a rendered object. Unlike the other charts' object name it admits
+/// a colon (RBAC names such as `system:...` are valid Kubernetes names).
+@A.Def { name = "objectName" }
+@A.Pattern {
+  regex = objectNameRe
+  valid { "a"; "a.b-c"; "a:b"; "a1" }
+  invalid { ""; "-a"; "A"; "a_b"; "a-"; ":a" }
+}
+typealias ObjectName = String(contains(Regex(objectNameRe)))
+
+/// A Kubernetes minor such as `v1.34`, `latest`, or empty (no version label).
+@A.Pattern {
+  regex = versionRe
+  valid { ""; "latest"; "v1.34" }
+  invalid { "v2.1"; "v1"; "1.34"; "Latest" }
+}
+typealias Version = String(contains(Regex(versionRe)))
+
+@A.Pattern {
+  regex = namePrefixRe
+  valid { ""; "ack-"; "ack"; "a.b-" }
+  invalid { "-"; "A"; "a--" }
+}
+typealias NamePrefix = String(contains(Regex(namePrefixRe)))
+
+/// The ARN of an IAM role.
+@A.Pattern {
+  regex = roleArnRe
+  valid { "arn:p:iam::acct:role/x"; "arn:p:iam::acct:role/a/b" }
+  invalid { ""; "arn:p:iam::acct:user/x"; "arn:p:iam::a:b:role/x"; "arn:p:iam::acct:role/" }
+}
+typealias RoleArn = String(contains(Regex(roleArnRe)))
+
+/// A label value: at most 63 characters.
+@A.Length { max = 63 }
+typealias LabelValue = String(length <= 63)
+
+@A.Def { name = "level" }
+typealias Level = "privileged" | "baseline" | "restricted"
+
+typealias Mode = "warn" | "audit" | "enforce"
+
+@A.Def { name = "modes" }
+@A.Items { min = 1; unique = true }
+typealias Modes = Listing<Mode>
+
+typealias AggregateTo = "admin" | "edit" | "view"
+
+typealias SubjectKind = "User" | "Group" | "ServiceAccount"
+
+typealias LimitKey = "default" | "defaultRequest" | "min" | "max"
+
+/// A Kubernetes quantity: a non-empty string (`500m`, `2Gi`) or a number.
+typealias Quantity = V.NonEmptyString | Number
+
+/// Resource quantities by resource name; at least one.
+@A.Def { name = "quantityMap" }
+@A.Properties { min = 1 }
+typealias QuantityMap = Mapping<String, Quantity>
+
+/// The rules of a Role or ClusterRole.
+@A.Def { name = "policyRules" }
+@A.Items { min = 1 }
+typealias PolicyRules = Listing<PolicyRule>
+
+class PodSecurity {
+  @A.Required
+  level: Level?
+
+  version: Version?
+
+  @A.Required
+  modes: Modes?
+
+  reasonAnnotation: V.NonEmptyString?
+}
+
+class NetworkPolicy {
+  name: ObjectName?
+  intraNamespace: Boolean?
+  ingress: Listing<Rule>?
+  egress: Listing<Rule>?
+}
+
+@A.Def { name = "rule" }
+class Rule {
+  description: V.NonEmptyString
+
+  @A.Items { unique = true }
+  kinds: Listing<V.NonEmptyString>?
+
+  from: Listing<Any>?
+  to: Listing<Any>?
+  ports: Listing<Any>?
+}
+
+class Quota {
+  @A.Required
+  hard: QuantityMap?
+
+  // At least one of the four LimitRange default kinds.
+  @A.Properties { min = 1 }
+  limitRange: Mapping<LimitKey, QuantityMap>?
+}
+
+class ClusterRole {
+  @A.Items { unique = true }
+  aggregateTo: Listing<AggregateTo>?
+
+  @A.Required
+  rules: PolicyRules?
+}
+
+class PolicyRule {
+  apiGroups: Listing<String>?
+  resources: Listing<String>?
+  resourceNames: Listing<String>?
+  nonResourceURLs: Listing<String>?
+
+  @A.Items { min = 1 }
+  @A.Required
+  verbs: Listing<String>?
+}
+
+@A.Def { name = "subject" }
+class Subject {
+  kind: SubjectKind
+  name: V.NonEmptyString
+  namespace: V.DnsLabel?
+}
+
+class AckRoleSelectors {
+  namePrefix: NamePrefix?
+}
+
+class Project {
+  name: V.DnsLabel
+  kind: V.NonEmptyString
+  labels: Mapping<String, LabelValue>?
+  podSecurity: ProjectPodSecurity?
+  quota: ObjectName?
+  deletable: Boolean?
+  roles: Mapping<ObjectName, ProjectRole>?
+  roleBindings: Listing<RoleBinding>?
+  ackRoleARN: RoleArn?
+
+  @A.Items { unique = true }
+  podIdentities: Listing<ObjectName>?
+}
+
+class ProjectPodSecurity {
+  level: Level?
+  modes: Modes?
+  reason: V.NonEmptyString?
+}
+
+class ProjectRole {
+  @A.Required
+  rules: PolicyRules?
+}
+
+class RoleBinding {
+  name: ObjectName
+  clusterRole: V.NonEmptyString?
+  role: ObjectName?
+
+  @A.Items { min = 1 }
+  @A.Required
+  subjects: Listing<Subject>?
+}
+
+class PodIdentities {
+  clusterName: String?
+  associations: Mapping<ObjectName, Association>?
+}
+
+class Association {
+  roleARN: RoleArn
+  associationNamespace: V.DnsLabel
+}

@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cluster-baseline values",
   "description": "An unknown key is an error, not a silent no-op: a typo in a mode name would otherwise leave a namespace unlabelled and the rollout would look finished.",
   "type": "object",
@@ -13,132 +13,729 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "level": { "$ref": "#/definitions/level" },
-        "version": { "$ref": "#/definitions/version" },
+        "level": {
+          "enum": [
+            "privileged",
+            "baseline",
+            "restricted"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(|latest|v1\\.[0-9]+)$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        },
         "modes": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "warn": { "$ref": "#/definitions/mode" },
-            "audit": { "$ref": "#/definitions/mode" },
-            "enforce": { "$ref": "#/definitions/mode" }
+            "warn": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "level": {
+                  "enum": [
+                    "",
+                    "privileged",
+                    "baseline",
+                    "restricted"
+                  ]
+                },
+                "version": {
+                  "type": "string",
+                  "pattern": "^(|latest|v1\\.[0-9]+)$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                }
+              }
+            },
+            "audit": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "level": {
+                  "enum": [
+                    "",
+                    "privileged",
+                    "baseline",
+                    "restricted"
+                  ]
+                },
+                "version": {
+                  "type": "string",
+                  "pattern": "^(|latest|v1\\.[0-9]+)$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                }
+              }
+            },
+            "enforce": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "level": {
+                  "enum": [
+                    "",
+                    "privileged",
+                    "baseline",
+                    "restricted"
+                  ]
+                },
+                "version": {
+                  "type": "string",
+                  "pattern": "^(|latest|v1\\.[0-9]+)$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                }
+              }
+            }
           }
         },
         "namespaces": {
           "type": "object",
-          "description": "Namespaces by name. The name must be a DNS label.",
-          "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
-          "additionalProperties": { "$ref": "#/definitions/namespace" }
+          "propertyNames": {
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "labels": {
+                "type": "object",
+                "propertyNames": {
+                  "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 63
+                },
+                "description": "Labels the Namespace object carries beside the Pod Security ones (which the chart refuses here)."
+              },
+              "level": {
+                "enum": [
+                  "privileged",
+                  "baseline",
+                  "restricted"
+                ]
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^(|latest|v1\\.[0-9]+)$",
+                "not": {
+                  "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                }
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "modes": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "warn": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "description": "false: this namespace carries no label of this kind (needs a reason when the mode is on)."
+                      },
+                      "level": {
+                        "enum": [
+                          "privileged",
+                          "baseline",
+                          "restricted"
+                        ]
+                      },
+                      "version": {
+                        "type": "string",
+                        "pattern": "^(|latest|v1\\.[0-9]+)$",
+                        "not": {
+                          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                        }
+                      }
+                    }
+                  },
+                  "audit": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "description": "false: this namespace carries no label of this kind (needs a reason when the mode is on)."
+                      },
+                      "level": {
+                        "enum": [
+                          "privileged",
+                          "baseline",
+                          "restricted"
+                        ]
+                      },
+                      "version": {
+                        "type": "string",
+                        "pattern": "^(|latest|v1\\.[0-9]+)$",
+                        "not": {
+                          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                        }
+                      }
+                    }
+                  },
+                  "enforce": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "description": "false: this namespace carries no label of this kind (needs a reason when the mode is on)."
+                      },
+                      "level": {
+                        "enum": [
+                          "privileged",
+                          "baseline",
+                          "restricted"
+                        ]
+                      },
+                      "version": {
+                        "type": "string",
+                        "pattern": "^(|latest|v1\\.[0-9]+)$",
+                        "not": {
+                          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "description": "Namespaces by name. The name must be a DNS label."
         }
       },
-      "$comment": "A namespace whose level departs from the default level needs a reason, so the exemption can be reviewed and retired. The template refuses the departures a schema cannot see: a mode switched off, a per-mode level.",
       "allOf": [
         {
-          "if": { "properties": { "level": { "const": "privileged" } }, "required": ["level"] },
-          "then": { "properties": { "namespaces": { "additionalProperties": {
-            "if": { "properties": { "level": { "not": { "const": "privileged" } } }, "required": ["level"] },
-            "then": { "required": ["reason"] }
-          } } } }
-        },
-        {
-          "if": { "properties": { "level": { "const": "baseline" } }, "required": ["level"] },
-          "then": { "properties": { "namespaces": { "additionalProperties": {
-            "if": { "properties": { "level": { "not": { "const": "baseline" } } }, "required": ["level"] },
-            "then": { "required": ["reason"] }
-          } } } }
-        },
-        {
-          "if": { "properties": { "level": { "const": "restricted" } }, "required": ["level"] },
-          "then": { "properties": { "namespaces": { "additionalProperties": {
-            "if": { "properties": { "level": { "not": { "const": "restricted" } } }, "required": ["level"] },
-            "then": { "required": ["reason"] }
-          } } } }
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "level": {
+                    "const": "privileged"
+                  }
+                },
+                "required": [
+                  "level"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "namespaces": {
+                    "additionalProperties": {
+                      "if": {
+                        "properties": {
+                          "level": {
+                            "not": {
+                              "const": "privileged"
+                            }
+                          }
+                        },
+                        "required": [
+                          "level"
+                        ]
+                      },
+                      "then": {
+                        "required": [
+                          "reason"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "level": {
+                    "const": "baseline"
+                  }
+                },
+                "required": [
+                  "level"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "namespaces": {
+                    "additionalProperties": {
+                      "if": {
+                        "properties": {
+                          "level": {
+                            "not": {
+                              "const": "baseline"
+                            }
+                          }
+                        },
+                        "required": [
+                          "level"
+                        ]
+                      },
+                      "then": {
+                        "required": [
+                          "reason"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "level": {
+                    "const": "restricted"
+                  }
+                },
+                "required": [
+                  "level"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "namespaces": {
+                    "additionalProperties": {
+                      "if": {
+                        "properties": {
+                          "level": {
+                            "not": {
+                              "const": "restricted"
+                            }
+                          }
+                        },
+                        "required": [
+                          "level"
+                        ]
+                      },
+                      "then": {
+                        "required": [
+                          "reason"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
     },
-    "protect": { "type": "boolean" },
-    "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
+    "protect": {
+      "type": "boolean"
+    },
+    "reasonAnnotation": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
+    },
     "guard": {
       "type": "object",
-      "description": "A ValidatingAdmissionPolicy and its binding that warn when a Namespace is created, or updated to drop its labels, with no Pod Security label.",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "name": { "$ref": "#/definitions/objectName" },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
         "validationActions": {
           "type": "array",
+          "items": {
+            "enum": [
+              "Warn",
+              "Audit",
+              "Deny"
+            ]
+          },
           "minItems": 1,
-          "uniqueItems": true,
-          "items": { "enum": ["Warn", "Audit", "Deny"] }
+          "uniqueItems": true
         },
-        "failurePolicy": { "enum": ["Ignore", "Fail"] },
+        "failurePolicy": {
+          "enum": [
+            "Ignore",
+            "Fail"
+          ]
+        },
         "satisfiedBy": {
           "type": "array",
+          "items": {
+            "enum": [
+              "warn",
+              "audit",
+              "enforce"
+            ]
+          },
           "minItems": 1,
-          "uniqueItems": true,
-          "items": { "enum": ["warn", "audit", "enforce"] }
+          "uniqueItems": true
         },
         "excludeNamespaces": {
           "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/definitions/namespaceName" }
+          "items": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
         },
         "excludeNamePrefixes": {
           "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,61})?$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61})?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
         },
-        "namespaceSelector": { "$ref": "#/definitions/labelSelector" }
-      }
+        "namespaceSelector": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "matchLabels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "matchExpressions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "operator"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "operator": {
+                    "enum": [
+                      "In",
+                      "NotIn",
+                      "Exists",
+                      "DoesNotExist"
+                    ]
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "A ValidatingAdmissionPolicy and its binding that warn when a Namespace is created, or updated to drop its labels, with no Pod Security label."
     },
     "labelGuard": {
       "type": "object",
-      "description": "A ValidatingAdmissionPolicy and its binding that let only the named principals set, change or remove the protected namespace labels.",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "name": { "$ref": "#/definitions/objectName" },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
         "validationActions": {
           "type": "array",
+          "items": {
+            "enum": [
+              "Warn",
+              "Audit",
+              "Deny"
+            ]
+          },
           "minItems": 1,
-          "uniqueItems": true,
-          "items": { "enum": ["Warn", "Audit", "Deny"] }
+          "uniqueItems": true
         },
-        "failurePolicy": { "enum": ["Ignore", "Fail"] },
+        "failurePolicy": {
+          "enum": [
+            "Ignore",
+            "Fail"
+          ]
+        },
         "protectedPrefixes": {
           "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?/$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?/$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
         },
         "protectedDomains": {
           "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
         },
-        "allowedUsers": { "$ref": "#/definitions/principalList" },
-        "allowedUserPrefixes": { "$ref": "#/definitions/principalList" },
-        "allowedGroups": { "$ref": "#/definitions/principalList" }
-      }
+        "allowedUsers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^'\"\\\\]+$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
+        },
+        "allowedUserPrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^'\"\\\\]+$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
+        },
+        "allowedGroups": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^'\"\\\\]+$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "uniqueItems": true
+        }
+      },
+      "description": "A ValidatingAdmissionPolicy and its binding that let only the named principals set, change or remove the protected namespace labels."
     },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "name": { "$ref": "#/definitions/objectName" },
-        "protect": { "type": "boolean" },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
+        "protect": {
+          "type": "boolean"
+        },
         "dns": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "namespace": { "$ref": "#/definitions/namespaceName" },
-            "podLabelKey": { "type": "string", "minLength": 1 },
-            "podLabelValue": { "type": "string", "minLength": 1 }
+            "namespace": {
+              "type": "string",
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+              "not": {
+                "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+              }
+            },
+            "podLabelKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "podLabelValue": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "namespaces": {
           "type": "object",
-          "propertyNames": { "$ref": "#/definitions/namespaceName" },
-          "additionalProperties": { "$ref": "#/definitions/networkPolicyNamespace" }
+          "propertyNames": {
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "deny"
+            ],
+            "properties": {
+              "intraNamespace": {
+                "type": "boolean",
+                "description": "Let the namespace's own pods through, each denied direction."
+              },
+              "ingress": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "description"
+                  ],
+                  "properties": {
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "from": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "to": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "ports": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  }
+                }
+              },
+              "egress": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "description"
+                  ],
+                  "properties": {
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "from": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "to": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "ports": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  }
+                }
+              },
+              "name": {
+                "$ref": "#/$defs/objectName"
+              },
+              "protect": {
+                "type": "boolean",
+                "description": "Overrides the kind's protect default for this object."
+              },
+              "deny": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "ingress",
+                    "egress"
+                  ]
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "dnsEgress": {
+                "type": "boolean",
+                "description": "Required when egress is denied: true adds a DNS allow, false is a deliberate total egress deny."
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "deny": {
+                      "type": "array",
+                      "contains": {
+                        "enum": [
+                          "egress"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deny"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "dnsEgress"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "deny": {
+                      "type": "array",
+                      "contains": {
+                        "enum": [
+                          "egress"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deny"
+                  ]
+                },
+                "else": {
+                  "not": {
+                    "required": [
+                      "dnsEgress"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
         }
       }
     },
@@ -146,14 +743,100 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "name": { "$ref": "#/definitions/objectName" },
-        "protect": { "type": "boolean" },
-        "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
-        "ownerAnnotation": { "$ref": "#/definitions/annotationKey" },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
+        "protect": {
+          "type": "boolean"
+        },
+        "reasonAnnotation": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        },
+        "ownerAnnotation": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        },
         "namespaces": {
           "type": "object",
-          "propertyNames": { "$ref": "#/definitions/namespaceName" },
-          "additionalProperties": { "$ref": "#/definitions/quotaNamespace" }
+          "propertyNames": {
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hard"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/objectName"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "protect": {
+                "type": "boolean",
+                "description": "Overrides the kind's protect default for this object."
+              },
+              "hard": {
+                "type": "object",
+                "propertyNames": {
+                  "pattern": "^[A-Za-z0-9][-A-Za-z0-9_./]*$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?([KMGTPE]i?|[numkMGTPE]|[eE][0-9]+)?$",
+                      "not": {
+                        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                      }
+                    }
+                  ]
+                },
+                "minProperties": 1
+              }
+            },
+            "allOf": [
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "reason"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "owner"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         }
       }
     },
@@ -161,14 +844,113 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "name": { "$ref": "#/definitions/objectName" },
-        "protect": { "type": "boolean" },
-        "reasonAnnotation": { "$ref": "#/definitions/annotationKey" },
-        "ownerAnnotation": { "$ref": "#/definitions/annotationKey" },
+        "name": {
+          "$ref": "#/$defs/objectName"
+        },
+        "protect": {
+          "type": "boolean"
+        },
+        "reasonAnnotation": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        },
+        "ownerAnnotation": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        },
         "namespaces": {
           "type": "object",
-          "propertyNames": { "$ref": "#/definitions/namespaceName" },
-          "additionalProperties": { "$ref": "#/definitions/limitRangeNamespace" }
+          "propertyNames": {
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "container"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/objectName"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "protect": {
+                "type": "boolean",
+                "description": "Overrides the kind's protect default for this object."
+              },
+              "container": {
+                "type": "object",
+                "propertyNames": {
+                  "enum": [
+                    "default",
+                    "defaultRequest",
+                    "min",
+                    "max"
+                  ]
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z0-9][-A-Za-z0-9_./]*$",
+                    "not": {
+                      "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                    }
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^[0-9]+(\\.[0-9]+)?([KMGTPE]i?|[numkMGTPE]|[eE][0-9]+)?$",
+                        "not": {
+                          "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                        }
+                      }
+                    ]
+                  },
+                  "minProperties": 1
+                },
+                "minProperties": 1,
+                "description": "At least one of the four kinds."
+              }
+            },
+            "allOf": [
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "reason"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "owner"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         }
       }
     },
@@ -176,49 +958,215 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "protect": { "type": "boolean" },
+        "protect": {
+          "type": "boolean"
+        },
         "clusterRoles": {
           "type": "object",
-          "propertyNames": { "$ref": "#/definitions/objectName" },
+          "propertyNames": {
+            "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["rules"],
+            "required": [
+              "rules"
+            ],
             "properties": {
-              "protect": { "type": "boolean" },
-              "aggregateTo": { "type": "array", "uniqueItems": true, "items": { "enum": ["admin", "edit", "view"] } },
-              "rules": { "$ref": "#/definitions/policyRules" }
+              "protect": {
+                "type": "boolean"
+              },
+              "aggregateTo": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "admin",
+                    "edit",
+                    "view"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "verbs"
+                  ],
+                  "properties": {
+                    "apiGroups": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "resourceNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "nonResourceURLs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "verbs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  }
+                },
+                "minItems": 1
+              }
             }
           }
         },
         "namespaces": {
           "type": "object",
-          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "propertyNames": {
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
               "roles": {
                 "type": "object",
-                "propertyNames": { "$ref": "#/definitions/objectName" },
+                "propertyNames": {
+                  "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                },
                 "additionalProperties": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["rules"],
-                  "properties": { "rules": { "$ref": "#/definitions/policyRules" } }
+                  "required": [
+                    "rules"
+                  ],
+                  "properties": {
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "verbs"
+                        ],
+                        "properties": {
+                          "apiGroups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "resources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "resourceNames": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "nonResourceURLs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "verbs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "minItems": 1
+                          }
+                        }
+                      },
+                      "minItems": 1
+                    }
+                  }
                 }
               },
               "roleBindings": {
                 "type": "object",
-                "propertyNames": { "$ref": "#/definitions/objectName" },
+                "propertyNames": {
+                  "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+                  "not": {
+                    "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                  }
+                },
                 "additionalProperties": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["subjects"],
+                  "required": [
+                    "subjects"
+                  ],
                   "properties": {
-                    "clusterRole": { "type": "string", "minLength": 1 },
-                    "role": { "$ref": "#/definitions/objectName" },
-                    "subjects": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/rbacSubject" } }
+                    "clusterRole": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "role": {
+                      "$ref": "#/$defs/objectName"
+                    },
+                    "subjects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "name"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "User",
+                              "Group",
+                              "ServiceAccount"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "maxLength": 63,
+                            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                            "not": {
+                              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                            }
+                          }
+                        }
+                      },
+                      "minItems": 1
+                    }
                   }
                 }
               }
@@ -231,225 +1179,54 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "namePrefix": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?-?$" },
-        "protect": { "type": "boolean" },
+        "namePrefix": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?-?$",
+          "not": {
+            "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+          }
+        },
+        "protect": {
+          "type": "boolean"
+        },
         "namespaces": {
           "type": "object",
-          "propertyNames": { "$ref": "#/definitions/namespaceName" },
+          "propertyNames": {
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["roleARN"],
+            "required": [
+              "roleARN"
+            ],
             "properties": {
-              "roleARN": { "type": "string", "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$" },
-              "protect": { "type": "boolean" }
+              "roleARN": {
+                "type": "string",
+                "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$",
+                "not": {
+                  "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+                }
+              },
+              "protect": {
+                "type": "boolean"
+              }
             }
           }
         }
       }
     }
   },
-  "definitions": {
-    "networkPolicyRule": {
-      "type": "object",
-      "required": ["description"],
-      "description": "A NetworkPolicy ingress (from) or egress (to) rule, verbatim, with a description that is rendered as a comment.",
-      "properties": {
-        "description": { "type": "string", "minLength": 1 },
-        "from": { "type": "array" },
-        "to": { "type": "array" },
-        "ports": { "type": "array" }
-      },
-      "additionalProperties": false
-    },
-    "policyRules": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["verbs"],
-        "properties": {
-          "apiGroups": { "type": "array", "items": { "type": "string" } },
-          "resources": { "type": "array", "items": { "type": "string" } },
-          "resourceNames": { "type": "array", "items": { "type": "string" } },
-          "nonResourceURLs": { "type": "array", "items": { "type": "string" } },
-          "verbs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
-        }
-      }
-    },
-    "rbacSubject": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "name"],
-      "properties": {
-        "kind": { "enum": ["User", "Group", "ServiceAccount"] },
-        "name": { "type": "string", "minLength": 1 },
-        "namespace": { "$ref": "#/definitions/namespaceName" }
-      }
-    },
-    "principalList": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1, "pattern": "^[^'\"\\\\]+$" }
-    },
-    "namespaceName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" },
+  "$defs": {
     "objectName": {
       "type": "string",
-      "description": "A DNS subdomain: the name of a rendered object.",
-      "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
-    },
-    "annotationKey": {
-      "type": "string",
-      "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
-    },
-    "labelSelector": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "matchLabels": { "type": "object", "additionalProperties": { "type": "string" } },
-        "matchExpressions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["key", "operator"],
-            "properties": {
-              "key": { "type": "string", "minLength": 1 },
-              "operator": { "enum": ["In", "NotIn", "Exists", "DoesNotExist"] },
-              "values": { "type": "array", "items": { "type": "string" } }
-            }
-          }
-        }
-      }
-    },
-    "quantity": {
-      "description": "A Kubernetes quantity, as a string (\"500m\", \"2Gi\") or a whole number.",
-      "oneOf": [
-        { "type": "integer", "minimum": 0 },
-        { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?([KMGTPE]i?|[numkMGTPE]|[eE][0-9]+)?$" }
-      ]
-    },
-    "quantityMap": {
-      "type": "object",
-      "minProperties": 1,
-      "propertyNames": { "pattern": "^[A-Za-z0-9][-A-Za-z0-9_./]*$" },
-      "additionalProperties": { "$ref": "#/definitions/quantity" }
-    },
-    "networkPolicyNamespace": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["deny"],
-      "properties": {
-        "intraNamespace": { "type": "boolean", "description": "Let the namespace's own pods through, each denied direction." },
-        "ingress": { "type": "array", "items": { "$ref": "#/definitions/networkPolicyRule" } },
-        "egress": { "type": "array", "items": { "$ref": "#/definitions/networkPolicyRule" } },
-        "name": { "$ref": "#/definitions/objectName" },
-        "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
-        "deny": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "enum": ["ingress", "egress"] }
-        },
-        "dnsEgress": {
-          "type": "boolean",
-          "description": "Required when egress is denied: true adds a DNS allow, false is a deliberate total egress deny."
-        }
-      },
-      "if": { "properties": { "deny": { "contains": { "const": "egress" } } }, "required": ["deny"] },
-      "then": { "required": ["dnsEgress"] },
-      "else": { "not": { "required": ["dnsEgress"] } }
-    },
-    "quotaNamespace": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["hard"],
-      "properties": {
-        "name": { "$ref": "#/definitions/objectName" },
-        "reason": { "type": "string", "minLength": 1 },
-        "owner": { "type": "string", "minLength": 1 },
-        "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
-        "hard": { "$ref": "#/definitions/quantityMap" }
-      },
-      "anyOf": [{ "required": ["reason"] }, { "required": ["owner"] }]
-    },
-    "limitRangeNamespace": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["container"],
-      "anyOf": [{ "required": ["reason"] }, { "required": ["owner"] }],
-      "properties": {
-        "name": { "$ref": "#/definitions/objectName" },
-        "reason": { "type": "string", "minLength": 1 },
-        "owner": { "type": "string", "minLength": 1 },
-        "protect": { "type": "boolean", "description": "Overrides the kind's protect default for this object." },
-        "container": {
-          "type": "object",
-          "additionalProperties": false,
-          "minProperties": 1,
-          "properties": {
-            "default": { "$ref": "#/definitions/quantityMap" },
-            "defaultRequest": { "$ref": "#/definitions/quantityMap" },
-            "min": { "$ref": "#/definitions/quantityMap" },
-            "max": { "$ref": "#/definitions/quantityMap" }
-          }
-        }
-      }
-    },
-    "level": {
-      "type": "string",
-      "enum": ["privileged", "baseline", "restricted"]
-    },
-    "optionalLevel": {
-      "type": "string",
-      "enum": ["", "privileged", "baseline", "restricted"]
-    },
-    "version": {
-      "type": "string",
-      "description": "latest, or a Kubernetes minor such as v1.34. Empty renders no version label (latest).",
-      "pattern": "^(|latest|v1\\.[0-9]+)$"
-    },
-    "mode": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "level": { "$ref": "#/definitions/optionalLevel" },
-        "version": { "$ref": "#/definitions/version" }
-      }
-    },
-    "modeOverride": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": { "type": "boolean", "description": "false: this namespace carries no label of this kind (needs a reason when the mode is on)." },
-        "level": { "$ref": "#/definitions/level" },
-        "version": { "$ref": "#/definitions/version" }
-      }
-    },
-    "namespace": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "labels": {
-          "type": "object",
-          "description": "Labels the Namespace object carries beside the Pod Security ones (which the chart refuses here).",
-          "propertyNames": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$" },
-          "additionalProperties": { "type": "string", "maxLength": 63 }
-        },
-        "level": { "$ref": "#/definitions/level" },
-        "version": { "$ref": "#/definitions/version" },
-        "reason": { "type": "string", "minLength": 1 },
-        "modes": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "warn": { "$ref": "#/definitions/modeOverride" },
-            "audit": { "$ref": "#/definitions/modeOverride" },
-            "enforce": { "$ref": "#/definitions/modeOverride" }
-          }
-        }
+      "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
       }
     }
   }

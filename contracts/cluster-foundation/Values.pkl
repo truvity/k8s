@@ -1,0 +1,137 @@
+/// An unknown key is an error, not a silent no-op: a typo in a mode or in `protect` would otherwise leave a namespace unlabelled or unprotected and the rollout would look finished.
+@A.Chart { title = "cluster-foundation values" }
+module k8s.contracts.ClusterFoundation
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Helm's shared values. Unused by this chart; allowed so a parent chart can set it.
+global: Dynamic?
+
+podSecurity: PodSecurity?
+protect: Boolean?
+helmKeep: Boolean?
+
+/// Namespaces by name. The name must be a DNS label.
+namespaces: Mapping<V.DnsLabel, Namespace>?
+
+clusterRoleBindings: Mapping<Common.ObjectName, ClusterRoleBinding>?
+storageClasses: Mapping<Common.ObjectName, StorageClass>?
+
+/// PriorityClasses by name. A name starting with system- is refused: Kubernetes reserves the prefix.
+priorityClasses: Mapping<PriorityClassName, PriorityClass>?
+
+eksAuto: EksAuto?
+
+local const objectNameRe = #"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"#
+
+/// An object name that is not `system-`: the prefix is Kubernetes'.
+@A.Pattern {
+  regex = objectNameRe
+  valid { "a"; "a.b-c"; "system"; "my-system-x" }
+  invalid { ""; "-a"; "A"; "a_b"; "a-" }
+}
+@A.NotPattern {
+  regex = "^system-"
+  reason = "the prefix system- is reserved by Kubernetes"
+  invalid { "system-x"; "system-node-critical" }
+}
+typealias PriorityClassName = String(contains(Regex(objectNameRe)) && !contains(Regex("^system-")))
+
+class PodSecurity {
+  level: Common.OptionalLevel?
+  version: Common.Version?
+
+  @A.Items { unique = true }
+  modes: Listing<Common.Mode>?
+
+  unenforced: Boolean?
+  reasonAnnotation: Common.AnnotationKey?
+}
+
+class Namespace {
+  level: Common.Level?
+  reason: V.NonEmptyString?
+
+  @A.Nullable
+  syncWave: Int?
+
+  /// Overrides the chart's protect for this namespace.
+  @A.Nullable
+  protect: Boolean?
+
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+}
+
+class ClusterRoleBinding {
+  clusterRole: V.NonEmptyString
+
+  @A.Items { min = 1 }
+  @A.Required
+  subjects: Listing<Subject>?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+class Subject {
+  kind: "Group" | "User" | "ServiceAccount"
+  name: V.NonEmptyString
+  namespace: V.NonEmptyString?
+}
+
+class StorageClass {
+  provisioner: V.NonEmptyString
+  isDefault: Boolean?
+  reclaimPolicy: ("Delete" | "Retain")?
+  volumeBindingMode: ("Immediate" | "WaitForFirstConsumer")?
+  allowVolumeExpansion: Boolean?
+  parameters: Common.StringMap?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+class PriorityClass {
+  @A.Range { min = -2147483648; max = 1000000000 }
+  value: Int
+
+  description: V.NonEmptyString
+  globalDefault: Boolean?
+  preemptionPolicy: ("PreemptLowerPriority" | "Never")?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+
+  annotations: Common.StringMap?
+}
+
+class EksAuto {
+  networkPolicyController: NetworkPolicyController?
+}
+
+class NetworkPolicyController {
+  enabled: Boolean?
+
+  @A.Nullable
+  syncWave: Int?
+
+  @A.Nullable
+  protect: Boolean?
+}
