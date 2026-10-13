@@ -86,7 +86,10 @@ spec:
           values: ["r"]
         - key: eks.amazonaws.com/instance-cpu
           operator: Lt
-          values: ["5"]
+          values: ["9"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["r6g.2xlarge"]
         - key: topology.kubernetes.io/zone
           operator: In
           values: ["zone-a"]
@@ -99,8 +102,8 @@ spec:
   disruption:
     # WhenEmpty reclaims empty nodes and never moves a live workload for
     # packing (recycling happens via expireAfter).
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 5m
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 90s
     budgets:
       # All empties at once. Underutilized and drift consolidation stay
       # serialized below: the storm guard is about moving LIVE pods, which an

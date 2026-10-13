@@ -51,6 +51,8 @@ protect: true
 #         - {key: dedicated, value: "true", effect: NoSchedule}
 #       cpuLimit: 64                       # optional: pool-wide vCPU cap
 #       maxInstanceCpu: 8                  # optional: per-node vCPU ceiling
+#       instanceTypes: [r6g.2xlarge]       # optional: only these EC2 types
+#       consolidateAfter: 90s              # optional: replaces poolDefaults
 #       zones: [zone-a]                    # optional: pin to zones
 #       expireAfter / terminationGracePeriod / consolidationPolicy
 #                                          # optional: replace poolDefaults

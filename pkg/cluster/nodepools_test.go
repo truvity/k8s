@@ -22,7 +22,7 @@ func TestDeriveNodePools(t *testing.T) {
 	pools, err := cluster.DeriveNodePools(map[string]cluster.NodePoolSpec{
 		"default": {Archs: []string{"arm64"}, Weight: 10},
 		"compute": {Archs: []string{"amd64"}},
-		"ci":      {Archs: []string{"arm64"}, Dedicated: true, CPULimit: 12},
+		"ci":      {Archs: []string{"arm64"}, Dedicated: true, CPULimit: 12, InstanceTypes: []string{"r6g.2xlarge"}, ConsolidateAfter: "90s"},
 		"bare":    {},
 	}, testDefaults, "")
 	if err != nil {
@@ -45,7 +45,8 @@ func TestDeriveNodePools(t *testing.T) {
 	}
 
 	wantCI := []cluster.Taint{{Key: "ci", Value: "true", Effect: "NoSchedule"}, {Key: "arch", Value: "arm64", Effect: "NoSchedule"}}
-	if !reflect.DeepEqual(ci.Taints, wantCI) || ci.CPULimit != 12 {
+	if !reflect.DeepEqual(ci.Taints, wantCI) || ci.CPULimit != 12 ||
+		!reflect.DeepEqual(ci.InstanceTypes, []string{"r6g.2xlarge"}) || ci.ConsolidateAfter != "90s" {
 		t.Fatalf("ci: %+v", ci)
 	}
 
@@ -160,6 +161,9 @@ func TestValidateNodePool(t *testing.T) {
 		{name: "unknown class", pool: "p", np: cluster.NodePoolSpec{NodeClass: "nope"}, want: "not in the preset's node_classes"},
 		{name: "class and volume", pool: "p", np: cluster.NodePoolSpec{NodeClass: "standard", EphemeralStorage: vol("1Gi", 0, 0)}, want: "excludes"},
 		{name: "pod subnets alone", pool: "p", np: cluster.NodePoolSpec{PodSubnets: true}, want: "pod_subnets"},
+		{name: "instance type", pool: "p", np: cluster.NodePoolSpec{InstanceTypes: []string{"r6g.2xlarge"}, ConsolidateAfter: "90s"}},
+		{name: "bad instance type", pool: "p", np: cluster.NodePoolSpec{InstanceTypes: []string{"2xlarge"}}, want: "instance_types"},
+		{name: "bad consolidate after", pool: "p", np: cluster.NodePoolSpec{ConsolidateAfter: "soon"}, want: "consolidate_after"},
 		{name: "blank zone", pool: "p", np: cluster.NodePoolSpec{Zones: []string{""}}, want: "empty entry"},
 		{name: "duplicate zone", pool: "p", np: cluster.NodePoolSpec{Zones: []string{"a", "a"}}, want: "twice"},
 	} {
