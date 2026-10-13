@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.29.0
+
 - `charts/eks-auto-node-pools`: `nodePools[].instanceTypes` pins a pool to exact EC2 instance types (`node.kubernetes.io/instance-type In [...]`, intersected with `categories` and `maxInstanceCpu`), and `nodePools[].consolidateAfter` replaces `poolDefaults.consolidateAfter` for one pool. Both optional; unset renders what earlier releases rendered. The full golden case now sets both on its `ci` pool.
 - `pkg/cluster`: `NodePoolSpec.InstanceTypes` and `.ConsolidateAfter` (and the same `NodePool` fields) feed those chart keys; a malformed instance type or duration is refused.
 
