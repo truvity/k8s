@@ -28,6 +28,13 @@ const (
 // unit keeps the value comparable at a glance.
 var ephemeralSizeRE = regexp.MustCompile(`^([1-9]\d*)Gi$`)
 
+var (
+	// instanceTypePattern is an EC2 instance type: family and size.
+	instanceTypePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*\.[a-z0-9]+$`)
+	// durationPattern is the chart's duration: whole hours, minutes, seconds.
+	durationPattern = regexp.MustCompile(`^([0-9]+(h|m|s))+$`)
+)
+
 type (
 	// EphemeralStorage is the gp3 data volume of a NodeClass
 	// (eks.amazonaws.com/v1 NodeClass spec.ephemeralStorage). Zero IOPS or
@@ -53,11 +60,20 @@ type (
 		// CPULimit caps the pool's total vCPUs.
 		CPULimit int
 		// MaxInstanceCPU caps the vCPUs of a SINGLE node (inclusive); 0 is unset.
-		MaxInstanceCPU         int
+		MaxInstanceCPU int
+		// InstanceTypes pins the pool to exactly these EC2 instance types
+		// (node.kubernetes.io/instance-type In [...]), e.g. ["r6g.2xlarge"].
+		// Empty leaves the choice to Categories and MaxInstanceCPU. It only
+		// narrows them: a type outside Categories admits nothing.
+		InstanceTypes          []string
 		TerminationGracePeriod string
 		ExpireAfter            string
 		ConsolidationPolicy    string
-		FastEmptyReclaim       bool
+		// ConsolidateAfter is how long a node must be eligible (empty, for
+		// WhenEmpty) before Karpenter removes it, as a duration such as
+		// "90s"; empty keeps the chart's poolDefaults.consolidateAfter.
+		ConsolidateAfter string
+		FastEmptyReclaim bool
 		// Zones pins the pool to these AZs; empty is all.
 		Zones []string
 		// EphemeralStorage, when set, gives the pool a NodeClass of its own
@@ -100,9 +116,11 @@ type (
 		Taints                 []Taint  `yaml:"taints,omitempty"`
 		CPULimit               int      `yaml:"cpuLimit,omitempty"`
 		MaxInstanceCPU         int      `yaml:"maxInstanceCpu,omitempty"`
+		InstanceTypes          []string `yaml:"instanceTypes,omitempty"`
 		ExpireAfter            string   `yaml:"expireAfter,omitempty"`
 		TerminationGracePeriod string   `yaml:"terminationGracePeriod,omitempty"`
 		ConsolidationPolicy    string   `yaml:"consolidationPolicy,omitempty"`
+		ConsolidateAfter       string   `yaml:"consolidateAfter,omitempty"`
 		FastEmptyReclaim       bool     `yaml:"fastEmptyReclaim,omitempty"`
 		Zones                  []string `yaml:"zones,omitempty"`
 		// NodeClass is the pool's OWN NodeClass; nil keeps the pool on a
@@ -178,9 +196,11 @@ func DeriveNodePools(pools map[string]NodePoolSpec, defaults PoolDefaults, nodeR
 			Taints:                 taints,
 			CPULimit:               np.CPULimit,
 			MaxInstanceCPU:         np.MaxInstanceCPU,
+			InstanceTypes:          np.InstanceTypes,
 			ExpireAfter:            np.ExpireAfter,
 			TerminationGracePeriod: np.TerminationGracePeriod,
 			ConsolidationPolicy:    np.ConsolidationPolicy,
+			ConsolidateAfter:       np.ConsolidateAfter,
 			FastEmptyReclaim:       np.FastEmptyReclaim,
 			Zones:                  np.Zones,
 			NodeClassName:          np.NodeClass,
@@ -318,6 +338,16 @@ func ValidateNodePool(scope, poolName string, np *NodePoolSpec, classes map[stri
 			"%s: node_pools.%s.max_instance_cpu (%d) exceeds cpu_limit (%d) — one node could not fit inside the pool",
 			scope, poolName, np.MaxInstanceCPU, np.CPULimit,
 		)
+	}
+
+	for _, it := range np.InstanceTypes {
+		if !instanceTypePattern.MatchString(it) {
+			return fmt.Errorf("%s: node_pools.%s.instance_types contains %q (must look like r6g.2xlarge)", scope, poolName, it)
+		}
+	}
+
+	if np.ConsolidateAfter != "" && !durationPattern.MatchString(np.ConsolidateAfter) {
+		return fmt.Errorf("%s: node_pools.%s.consolidate_after %q is not a duration like 90s or 2m", scope, poolName, np.ConsolidateAfter)
 	}
 
 	if err := ValidateEphemeralStorage(scope, poolName, np.EphemeralStorage); err != nil {

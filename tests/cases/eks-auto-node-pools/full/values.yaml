@@ -14,7 +14,10 @@ nodePools:
     taints:
       - {key: ci, value: "true", effect: NoSchedule}
     cpuLimit: 224
-    maxInstanceCpu: 4
+    maxInstanceCpu: 8
+    instanceTypes: [r6g.2xlarge]
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 90s
     expireAfter: 48h0m0s
     terminationGracePeriod: 2h0m0s
     fastEmptyReclaim: true

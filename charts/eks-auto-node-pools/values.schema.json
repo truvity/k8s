@@ -81,6 +81,11 @@
         },
         "cpuLimit": { "type": "integer", "minimum": 1 },
         "maxInstanceCpu": { "type": "integer", "minimum": 2 },
+        "instanceTypes": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9]+$" }
+        },
+        "consolidateAfter": { "$ref": "#/definitions/duration" },
         "expireAfter": { "$ref": "#/definitions/duration" },
         "terminationGracePeriod": { "$ref": "#/definitions/duration" },
         "consolidationPolicy": { "enum": ["WhenEmpty", "WhenEmptyOrUnderutilized"] },

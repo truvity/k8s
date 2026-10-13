@@ -6,7 +6,9 @@ pods; `categories` bounds the families it may pick.
 
 A pool MAY cap per-node vCPUs (maxInstanceCpu): on a pool whose pods carry
 do-not-disrupt, the shape Karpenter picks is held until expireAfter, so an
-unbounded pick becomes a standing bill.
+unbounded pick becomes a standing bill. instanceTypes goes further and names
+the exact types the pool may buy (node.kubernetes.io/instance-type), for a
+pool whose capacity arithmetic is for one shape.
 
 One disruption budget keeps consolidation from moving more than one node at a
 time per pool, so a consolidation storm cannot drain a pool at once.
@@ -58,6 +60,11 @@ spec:
           operator: Lt
           values: ["{{ add (.maxInstanceCpu | int64) 1 }}"]
       {{- end }}
+      {{- if .instanceTypes }}
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: {{ toJson .instanceTypes }}
+      {{- end }}
       {{- if .zones }}
         {{- /* Zone pin: for a pool whose traffic is to something zonal,
                since cross-zone bytes are billed both ways. */}}
@@ -81,7 +88,7 @@ spec:
     # WhenEmpty reclaims empty nodes and never moves a live workload for
     # packing (recycling happens via expireAfter).
     consolidationPolicy: {{ .consolidationPolicy | default $d.consolidationPolicy }}
-    consolidateAfter: {{ $d.consolidateAfter }}
+    consolidateAfter: {{ .consolidateAfter | default $d.consolidateAfter }}
     budgets:
       {{- if .fastEmptyReclaim }}
       # All empties at once. Underutilized and drift consolidation stay
