@@ -13,6 +13,11 @@
 // and a multi-AZ network's logical block is the /22 over four /24 slots; a
 // subnet with a larger block (prefix length 16 to 23) places AZ i at
 // third_octet + i*2^(24-prefix) and its logical label is the first AZ's block.
+//
+// Peering (peering.go) is a hub-and-spoke peering of the plan's networks: its
+// validation (one index per network, spokes that exist, one connection each),
+// the spokes a supernet does not cover (SpokeCIDRsOutside) and the spokes with
+// no router of their own, which the hub's routers reach over the peering.
 package vpclayout
 
 import (
