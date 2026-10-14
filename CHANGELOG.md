@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/vpclayout`: hub-and-spoke peering of a plan's networks. `ValidateIndexes` refuses two networks with one index (the same /16); `Peering.Validate` refuses an unknown hub or spoke, an empty or repeated connection name, a spoke with two connections and the hub peered with itself; `Plan.SpokeCIDRsOutside` lists the spokes' CIDRs a supernet does not cover (what admits "the peered VPCs" by the supernet must admit these too); `Peering.RouterlessSpokes` and `Plan.RouterlessSpokeCIDRs` list the spokes with no router of their own, which the hub's routers reach over the peering. Moved from a consumer; its results are unchanged.
+
 ## v0.29.0
 
 - `charts/eks-auto-node-pools`: `nodePools[].instanceTypes` pins a pool to exact EC2 instance types (`node.kubernetes.io/instance-type In [...]`, intersected with `categories` and `maxInstanceCpu`), and `nodePools[].consolidateAfter` replaces `poolDefaults.consolidateAfter` for one pool. Both optional; unset renders what earlier releases rendered. The full golden case now sets both on its `ci` pool.
