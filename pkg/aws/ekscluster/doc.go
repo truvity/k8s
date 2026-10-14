@@ -17,9 +17,15 @@
 // authentication mode (one access entry and one access policy association
 // each), and Args.CoreDNS installs the coredns add-on with a Corefile the
 // component renders from the stock file plus the caller's extra lines.
-// Security group rules, DNS records and other add-ons are not part of the
-// component: they belong to whoever owns the cluster and take the cluster
-// from the component's Cluster field.
+// Three optional children sit around the API endpoint and the node role:
+// Args.APIIngressCIDRs (one cluster security group rule admitting a CIDR on
+// 443 each), Args.APIRecord (a Route 53 CNAME to the endpoint) and
+// Args.NodeECR (the node role's inline policies for other accounts'
+// registries and the pull-through cache). Other security group rules, records
+// and add-ons are not part of the component: they belong to whoever owns the
+// cluster and take the cluster from the component's Cluster field.
+// Args.ChildOptions adds resource options to one child (an alias from an
+// older name, say).
 //
 // What the component refuses, before registering anything: a missing provider,
 // name, version, subnet or service CIDR, a service CIDR that is not IPv4, an

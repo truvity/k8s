@@ -556,9 +556,10 @@ Auto Mode node role with their policies, and the CloudWatch log group of the
 control plane. The shape is fixed: API authentication mode, no bootstrap
 creator-admin, no self-managed add-ons, a rotated customer-managed key,
 control-plane logs on, EKS-managed compute, load balancing and block storage.
-Access entries (`AccessEntries`) and the coredns add-on (`CoreDNS`) are
-children too; security group rules, DNS records and other add-ons are the
-caller's, attached to `Cluster`. It takes its AWS provider in `Args.Provider`,
+Access entries (`AccessEntries`), the coredns add-on (`CoreDNS`), the API
+ingress rules (`APIIngressCIDRs`), the API record (`APIRecord`) and the node
+role's registry policies (`NodeECR`) are children too; other security group
+rules, records and add-ons are the caller's, attached to `Cluster`. It takes its AWS provider in `Args.Provider`,
 never from `pulumi.Providers`.
 
 ```go
@@ -603,11 +604,15 @@ c, err := ekscluster.New(ctx, "main", &ekscluster.Args{
 | `LogGroupName`, `LogRetentionDays` | Default `/aws/eks/<Name>/cluster` (the group EKS writes to) and 90 days. |
 | `AccessEntries` | `Name`, `PrincipalARN`, `PolicyARN`, `Namespaces`: one `STANDARD` access entry and one access policy association per principal, scoped to the cluster, or to `Namespaces` when set. Names and principals are unique. The cluster has no bootstrap admin: with no entry nobody reaches its API. |
 | `CoreDNS` | `*CoreDNS`: `Version`, `Corefile`, `Extras`. Nil installs no add-on. See below. |
+| `APIIngressCIDRs` | IPv4 CIDRs the cluster security group admits on 443 (the API endpoint): one `ingress` rule each, described `HTTPS to the private EKS endpoint`, created after the cluster. No host bits, no repeats. |
+| `APIRecord` | `*APIRecord`: `ZoneID`, `Name`, `TTL` (default 300). A CNAME to the endpoint's host (the endpoint without `https://`). Nil publishes none. |
+| `NodeECR` | `*NodeECR`: `Partition` (default `aws`), `CrossAccount` (`[]Registry{Region, AccountID}`), `PullThroughCache` (`Registry` + `Prefixes`). Adds the node role's inline policies `cross-account-ecr-pull` (GetAuthorizationToken on `*`; BatchGetImage, GetDownloadUrlForLayer, BatchCheckLayerAvailability on each registry's `repository/*`) and `ptc-import` (BatchImportUpstreamImage, CreateRepository on `repository/<prefix>/*` of the cluster's registry), rendered by the provider's `aws:iam/getPolicyDocument`. Their names may not be `NodeInlinePolicies` names. |
 | `UpgradePolicy` | `UpgradePolicyStandard` (`STANDARD`) or `UpgradePolicyExtended` (`EXTENDED`). Empty leaves it unset, so EKS keeps what the cluster has (EXTENDED for a new one). STANDARD: the cluster is upgraded when standard support ends and never pays for extended support. |
 | `DeletionProtection` | `*bool`. Nil leaves it unset (off for a new cluster). True: EKS refuses to delete the cluster, a second lock beside `Protect`, which only guards this Pulumi program. |
 | `Capabilities` | The contract's capabilities. Empty: `DefaultCapabilities()`, which is `node-pools`, `workload-identity`, `load-balancing`, `api-access`. Add `storage` and `network-policy` once a default StorageClass exists and the NetworkPolicy controller is on (`cluster-foundation` renders both). |
 | `Tags` | Set on the key, the roles, the log group and the cluster. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
+| `ChildOptions` | `func(Child) []pulumi.ResourceOption`: options added to one child's (an alias from an older name, say). Nil adds none. Not for the parent or the provider. |
 | `LegacyTopLevel` | Adopt loose resources by alias. |
 | `Protect` | `*bool`; nil (the default) protects. |
 
@@ -671,6 +676,9 @@ API.
 | access entry | `aws:eks/accessEntry:AccessEntry` | `<c>-access-<name>` | one per `AccessEntries` entry (`Key` is its `Name`) |
 | access policy | `aws:eks/accessPolicyAssociation:AccessPolicyAssociation` | `<c>-access-<name>-policy` | one per `AccessEntries` entry |
 | coredns | `aws:eks/addon:Addon` | `<c>-coredns` | `CoreDNS` set |
+| node registry policy | `aws:iam/rolePolicy:RolePolicy` | `<c>-node-role-policy-<name>` | kind `node-inline-policy`, `<name>` `cross-account-ecr-pull` / `ptc-import`, as `NodeECR` asks |
+| API ingress rule | `aws:ec2/securityGroupRule:SecurityGroupRule` | `<c>-api-ingress-<index>` | one per `APIIngressCIDRs` entry (`Key` is its index) |
+| API record | `aws:route53/record:Record` | `<c>-api-record` | `APIRecord` set |
 
 ### Aliases
 
