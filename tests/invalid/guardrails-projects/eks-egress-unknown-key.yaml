@@ -1,0 +1,7 @@
+# A misspelt preset key.
+networkPolicy:
+  eksEgress:
+    enabled: true
+    nodeCidrs: [10.0.0.0/16]
+projects:
+  - {name: shop, kind: product}

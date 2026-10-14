@@ -1,0 +1,7 @@
+# The EKS egress preset needs the service range.
+networkPolicy:
+  eksEgress:
+    enabled: true
+    nodeCIDRs: [10.0.0.0/16]
+projects:
+  - {name: shop, kind: product}

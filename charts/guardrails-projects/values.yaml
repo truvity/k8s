@@ -43,6 +43,20 @@ networkPolicy:
   intraNamespace: true
   ingress: []
   egress: []
+  # The egress every workload of an EKS cluster needs, appended after
+  # `egress` for every row: the API server (443 to the node and service
+  # ranges), HTTPS to the internet but the instance metadata service, the EKS
+  # Pod Identity Agent (169.254.170.23:80) and DNS (53 to dnsPeers, the
+  # service range and the node ranges).
+  eksEgress:
+    enabled: false
+    # The node range (the VPC): the API endpoint lives in it. Required when
+    # enabled.
+    nodeCIDRs: []
+    # The cluster's service range. Required when enabled.
+    serviceCIDR: ""
+    # Further NetworkPolicy peers that answer DNS, listed first.
+    dnsPeers: []
 
 # --- Quotas -------------------------------------------------------------------
 # By profile name; a row names one in `quota`. A ResourceQuota (`hard`) and,
