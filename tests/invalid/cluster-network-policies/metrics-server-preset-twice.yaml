@@ -1,0 +1,12 @@
+# A listed policy and the preset with the same namespace and name.
+policies:
+  - name: metrics-server
+    namespace: metrics-server
+    reason: "A hand-written copy of what the preset renders."
+    podSelector: {}
+    policyTypes: [Egress]
+presets:
+  metricsServer:
+    enabled: true
+    nodeCIDRs: [10.0.0.0/16]
+    serviceCIDR: 172.20.0.0/16

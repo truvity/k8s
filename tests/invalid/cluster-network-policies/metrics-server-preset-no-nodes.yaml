@@ -1,0 +1,5 @@
+# The metrics-server preset needs the node range.
+presets:
+  metricsServer:
+    enabled: true
+    serviceCIDR: 172.20.0.0/16
