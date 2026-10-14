@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/autolb` (new): `FindAutoModeNLB` returns the DNS name of the load balancer EKS Auto Mode provisioned for a Service, found by the tags Auto Mode puts on it (`TagServiceStack` = `<namespace>/<service>` and `TagClusterName`; both must match). None is "not yet" (empty, no error), two are an error, an API error is never "not yet". A read through the AWS SDK (`API` is the narrow ELBv2 surface it needs); the module now requires `aws-sdk-go-v2/service/elasticloadbalancingv2`. Moved from a consumer.
+
 ## v0.29.0
 
 - `charts/eks-auto-node-pools`: `nodePools[].instanceTypes` pins a pool to exact EC2 instance types (`node.kubernetes.io/instance-type In [...]`, intersected with `categories` and `maxInstanceCpu`), and `nodePools[].consolidateAfter` replaces `poolDefaults.consolidateAfter` for one pool. Both optional; unset renders what earlier releases rendered. The full golden case now sets both on its `ci` pool.
