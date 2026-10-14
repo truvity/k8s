@@ -105,8 +105,9 @@ type Child struct {
 	Component string
 	Kind      Kind
 	// Key says which policy a KindClusterPolicy, KindNodePolicy or
-	// KindNodeInlinePolicy is for, and which access entry a KindAccessEntry
-	// or KindAccessPolicy is for. Empty otherwise.
+	// KindNodeInlinePolicy is for, which access entry a KindAccessEntry or
+	// KindAccessPolicy is for, and which of Args.APIIngressCIDRs (its index)
+	// a KindAPIIngress is for. Empty otherwise.
 	Key string
 }
 
@@ -117,8 +118,9 @@ type NameFunc func(Child) string
 // DefaultName names the children from the component name: "<c>-key",
 // "<c>-key-alias", "<c>-cluster-role", "<c>-cluster-role-<key>",
 // "<c>-node-role", "<c>-node-role-<key>", "<c>-node-role-policy-<name>",
-// "<c>-logs", "<c>-cluster", "<c>-access-<name>", "<c>-access-<name>-policy"
-// and "<c>-coredns". These names are API.
+// "<c>-logs", "<c>-cluster", "<c>-access-<name>", "<c>-access-<name>-policy",
+// "<c>-coredns", "<c>-api-ingress-<index>" and "<c>-api-record". These names
+// are API.
 func DefaultName(c Child) string {
 	switch c.Kind {
 	case KindKey:
@@ -143,6 +145,10 @@ func DefaultName(c Child) string {
 		return c.Component + "-access-" + c.Key + "-policy"
 	case KindCoreDNS:
 		return c.Component + "-coredns"
+	case KindAPIIngress:
+		return c.Component + "-api-ingress-" + c.Key
+	case KindAPIRecord:
+		return c.Component + "-api-record"
 	default:
 		return c.Component + "-cluster"
 	}
@@ -362,6 +368,18 @@ type Args struct {
 	// CoreDNS installs the coredns add-on. Nil installs none.
 	CoreDNS *CoreDNS
 
+	// APIIngressCIDRs are IPv4 CIDRs the cluster security group admits on
+	// 443, the API endpoint: one ingress rule each (APIIngressDescription),
+	// created after the cluster. A private endpoint is reached from the VPC
+	// and from peered networks only through such rules. Empty adds none.
+	APIIngressCIDRs []string
+	// APIRecord publishes a CNAME to the API endpoint in a Route 53 zone.
+	// Nil publishes none.
+	APIRecord *APIRecord
+	// NodeECR adds the node role's inline policies for other accounts'
+	// registries and the pull-through cache. Nil adds none.
+	NodeECR *NodeECR
+
 	// UpgradePolicy is the cluster's support policy, UpgradePolicyStandard
 	// or UpgradePolicyExtended. Empty leaves it unset, so EKS keeps whatever
 	// the cluster has (EXTENDED for a new cluster). Set it to STANDARD for a
@@ -384,6 +402,10 @@ type Args struct {
 	// Names overrides the logical names of the children. Nil uses
 	// DefaultName.
 	Names NameFunc
+	// ChildOptions returns resource options added to one child's (an alias
+	// from a name it had before, say). Nil adds none. It must not set the
+	// parent or the provider, which are the component's.
+	ChildOptions func(Child) []pulumi.ResourceOption
 	// LegacyTopLevel makes every child carry an alias from the URN it has
 	// when it is registered directly under the stack (no parent), with the
 	// same type and the name Names gives it. Set it when adopting resources
@@ -545,6 +567,10 @@ func (a *Args) plan(component string) []Child {
 		out = append(out, Child{Component: component, Kind: KindNodeInlinePolicy, Key: p.Name})
 	}
 
+	for _, name := range a.NodeECR.policyNames() {
+		out = append(out, Child{Component: component, Kind: KindNodeInlinePolicy, Key: name})
+	}
+
 	out = append(out,
 		Child{Component: component, Kind: KindLogGroup},
 		Child{Component: component, Kind: KindCluster},
@@ -560,6 +586,8 @@ func (a *Args) plan(component string) []Child {
 	if a.CoreDNS != nil {
 		out = append(out, Child{Component: component, Kind: KindCoreDNS})
 	}
+
+	out = append(out, a.endpointPlan(component)...)
 
 	return out
 }
@@ -632,6 +660,7 @@ func (a *Args) Validate() error {
 	}
 
 	errs = append(errs, a.checkAccessEntries()...)
+	errs = append(errs, a.checkEndpoint()...)
 
 	switch a.UpgradePolicy {
 	case "", UpgradePolicyStandard, UpgradePolicyExtended:
@@ -902,9 +931,10 @@ func (b *builder) child(c Child) string {
 	return b.names(c)
 }
 
-// childOpts is what every child registers with: the component as parent, the
-// provider, the adoption alias when asked for, and protection when asked for.
-func (b *builder) childOpts(protect bool, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
+// childOptsFor is what child c registers with: the component as parent, the
+// provider, the adoption alias when asked for, protection when asked for, and
+// what Args.ChildOptions adds for c.
+func (b *builder) childOptsFor(c Child, protect bool, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
 	out := append([]pulumi.ResourceOption{pulumi.Parent(b.comp), pulumi.Provider(b.args.Provider)}, extra...)
 
 	if b.args.LegacyTopLevel {
@@ -913,6 +943,11 @@ func (b *builder) childOpts(protect bool, extra ...pulumi.ResourceOption) []pulu
 
 	if protect && b.args.protect() {
 		out = append(out, pulumi.Protect(true))
+	}
+
+	if b.args.ChildOptions != nil {
+		c.Component = b.name
+		out = append(out, b.args.ChildOptions(c)...)
 	}
 
 	return out
@@ -936,7 +971,7 @@ func (b *builder) role(kind Kind, roleName string, trust pulumi.StringInput) (*i
 		args.PermissionsBoundary = pulumi.String(b.args.PermissionsBoundary)
 	}
 
-	return iam.NewRole(b.ctx, b.child(Child{Kind: kind}), args, b.childOpts(true)...)
+	return iam.NewRole(b.ctx, b.child(Child{Kind: kind}), args, b.childOptsFor(Child{Kind: kind}, true)...)
 }
 
 func (b *builder) attach(kind Kind, role *iam.Role, arns []string) ([]pulumi.Resource, error) {
@@ -946,7 +981,7 @@ func (b *builder) attach(kind Kind, role *iam.Role, arns []string) ([]pulumi.Res
 		att, err := iam.NewRolePolicyAttachment(b.ctx, b.child(Child{Kind: kind, Key: policyKey(arn)}), &iam.RolePolicyAttachmentArgs{
 			Role:      role.Name,
 			PolicyArn: pulumi.String(arn),
-		}, b.childOpts(false)...)
+		}, b.childOptsFor(Child{Kind: kind, Key: policyKey(arn)}, false)...)
 		if err != nil {
 			return nil, fmt.Errorf("attach %s: %w", arn, err)
 		}
@@ -966,7 +1001,7 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 		EnableKeyRotation:    pulumi.Bool(true),
 		RotationPeriodInDays: pulumi.Int(a.keyRotationDays()),
 		Tags:                 b.tags(),
-	}, b.childOpts(true)...)
+	}, b.childOptsFor(Child{Kind: KindKey}, true)...)
 	if err != nil {
 		return fmt.Errorf("create key: %w", err)
 	}
@@ -976,7 +1011,7 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 	if _, err := kms.NewAlias(b.ctx, b.child(Child{Kind: KindKeyAlias}), &kms.AliasArgs{
 		Name:        pulumi.String(a.keyAlias()),
 		TargetKeyId: key.ID(),
-	}, b.childOpts(false)...); err != nil {
+	}, b.childOptsFor(Child{Kind: KindKeyAlias}, false)...); err != nil {
 		return fmt.Errorf("create key alias: %w", err)
 	}
 
@@ -1006,12 +1041,17 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 
 	deps = append(deps, nodeDeps...)
 
-	for _, p := range a.NodeInlinePolicies {
+	ecrPolicies, err := b.nodeECRPolicies()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range append(slices.Clone(a.NodeInlinePolicies), ecrPolicies...) {
 		if _, err := iam.NewRolePolicy(b.ctx, b.child(Child{Kind: KindNodeInlinePolicy, Key: p.Name}), &iam.RolePolicyArgs{
 			Role:   nodeRole.Name,
 			Name:   pulumi.String(p.Name),
 			Policy: p.Document,
-		}, b.childOpts(false)...); err != nil {
+		}, b.childOptsFor(Child{Kind: KindNodeInlinePolicy, Key: p.Name}, false)...); err != nil {
 			return fmt.Errorf("create node inline policy %s: %w", p.Name, err)
 		}
 	}
@@ -1020,7 +1060,7 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 		Name:            pulumi.String(a.logGroupName()),
 		RetentionInDays: pulumi.Int(a.logRetentionDays()),
 		Tags:            b.tags(),
-	}, b.childOpts(false)...)
+	}, b.childOptsFor(Child{Kind: KindLogGroup}, false)...)
 	if err != nil {
 		return fmt.Errorf("create log group: %w", err)
 	}
@@ -1067,7 +1107,9 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 	}
 	a.optionalClusterArgs(clusterArgs)
 
-	cluster, err := eks.NewCluster(b.ctx, b.child(Child{Kind: KindCluster}), clusterArgs, b.childOpts(true, pulumi.DependsOn(deps))...)
+	clusterChild := Child{Kind: KindCluster}
+
+	cluster, err := eks.NewCluster(b.ctx, b.child(clusterChild), clusterArgs, b.childOptsFor(clusterChild, true, pulumi.DependsOn(deps))...)
 	if err != nil {
 		return fmt.Errorf("create cluster: %w", err)
 	}
@@ -1079,7 +1121,11 @@ func (b *builder) build(clusterTrust, nodeTrust pulumi.StringInput) error {
 		return err
 	}
 
-	return b.coreDNS(cluster)
+	if err := b.coreDNS(cluster); err != nil {
+		return err
+	}
+
+	return b.endpoint(cluster)
 }
 
 func (b *builder) accessEntries(cluster *eks.Cluster) error {
@@ -1088,7 +1134,7 @@ func (b *builder) accessEntries(cluster *eks.Cluster) error {
 			ClusterName:  cluster.Name,
 			PrincipalArn: pulumi.String(e.PrincipalARN),
 			Type:         pulumi.String("STANDARD"),
-		}, b.childOpts(false)...)
+		}, b.childOptsFor(Child{Kind: KindAccessEntry, Key: e.Name}, false)...)
 		if err != nil {
 			return fmt.Errorf("create access entry %s: %w", e.Name, err)
 		}
@@ -1106,7 +1152,7 @@ func (b *builder) accessEntries(cluster *eks.Cluster) error {
 			PrincipalArn: pulumi.String(e.PrincipalARN),
 			PolicyArn:    pulumi.String(e.PolicyARN),
 			AccessScope:  scope,
-		}, b.childOpts(false, pulumi.DependsOn([]pulumi.Resource{entry}))...); err != nil {
+		}, b.childOptsFor(Child{Kind: KindAccessPolicy, Key: e.Name}, false, pulumi.DependsOn([]pulumi.Resource{entry}))...); err != nil {
 			return fmt.Errorf("create access policy association %s: %w", e.Name, err)
 		}
 	}
@@ -1135,7 +1181,7 @@ func (b *builder) coreDNS(cluster *eks.Cluster) error {
 		ConfigurationValues:      pulumi.String(values),
 		ResolveConflictsOnCreate: pulumi.String("OVERWRITE"),
 		ResolveConflictsOnUpdate: pulumi.String("OVERWRITE"),
-	}, b.childOpts(false)...); err != nil {
+	}, b.childOptsFor(Child{Kind: KindCoreDNS}, false)...); err != nil {
 		return fmt.Errorf("create coredns addon: %w", err)
 	}
 

@@ -42,8 +42,8 @@ var testCAPEM = func() string {
 }()
 
 type alias struct {
-	typ      string
-	noParent bool
+	typ, name string
+	noParent  bool
 }
 
 type registration struct {
@@ -54,8 +54,9 @@ type registration struct {
 }
 
 type recorder struct {
-	mu   sync.Mutex
-	regs []registration
+	mu      sync.Mutex
+	regs    []registration
+	invokes []string
 }
 
 func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
@@ -67,8 +68,8 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 		reg.protect = rpc.GetProtect()
 
 		for _, a := range rpc.GetAliases() {
-			if spec := a.GetSpec(); spec != nil && spec.GetName() == "" {
-				reg.aliases = append(reg.aliases, alias{typ: spec.GetType(), noParent: spec.GetNoParent()})
+			if spec := a.GetSpec(); spec != nil {
+				reg.aliases = append(reg.aliases, alias{typ: spec.GetType(), name: spec.GetName(), noParent: spec.GetNoParent()})
 			}
 		}
 	}
@@ -96,7 +97,22 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 	return args.Name + "-id", outs, nil
 }
 
-func (*recorder) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+func (r *recorder) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	if args.Token == "aws:iam/getPolicyDocument:getPolicyDocument" {
+		// What the provider renders: here, the statements as JSON, so a test
+		// reads back what was asked for.
+		raw, err := json.Marshal(args.Args.Mappable())
+		if err != nil {
+			return nil, err
+		}
+
+		r.mu.Lock()
+		r.invokes = append(r.invokes, string(raw))
+		r.mu.Unlock()
+
+		return resource.PropertyMap{"json": resource.NewStringProperty(string(raw))}, nil
+	}
+
 	return args.Args, nil
 }
 
@@ -168,8 +184,9 @@ func legacy(c ekscluster.Child) string {
 }
 
 type result struct {
-	regs []registration
-	comp *ekscluster.EksCluster
+	regs    []registration
+	invokes []string
+	comp    *ekscluster.EksCluster
 }
 
 func run(t *testing.T, args *ekscluster.Args, mutate ...func(a *ekscluster.Args)) (result, error) {
@@ -196,7 +213,7 @@ func run(t *testing.T, args *ekscluster.Args, mutate ...func(a *ekscluster.Args)
 		return err
 	}, pulumi.WithMocks("example", "dev", rec))
 
-	res.regs = rec.regs
+	res.regs, res.invokes = rec.regs, rec.invokes
 
 	return res, err
 }
@@ -364,7 +381,7 @@ func TestAliasesAreNoParentOnEveryChildWithLegacyTopLevel(t *testing.T) {
 		var plain int
 
 		for _, al := range r.aliases {
-			if al.noParent && al.typ == "" {
+			if al.noParent && al.typ == "" && al.name == "" {
 				plain++
 			}
 		}
