@@ -7,6 +7,7 @@ them, and for anything breaking, what to do.
 ## Unreleased
 
 - `pkg/aws/vpclayout`: hub-and-spoke peering of a plan's networks. `ValidateIndexes` refuses two networks with one index (the same /16); `Peering.Validate` refuses an unknown hub or spoke, an empty or repeated connection name, a spoke with two connections and the hub peered with itself; `Plan.SpokeCIDRsOutside` lists the spokes' CIDRs a supernet does not cover (what admits "the peered VPCs" by the supernet must admit these too); `Peering.RouterlessSpokes` and `Plan.RouterlessSpokeCIDRs` list the spokes with no router of their own, which the hub's routers reach over the peering. Moved from a consumer; its results are unchanged.
+- `pkg/aws/autolb` (new): `FindAutoModeNLB` returns the DNS name of the load balancer EKS Auto Mode provisioned for a Service, found by the tags Auto Mode puts on it (`TagServiceStack` = `<namespace>/<service>` and `TagClusterName`; both must match). None is "not yet" (empty, no error), two are an error, an API error is never "not yet". A read through the AWS SDK (`API` is the narrow ELBv2 surface it needs); the module now requires `aws-sdk-go-v2/service/elasticloadbalancingv2`. Moved from a consumer.
 
 ## v0.29.0
 
