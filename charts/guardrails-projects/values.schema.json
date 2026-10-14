@@ -198,6 +198,31 @@
           "items": {
             "$ref": "#/definitions/rule"
           }
+        },
+        "eksEgress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "nodeCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "serviceCIDR": {
+              "type": "string"
+            },
+            "dnsPeers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
         }
       }
     },

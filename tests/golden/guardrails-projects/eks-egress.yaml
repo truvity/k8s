@@ -1,0 +1,79 @@
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+    # the message broker
+    - ports:
+      - port: 4222
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: broker
+    # kube-apiserver
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.0.0.0/16
+      - ipBlock:
+          cidr: 172.20.0.0/16
+    # internet HTTPS
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+          - 169.254.169.254/32
+    # EKS Pod Identity Agent
+    - ports:
+      - port: 80
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 169.254.170.23/32
+    # cluster DNS
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            example.com/dns-forwarder: "true"
+      - ipBlock:
+          cidr: 172.20.0.0/16
+      - ipBlock:
+          cidr: 10.0.0.0/16

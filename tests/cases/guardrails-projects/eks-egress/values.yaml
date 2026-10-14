@@ -1,0 +1,15 @@
+# The EKS egress preset after one rule of the caller's, with a DNS peer.
+networkPolicy:
+  egress:
+    - description: the message broker
+      to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: broker}}
+      ports: [{port: 4222, protocol: TCP}]
+  eksEgress:
+    enabled: true
+    nodeCIDRs: [10.0.0.0/16]
+    serviceCIDR: 172.20.0.0/16
+    dnsPeers:
+      - namespaceSelector: {matchLabels: {example.com/dns-forwarder: "true"}}
+projects:
+  - {name: shop, kind: product}

@@ -1456,3 +1456,11 @@ prune everything else. A row listed twice, a Pod Security label among a
 row's `labels`, an unknown quota profile and a rule without a description
 are refused.
 
+`networkPolicy.eksEgress` (`enabled: true`) appends, after the shared `egress`
+rules and for every row, the egress a workload of an EKS cluster needs: the API
+server (443 to `nodeCIDRs` and `serviceCIDR`), HTTPS to the internet except the
+instance metadata service (`169.254.169.254/32`), the EKS Pod Identity Agent
+(`169.254.170.23/32`, 80) and DNS (53 UDP and TCP to `dnsPeers`, verbatim, then
+the service range and the node ranges). `nodeCIDRs` and `serviceCIDR` are
+required when it is on.
+
