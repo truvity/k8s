@@ -1,0 +1,5 @@
+# A misspelt preset key.
+presets:
+  metricsServer:
+    enabled: true
+    nodeCidrs: [10.0.0.0/16]

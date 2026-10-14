@@ -1234,6 +1234,7 @@ namespace.
 | `policies[]` | none | One policy per entry (below). |
 | `protect` | `false` | Every policy carries `argocd.argoproj.io/sync-options: Prune=false,Delete=false`. Off by default: a NetworkPolicy is cheap to put back and a stale one is the hazard. |
 | `helmKeep` | `false` | Also `helm.sh/resource-policy: keep` on protected policies. |
+| `presets.metricsServer` | off | metrics-server's egress (below), rendered after `policies[]` as one more entry. |
 
 An entry: `name`, `namespace`, `reason` (at least ten characters, not rendered),
 `podSelector` (a label selector; `{}` selects every pod of the namespace) and
@@ -1244,6 +1245,18 @@ What the render refuses: an unknown key, a missing reason, an entry listed twice
 `ingress` or `egress` rules for a direction `policyTypes` does not list
 (Kubernetes would silently ignore them) and a literal annotation that sets a key
 the chart computes.
+
+### Presets
+
+`presets.metricsServer` (`enabled: true`) renders `metrics-server/metrics-server`
+for pods labelled `app.kubernetes.io/name: metrics-server`: egress only, to
+`nodeCIDRs` and `serviceCIDR` on TCP 10250 (the kubelets) and 443 (the API
+server), and to `dnsPeers` (further peers that answer DNS, verbatim), the
+service range and the node ranges on 53 UDP and TCP. Ingress is not selected, so
+the API server's calls into it stay open. `nodeCIDRs` and `serviceCIDR` are
+required; `name`, `namespace`, `podSelector`, `reason`, `syncWave` and
+`protect` override the defaults. The preset is an entry like any other: listing
+the same namespace and name in `policies[]` too is refused.
 
 ### The first policy denies
 

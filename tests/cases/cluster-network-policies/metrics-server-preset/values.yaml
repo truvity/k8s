@@ -1,0 +1,27 @@
+# The metrics-server preset beside one listed policy, with a DNS peer, a sync
+# wave and the chart's protection.
+protect: true
+policies:
+  - name: router
+    namespace: router
+    reason: "The router accepts traffic from the overlay range and may reach anywhere."
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: router
+    policyTypes: [Ingress, Egress]
+    ingress:
+      - from:
+          - ipBlock:
+              cidr: 100.64.0.0/10
+    egress:
+      - {}
+presets:
+  metricsServer:
+    enabled: true
+    nodeCIDRs: [10.0.0.0/16]
+    serviceCIDR: 172.20.0.0/16
+    dnsPeers:
+      - namespaceSelector:
+          matchLabels:
+            example.com/dns-forwarder: "true"
+    syncWave: 15

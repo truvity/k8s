@@ -1,7 +1,8 @@
-{{- /* One NetworkPolicy per entry of `policies`, in the order given. */ -}}
+{{- /* One NetworkPolicy per entry of `policies`, in the order given, then one per enabled preset. */ -}}
 {{- $root := . -}}
 {{- $seen := dict -}}
-{{- range $i, $p := .Values.policies }}
+{{- $policies := concat (.Values.policies | default list) (include "cluster-network-policies.presets" . | fromYamlArray) -}}
+{{- range $i, $p := $policies }}
 {{- $key := printf "%s/%s" $p.namespace $p.name -}}
 {{- if hasKey $seen $key -}}
 {{- fail (printf "policies[%d]: %s is listed twice" $i $key) -}}

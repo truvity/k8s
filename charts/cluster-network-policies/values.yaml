@@ -33,3 +33,31 @@ helmKeep: false
 # that had none turns that namespace's selected pods default-deny. Check what a
 # namespace already has before adding to it.
 policies: []
+
+# Presets: common policies rendered from a few facts, after `policies` and
+# held to the same rules (no name twice, the chart's `protect`).
+presets:
+  # metrics-server's egress: every kubelet on 10250 and the API server on 443
+  # over the node and service ranges, and DNS. Ingress (the API server's calls
+  # into it) is not selected, so it stays unrestricted.
+  metricsServer:
+    enabled: false
+    name: metrics-server
+    namespace: metrics-server
+    reason: "Scrapes every kubelet on 10250 and reaches the API server and the cluster resolver; ingress, the API server's calls into it, stays unrestricted."
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: metrics-server
+    # The node range (the VPC on EKS): the kubelets and the API endpoint.
+    # Required when enabled.
+    nodeCIDRs: []
+    # The cluster's service range (the cluster DNS Service, the API Service).
+    # Required when enabled.
+    serviceCIDR: ""
+    # Further NetworkPolicy peers that answer DNS (a namespace selector, say),
+    # listed before the service and node ranges.
+    dnsPeers: []
+    # argocd.argoproj.io/sync-wave of the policy; null renders none.
+    syncWave: null
+    # Overrides the chart's `protect`; null follows it.
+    protect: null
