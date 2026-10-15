@@ -22,11 +22,25 @@ jobs:
     permissions:
       contents: write
       packages: write
-    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@b38472fac2bff567c7b138654cebc7da485170ca # v3.26.1
+    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@4c264a5e74b9b31f3b69f3267c99b9b5a0029627 # v3.31.0
     with:
       # ko publishes cmd/identity-check to ghcr.io/truvity/k8s/identity-check.
       ko-docker-repo: ghcr.io/truvity/k8s
       charts: '["cilium-config","cluster-baseline","cluster-foundation","cluster-network-policies","cluster-pki","eks-auto-node-pools","guardrails-projects","local-volumes","talos-etcd-backup","tenancy"]'
+
+  # Signs the released images by digest: cosign keyless (GitHub OIDC) plus a
+  # GitHub build-provenance attestation. Job-level permissions replace the
+  # workflow-level ones, so id-token and attestations are granted here only.
+  sign:
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: truvity/ci-workflows/.github/workflows/sign-images.yaml@4c264a5e74b9b31f3b69f3267c99b9b5a0029627 # v3.31.0
+    with:
+      images: ${{ needs.release.outputs.images }}
 
   # The CRD mirror charts (volume-snapshot-crds cilium-crds) are NOT in the `charts` list above: the
   # shared workflow stamps the tag onto every chart it is given, and these

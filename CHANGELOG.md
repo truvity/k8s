@@ -6,6 +6,15 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- Release images (`ghcr.io/truvity/k8s/identity-check`) are now signed with cosign keyless and carry a GitHub build-provenance attestation, both by digest. Verify a digest, never a tag:
+
+  ```sh
+  cosign verify ghcr.io/truvity/k8s/identity-check@<digest> \
+    --certificate-identity-regexp '^https://github.com/truvity/k8s/' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  gh attestation verify oci://ghcr.io/truvity/k8s/identity-check@<digest> -R truvity/k8s
+  ```
+
 ## v0.31.0
 
 - `cmd/identity-check` (new) and its image `ghcr.io/truvity/k8s/identity-check:<version>` (linux/amd64 and linux/arm64, static, distroless, nonroot), published by each release from now on. It proves the pod it runs in was admitted with an EKS Pod Identity or IRSA identity (the injected environment) and that STS accepts it (`GetCallerIdentity`, no IAM permission needed), and it never falls back to the instance metadata service. Flags: `-expect-role NAME`, `-timeout` (default 30s). It runs as a Job whose retries are new pods; charts reach it through truvity/policy's `service-lib.identityCheck`. The module now requires `aws-sdk-go-v2/config`, `feature/ec2/imds` and `service/sts`.
