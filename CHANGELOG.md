@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.31.0
+
 - `cmd/identity-check` (new) and its image `ghcr.io/truvity/k8s/identity-check:<version>` (linux/amd64 and linux/arm64, static, distroless, nonroot), published by each release from now on. It proves the pod it runs in was admitted with an EKS Pod Identity or IRSA identity (the injected environment) and that STS accepts it (`GetCallerIdentity`, no IAM permission needed), and it never falls back to the instance metadata service. Flags: `-expect-role NAME`, `-timeout` (default 30s). It runs as a Job whose retries are new pods; charts reach it through truvity/policy's `service-lib.identityCheck`. The module now requires `aws-sdk-go-v2/config`, `feature/ec2/imds` and `service/sts`.
 
 ## v0.30.0
