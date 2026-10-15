@@ -1,14 +1,40 @@
 # Tag-triggered release through truvity/ci-workflows release-public.yaml.
 #
-# A library: the tag is the Go module's version and needs no build step. No
-# binary is built yet, so `builds` is skipped; add one here when a command
-# is added, and archives follow from it.
+# The tag is the Go module's version. One command is built: cmd/identity-check,
+# shipped as a static distroless image (ko, below) at the tag's version.
 version: 2
 
 project_name: k8s
 
 builds:
-  - skip: true
+  - id: identity-check
+    main: ./cmd/identity-check
+    binary: identity-check
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+
+# The caller's ko-docker-repo (release.yaml: ghcr.io/truvity/k8s) plus
+# base_import_paths puts the image at ghcr.io/truvity/k8s/identity-check.
+kos:
+  - id: identity-check
+    build: identity-check
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    bare: true
+    preserve_import_paths: false
+    base_import_paths: true
+    base_image: gcr.io/distroless/static:nonroot
+    sbom: none
+    labels:
+      org.opencontainers.image.title: identity-check
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.source: https://github.com/truvity/k8s
 
 checksum:
   name_template: checksums.txt
@@ -28,6 +54,7 @@ release:
     ## k8s {{ .Tag }}
 
     Go module: `go get github.com/truvity/k8s@{{ .Tag }}`.
+    Image: `ghcr.io/truvity/k8s/identity-check:{{ .Version }}` (linux/amd64, linux/arm64).
     Charts, version `{{ .Version }}`: `oci://ghcr.io/truvity/charts/cluster-baseline`,
     `oci://ghcr.io/truvity/charts/cluster-foundation`,
     `oci://ghcr.io/truvity/charts/cluster-network-policies`,

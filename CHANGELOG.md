@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `cmd/identity-check` (new) and its image `ghcr.io/truvity/k8s/identity-check:<version>` (linux/amd64 and linux/arm64, static, distroless, nonroot), published by each release from now on. It proves the pod it runs in was admitted with an EKS Pod Identity or IRSA identity (the injected environment) and that STS accepts it (`GetCallerIdentity`, no IAM permission needed), and it never falls back to the instance metadata service. Flags: `-expect-role NAME`, `-timeout` (default 30s). It runs as a Job whose retries are new pods; charts reach it through truvity/policy's `service-lib.identityCheck`. The module now requires `aws-sdk-go-v2/config`, `feature/ec2/imds` and `service/sts`.
+
 ## v0.30.0
 
 - `pkg/aws/vpclayout`: hub-and-spoke peering of a plan's networks. `ValidateIndexes` refuses two networks with one index (the same /16); `Peering.Validate` refuses an unknown hub or spoke, an empty or repeated connection name, a spoke with two connections and the hub peered with itself; `Plan.SpokeCIDRsOutside` lists the spokes' CIDRs a supernet does not cover (what admits "the peered VPCs" by the supernet must admit these too); `Peering.RouterlessSpokes` and `Plan.RouterlessSpokeCIDRs` list the spokes with no router of their own, which the hub's routers reach over the peering. Moved from a consumer; its results are unchanged.

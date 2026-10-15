@@ -26,6 +26,7 @@ capabilities.
 | `pkg/talos/schematic` — a Talos Image Factory schematic, its ID computed offline, the pinned installer image reference | Go package |
 | `pkg/talos/machineconfig` — a self-hosted Talos cluster's machine configs rendered offline from a declared cluster and its secrets, validated as Talos does; the talosconfig; the contract | Go package |
 | `pkg/talos/cilium` — the upstream Cilium chart's values for a Talos cluster | Go package |
+| `cmd/identity-check` — proves a pod was admitted with its EKS Pod Identity or IRSA identity, see [identity-check](#identity-check) | Command and image, `ghcr.io/truvity/k8s/identity-check` |
 | `charts/cilium-config` — LoadBalancer IP pools, L2 announcements (default) and optional BGP for Cilium, as data | Helm chart, `oci://ghcr.io/truvity/charts/cilium-config` |
 | `pkg/talos/oidc` — a ServiceAccount issuer's discovery document and JWKS, generated offline | Go package |
 | `pkg/aws/oidcissuer` — publishes them to an S3-compatible bucket and registers the IAM OIDC provider (IAM roles for service accounts off EKS), `truvity:k8s/aws:OidcIssuer` | Pulumi component |
@@ -129,6 +130,33 @@ No consumer is recorded at v0; a repository that adopts it adds a line here.
   is held to (`docs/contracts/component.md`).
 - [ci-workflows](https://github.com/truvity/ci-workflows) — the shared CI and
   release workflows this repository calls.
+
+## identity-check
+
+`cmd/identity-check` is the gate a release puts in front of its workloads
+so that none of them starts without its cloud identity. An EKS Pod Identity
+association is eventually consistent ([CreatePodIdentityAssociation](https://docs.aws.amazon.com/eks/latest/APIReference/API_CreatePodIdentityAssociation.html)):
+it can exist before the cluster's pod admission can see it, and credentials
+are injected only when a pod is created. A pod admitted in that gap has no
+credentials for its whole life, so the check is a Job with
+`restartPolicy: Never`, whose retries are new pods.
+
+It looks for the injected identity (`AWS_CONTAINER_CREDENTIALS_FULL_URI` and
+`AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` for Pod Identity, or `AWS_ROLE_ARN`
+and `AWS_WEB_IDENTITY_TOKEN_FILE` for IRSA) and exits non-zero at once when
+neither is there. Then it calls STS `GetCallerIdentity`, which needs no IAM
+permission. It never reads the instance metadata service, so a node's role
+cannot stand in for a missing pod identity. It logs JSON.
+
+| Flag | Default | |
+| --- | --- | --- |
+| `-expect-role NAME` | none | fail unless the assumed role's name is `NAME` |
+| `-timeout` | `30s` | bound on the STS call, retries included |
+
+The image is `ghcr.io/truvity/k8s/identity-check:<version>` (the release
+version without the `v`), static, distroless and nonroot, for linux/amd64 and
+linux/arm64. Charts do not write the Job themselves: they include
+truvity/policy's `service-lib.identityCheck` template.
 
 ## Documentation
 
