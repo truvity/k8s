@@ -16,7 +16,6 @@ import (
 
 type registration struct {
 	typ, name, parent string
-	noParentAlias     bool
 	aliasCount        int
 	secretString      string
 }
@@ -32,12 +31,6 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 	if rpc := args.RegisterRPC; rpc != nil {
 		reg.parent = rpc.GetParent()
 		reg.aliasCount = len(rpc.GetAliases()) + len(rpc.GetAliasURNs())
-
-		for _, a := range rpc.GetAliases() {
-			if spec := a.GetSpec(); spec != nil && spec.GetNoParent() && spec.GetName() == "" && spec.GetType() == "" {
-				reg.noParentAlias = true
-			}
-		}
 	}
 
 	if v, ok := args.Inputs["secretString"]; ok {
@@ -74,7 +67,7 @@ func run(t *testing.T, args *pullthroughcache.Args) ([]registration, error) {
 	return rec.regs, err
 }
 
-func example(legacy bool) *pullthroughcache.Args {
+func example() *pullthroughcache.Args {
 	return &pullthroughcache.Args{
 		Upstreams: []pullthroughcache.Upstream{
 			{Prefix: "hub", RegistryURL: "registry-1.docker.io", NeedsCredentials: true},
@@ -86,14 +79,13 @@ func example(legacy bool) *pullthroughcache.Args {
 			"hub": {Username: pulumi.String("hub-user"), Token: pulumi.String("hub-token")},
 			"gh":  {Username: pulumi.String("gh-user"), Token: pulumi.String("gh-token")},
 		},
-		LegacyTopLevel: legacy,
 	}
 }
 
 const componentURNType = pullthroughcache.TypeToken
 
 func TestChildrenKeepTheirCurrentNames(t *testing.T) {
-	regs, err := run(t, example(true))
+	regs, err := run(t, example())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +134,8 @@ func countType(regs []registration, typ string) int {
 	return n
 }
 
-func TestLegacyTopLevelAliasesEveryChild(t *testing.T) {
-	regs, err := run(t, example(true))
+func TestEveryChildIsUnderTheComponent(t *testing.T) {
+	regs, err := run(t, example())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,29 +148,24 @@ func TestLegacyTopLevelAliasesEveryChild(t *testing.T) {
 		if !strings.Contains(r.parent, "::"+componentURNType+"::cache") {
 			t.Errorf("%s %s: parent %q is not the component", r.typ, r.name, r.parent)
 		}
-
-		if !r.noParentAlias || r.aliasCount != 1 {
-			t.Errorf("%s %s: want exactly one NoParent alias (same name, same type), got noParent=%v count=%d",
-				r.typ, r.name, r.noParentAlias, r.aliasCount)
-		}
 	}
 }
 
-func TestWithoutLegacyTopLevelThereAreNoAliases(t *testing.T) {
-	regs, err := run(t, example(false))
+func TestThereAreNoAliases(t *testing.T) {
+	regs, err := run(t, example())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, r := range regs {
 		if r.aliasCount != 0 {
-			t.Errorf("%s %s carries %d aliases without LegacyTopLevel", r.typ, r.name, r.aliasCount)
+			t.Errorf("%s %s carries %d aliases", r.typ, r.name, r.aliasCount)
 		}
 	}
 }
 
 func TestSecretPayloadAndName(t *testing.T) {
-	regs, err := run(t, example(false))
+	regs, err := run(t, example())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,8 +190,8 @@ func TestSecretPayloadAndName(t *testing.T) {
 	t.Fatal("no secret version for hub")
 }
 
-func TestNamingHookIsUsedForNameAndAlias(t *testing.T) {
-	args := example(true)
+func TestNamingHookIsUsedForTheName(t *testing.T) {
+	args := example()
 	args.Names = func(kind pullthroughcache.Kind, prefix string) string { return string(kind) + "." + prefix }
 
 	regs, err := run(t, args)
@@ -217,10 +204,6 @@ func TestNamingHookIsUsedForNameAndAlias(t *testing.T) {
 	for _, r := range regs {
 		if r.name == "rule.quay" {
 			found = true
-
-			if !r.noParentAlias {
-				t.Error("hooked child lost its alias")
-			}
 		}
 	}
 
@@ -265,7 +248,7 @@ func TestRefuses(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			args := example(true)
+			args := example()
 			tc.mutate(args)
 
 			regs, err := run(t, args)
@@ -290,7 +273,7 @@ func TestPrefixesOutput(t *testing.T) {
 	rec := &recorder{}
 
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		c, err := pullthroughcache.NewPullThroughCache(ctx, "cache", example(false))
+		c, err := pullthroughcache.NewPullThroughCache(ctx, "cache", example())
 		if err != nil {
 			return err
 		}

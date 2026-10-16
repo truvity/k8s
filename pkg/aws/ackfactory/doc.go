@@ -21,7 +21,7 @@
 // resources, under the same logical names, as the program they were lifted
 // from, so adopting them is no change to the stack: names are API (see
 // docs/decisions/0002-urn-stability.md). The identities that are Pod Identity
-// roles are podidentity components, registered with LegacyTopLevel.
+// roles are podidentity components.
 //
 // What the package does not know: the cluster's name, account, region and
 // partition, the names of the permissions boundaries and which projects have
