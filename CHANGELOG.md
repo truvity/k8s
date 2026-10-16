@@ -12,9 +12,10 @@ them, and for anything breaking, what to do.
 
   ```sh
   cosign verify ghcr.io/truvity/k8s/identity-check@<digest> \
-    --certificate-identity-regexp '^https://github.com/truvity/k8s/' \
-    --certificate-oidc-issuer https://token.actions.githubusercontent.com
-  gh attestation verify oci://ghcr.io/truvity/k8s/identity-check@<digest> -R truvity/k8s
+    --certificate-identity-regexp '^https://github.com/truvity/ci-workflows/\.github/workflows/sign-images\.yaml@' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --certificate-github-workflow-repository truvity/k8s
+  gh attestation verify oci://ghcr.io/truvity/k8s/identity-check@<digest> -R truvity/k8s --signer-repo truvity/ci-workflows
   ```
 
 ## v0.31.0
