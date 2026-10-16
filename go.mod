@@ -14,7 +14,6 @@ require (
 	github.com/pulumi/pulumi-aws/sdk/v7 v7.48.0
 	github.com/pulumi/pulumi/sdk/v3 v3.267.0
 	github.com/siderolabs/talos/pkg/machinery v1.14.2
-	github.com/truvity/cnpg/v2 v2.11.0
 	go.yaml.in/yaml/v3 v3.0.5
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 )
@@ -58,6 +57,7 @@ require (
 	github.com/containernetworking/cni v1.3.0 // indirect
 	github.com/cosi-project/runtime v1.16.3 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.5.0 // indirect
 	github.com/djherbis/times v1.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
