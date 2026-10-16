@@ -406,11 +406,6 @@ type Args struct {
 	// from a name it had before, say). Nil adds none. It must not set the
 	// parent or the provider, which are the component's.
 	ChildOptions func(Child) []pulumi.ResourceOption
-	// LegacyTopLevel makes every child carry an alias from the URN it has
-	// when it is registered directly under the stack (no parent), with the
-	// same type and the name Names gives it. Set it when adopting resources
-	// that were created before they were wrapped in this component.
-	LegacyTopLevel bool
 	// Protect marks the cluster, the KMS key and the two roles protected, so
 	// a preview that would delete or replace them fails. Nil (the default)
 	// protects them; point it at false only for a cluster that is meant to be
@@ -936,10 +931,6 @@ func (b *builder) child(c Child) string {
 // what Args.ChildOptions adds for c.
 func (b *builder) childOptsFor(c Child, protect bool, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
 	out := append([]pulumi.ResourceOption{pulumi.Parent(b.comp), pulumi.Provider(b.args.Provider)}, extra...)
-
-	if b.args.LegacyTopLevel {
-		out = append(out, pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}}))
-	}
 
 	if protect && b.args.protect() {
 		out = append(out, pulumi.Protect(true))

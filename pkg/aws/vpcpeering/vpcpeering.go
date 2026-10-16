@@ -172,11 +172,6 @@ type Args struct {
 	// Names overrides the logical names of the children. Nil uses
 	// DefaultName.
 	Names NameFunc
-	// LegacyTopLevel makes every child carry an alias from the URN it has
-	// when it is registered directly under the stack (no parent), with the
-	// same type and the name Names gives it. Set it when adopting resources
-	// that were created before they were wrapped in this component.
-	LegacyTopLevel bool
 	// Protect marks the connection and the accepter protected, so a preview
 	// that would delete or replace them fails. Nil means true: deleting the
 	// connection cuts all traffic between the two VPCs. Point it at false
@@ -469,10 +464,6 @@ func (b *builder) child(c Child) string {
 // provider of its side, and the adoption alias when asked for.
 func (b *builder) childOpts(p pulumi.ProviderResource, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
 	out := append([]pulumi.ResourceOption{pulumi.Parent(b.comp), pulumi.Provider(p)}, extra...)
-
-	if b.args.LegacyTopLevel {
-		out = append(out, pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}}))
-	}
 
 	return out
 }

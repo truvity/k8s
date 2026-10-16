@@ -151,11 +151,6 @@ type Args struct {
 	// Names overrides the logical names of the children. Nil uses
 	// DefaultName.
 	Names NameFunc
-	// LegacyTopLevel makes every child carry an alias from the URN it has
-	// when it is registered directly under the stack (no parent), with the
-	// same type and the name Names gives it. Set it when adopting resources
-	// that were created before they were wrapped in this component.
-	LegacyTopLevel bool
 	// Protect marks the role, the policy and the associations protected, so
 	// a preview that would delete or replace them fails. False (the default)
 	// protects nothing.
@@ -416,10 +411,6 @@ func (b *builder) child(c Child) string {
 // provider, the adoption alias when asked for, and protection when asked for.
 func (b *builder) childOpts(protect bool, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
 	out := append([]pulumi.ResourceOption{pulumi.Parent(b.comp), pulumi.Provider(b.args.Provider)}, extra...)
-
-	if b.args.LegacyTopLevel {
-		out = append(out, pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}}))
-	}
 
 	if protect && b.args.Protect {
 		out = append(out, pulumi.Protect(true))

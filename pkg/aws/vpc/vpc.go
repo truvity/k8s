@@ -399,11 +399,6 @@ type Args struct {
 	// Names overrides the logical names of the children. Nil uses
 	// DefaultName.
 	Names NameFunc
-	// LegacyTopLevel makes every child carry an alias from the URN it has
-	// when it is registered directly under the stack (no parent), with the
-	// same type and the name Names gives it. Set it when adopting resources
-	// that were created before they were wrapped in this component.
-	LegacyTopLevel bool
 	// Protect marks the VPC and the subnets protected, so a preview that
 	// would delete or replace them fails. Nil means true. Point it at false
 	// only for a VPC that is meant to be torn down. No other child is

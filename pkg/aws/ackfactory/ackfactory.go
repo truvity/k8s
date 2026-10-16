@@ -190,7 +190,6 @@ func IAM(ctx *pulumi.Context, c Cluster, o Options, withProjectAssume bool) (*po
 		AccountID:           c.AccountID,
 		ClusterARN:          c.ARN(),
 		InlinePolicy:        &podidentity.InlinePolicy{Name: c.Name + "-ack-iam-policy", Document: pulumi.String(policy)},
-		LegacyTopLevel:      true,
 		Names: func(k podidentity.Child) string {
 			switch k.Kind {
 			case podidentity.KindRolePolicy:
@@ -305,7 +304,6 @@ func EKSWith(ctx *pulumi.Context, c Cluster, o Options, e EKSOptions) (*podident
 		AccountID:           c.AccountID,
 		ClusterARN:          c.ARN(),
 		InlinePolicy:        &podidentity.InlinePolicy{Name: c.Name + "-ack-eks-policy", Document: pulumi.String(policy)},
-		LegacyTopLevel:      true,
 		Names: func(k podidentity.Child) string {
 			switch k.Kind {
 			case podidentity.KindRolePolicy:
@@ -474,7 +472,6 @@ func deployService(ctx *pulumi.Context, c Cluster, o ServicesOptions, svc Servic
 		ManagedPolicy:         &podidentity.ManagedPolicy{Name: name, Description: svc.Description, Document: pulumi.String(policyDoc)},
 		IgnoreAssociationTags: true,
 		Imports:               imports,
-		LegacyTopLevel:        true,
 		Names: func(k podidentity.Child) string {
 			switch k.Kind {
 			case podidentity.KindPolicy:

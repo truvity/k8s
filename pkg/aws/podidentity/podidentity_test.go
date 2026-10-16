@@ -83,7 +83,6 @@ func base() *podidentity.Args {
 		ManagedPolicy: &podidentity.ManagedPolicy{
 			Name: "c1-app", Description: "what it is for", Document: pulumi.String(`{"managed":true}`),
 		},
-		LegacyTopLevel: true,
 	}
 }
 
@@ -251,54 +250,8 @@ func TestEveryChildIsUnderTheComponentAndItsProvider(t *testing.T) {
 	}
 }
 
-func TestAliasesAreNoParentOnEveryChildWithLegacyTopLevel(t *testing.T) {
-	res, err := run(t, base())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, r := range children(res.regs) {
-		plain := 0
-
-		for _, al := range r.aliases {
-			if al.noParent && al.typ == "" {
-				plain++
-			}
-		}
-
-		if plain != 1 {
-			t.Errorf("%s %s: want exactly one plain NoParent alias, got %d", r.typ, r.name, plain)
-		}
-	}
-}
-
-// The AWS SDK may declare aliases of its own on these types without a parent.
-// Under a component those resolve beneath the component, so a state still
-// holding the former type at the top level would be missed. ADR 0003 item 6:
-// whatever the SDK aliases, the legacy set must repeat. The SDK declares none
-// on these types today; this goes red when an upgrade adds one.
-func TestTheSDKAliasesNoneOfTheseTypes(t *testing.T) {
-	res, err := run(t, base())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, r := range children(res.regs) {
-		for _, al := range r.aliases {
-			if !al.noParent {
-				t.Errorf("%s %s: the SDK now aliases from %q; make LegacyTopLevel repeat it with no parent (ADR 0003 item 6)", r.typ, r.name, al.typ)
-			}
-
-			if al.noParent && al.typ != "" {
-				t.Errorf("%s %s: a typed NoParent alias from %q the SDK does not declare", r.typ, r.name, al.typ)
-			}
-		}
-	}
-}
-
-func TestWithoutLegacyTopLevelNoChildCarriesAnAlias(t *testing.T) {
+func TestNoChildCarriesAnAlias(t *testing.T) {
 	a := base()
-	a.LegacyTopLevel = false
 
 	res, err := run(t, a)
 	if err != nil {
