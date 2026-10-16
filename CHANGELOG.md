@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- **Breaking: `pkg/aws/backupbucket` is removed.** It was a forwarder, deprecated since v0.13.0, to `github.com/truvity/cnpg/v2/pkg/aws/backupstore`. To migrate, import `backupstore` and rename `BackupBucket` to `BackupStore`; every other name (`New`, `Args`, `Replica`, `Backstop`, `BackstopArgs`, `Transition`, `TypeToken`, `DefaultPartition`) is the same. Resource URNs do not move: the component's type has been `truvity:cnpg/aws:BackupStore` since the move. No importer is left in the truvity, trust-form or finttech organisations. The module no longer depends on `github.com/truvity/cnpg/v2`.
+
 ## v0.31.1
 
 - Release images (`ghcr.io/truvity/k8s/identity-check`) are now signed with cosign keyless and carry a GitHub build-provenance attestation, both by digest. Verify a digest, never a tag:
