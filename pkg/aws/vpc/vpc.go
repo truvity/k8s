@@ -65,6 +65,18 @@ const (
 	KindFlowLogPolicy Kind = "flow-log-policy"
 	// KindFlowLog is the ec2.FlowLog.
 	KindFlowLog Kind = "flow-log"
+	// KindFlowLogBucket is the s3.BucketV2 of the flow logs, with
+	// FlowLogs.Destination "s3".
+	KindFlowLogBucket Kind = "flow-log-bucket"
+	// KindFlowLogBucketPublicAccess is the bucket's public access block.
+	KindFlowLogBucketPublicAccess Kind = "flow-log-bucket-public-access"
+	// KindFlowLogBucketEncryption is the bucket's default encryption (SSE-S3).
+	KindFlowLogBucketEncryption Kind = "flow-log-bucket-encryption"
+	// KindFlowLogBucketPolicy is the bucket policy: log delivery may write,
+	// everything else must use TLS.
+	KindFlowLogBucketPolicy Kind = "flow-log-bucket-policy"
+	// KindFlowLogBucketLifecycle is the bucket's expiry rule.
+	KindFlowLogBucketLifecycle Kind = "flow-log-bucket-lifecycle"
 )
 
 // SubnetType is whether a subnet routes to the internet gateway or to NAT.
@@ -159,7 +171,10 @@ type NameFunc func(Child) string
 // "<c>-subnet-<subnet>-<az>", "<c>-subnet-<subnet>-<az>-assoc",
 // "<c>-nat-eip-<az>", "<c>-nat-<az>", "<c>-nat-route-<az>",
 // "<c>-<service>-endpoint", "<c>-flow-log-group", "<c>-flow-log-role",
-// "<c>-flow-log-policy" and "<c>-flow-log". These names are API.
+// "<c>-flow-log-policy", "<c>-flow-log", "<c>-flow-log-bucket",
+// "<c>-flow-log-bucket-public-access", "<c>-flow-log-bucket-encryption",
+// "<c>-flow-log-bucket-policy" and "<c>-flow-log-bucket-lifecycle". These
+// names are API.
 func DefaultName(c Child) string {
 	switch c.Kind {
 	case KindDefaultSecurityGroup:
@@ -200,6 +215,16 @@ func DefaultName(c Child) string {
 		return c.Component + "-flow-log-policy"
 	case KindFlowLog:
 		return c.Component + "-flow-log"
+	case KindFlowLogBucket:
+		return c.Component + "-flow-log-bucket"
+	case KindFlowLogBucketPublicAccess:
+		return c.Component + "-flow-log-bucket-public-access"
+	case KindFlowLogBucketEncryption:
+		return c.Component + "-flow-log-bucket-encryption"
+	case KindFlowLogBucketPolicy:
+		return c.Component + "-flow-log-bucket-policy"
+	case KindFlowLogBucketLifecycle:
+		return c.Component + "-flow-log-bucket-lifecycle"
 	default:
 		return c.Component + "-vpc"
 	}
@@ -229,18 +254,41 @@ type Subnet struct {
 	Tags map[string]string
 }
 
-// FlowLogs configures the VPC flow logs: a CloudWatch Logs log group, the
-// role the flow log service assumes to write to it, and the flow log.
+// Flow log destinations for FlowLogs.Destination.
+const (
+	// FlowLogsCloudWatch sends the flow logs to a CloudWatch Logs log group
+	// (the default).
+	FlowLogsCloudWatch = "cloud-watch-logs"
+	// FlowLogsS3 sends the flow logs to an S3 bucket the component creates.
+	FlowLogsS3 = "s3"
+)
+
+// FlowLogs configures the VPC flow logs: by default a CloudWatch Logs log
+// group, the role the flow log service assumes to write to it, and the flow
+// log; with Destination "s3", a bucket and the flow log.
 type FlowLogs struct {
 	// Disable turns the flow logs, their log group and their role off.
 	Disable bool
+	// Destination is FlowLogsCloudWatch (default) or FlowLogsS3. With S3 the
+	// component registers no log group, role or role policy; the flow log
+	// keeps its name, so switching an existing flow log replaces it.
+	Destination string
+	// S3 configures the bucket of Destination "s3". Ignored otherwise.
+	S3 FlowLogsS3Bucket
+	// RetainLogGroup registers the log group with RetainOnDelete, so that
+	// removing it from the program (Disable, or Destination "s3") forgets it
+	// in the state and leaves the group, with its data, in the account to
+	// age out under its retention. Apply it while the group is still
+	// registered, then switch the destination in a later update.
+	RetainLogGroup bool
 	// LogGroupName is the log group's name. Default
 	// "/vpc/flow-logs/<component name>".
 	LogGroupName string
 	// RoleName is the IAM role's name. Default
 	// "<component name>-flow-logs".
 	RoleName string
-	// RetentionDays is the log group's retention. Default 365.
+	// RetentionDays is the log group's retention. Default 365. CloudWatch
+	// destination only.
 	RetentionDays int
 	// TrafficType is ALL, ACCEPT or REJECT. Default ALL.
 	TrafficType string
@@ -249,6 +297,21 @@ type FlowLogs struct {
 	AggregationSeconds int
 	// PermissionsBoundaryARN, when set, is the role's permissions boundary.
 	PermissionsBoundaryARN pulumi.StringInput
+}
+
+// FlowLogsS3Bucket configures the bucket of FlowLogs.Destination "s3": a
+// private bucket with SSE-S3, TLS only, public access blocked, and an expiry
+// rule. There is no replication and no versioning.
+type FlowLogsS3Bucket struct {
+	// BucketName is the bucket's name. Required with Destination "s3".
+	BucketName string
+	// AccountID is the owning account, for the log delivery conditions in the
+	// bucket policy. Required with Destination "s3".
+	AccountID string
+	// Partition is the ARN partition. Default "aws".
+	Partition string
+	// ExpireDays expires objects after this many days. Default 90.
+	ExpireDays int
 }
 
 // Args configures the component.
@@ -678,6 +741,27 @@ func (a *Args) checkMisc() []error {
 	}
 
 	f := a.FlowLogs
+
+	switch f.Destination {
+	case "", FlowLogsCloudWatch:
+	case FlowLogsS3:
+		if !f.Disable {
+			if f.S3.BucketName == "" {
+				errs = append(errs, errors.New("args: FlowLogs.S3.BucketName is empty with Destination \"s3\""))
+			}
+
+			if f.S3.AccountID == "" {
+				errs = append(errs, errors.New("args: FlowLogs.S3.AccountID is empty with Destination \"s3\""))
+			}
+		}
+
+		if f.S3.ExpireDays < 0 {
+			errs = append(errs, fmt.Errorf("args: FlowLogs.S3.ExpireDays %d is negative", f.S3.ExpireDays))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("args: FlowLogs.Destination %q is not cloud-watch-logs or s3", f.Destination))
+	}
+
 	if f.RetentionDays < 0 {
 		errs = append(errs, fmt.Errorf("args: FlowLogs.RetentionDays %d is negative", f.RetentionDays))
 	}

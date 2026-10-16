@@ -71,7 +71,12 @@ func (a *Args) plan(component string) []Child {
 		out = append(out, Child{Component: component, Kind: KindGatewayEndpoint, Service: svc})
 	}
 
-	if !a.FlowLogs.Disable {
+	switch {
+	case a.FlowLogs.Disable:
+	case a.FlowLogs.Destination == FlowLogsS3:
+		out = append(out, c(KindFlowLogBucket), c(KindFlowLogBucketPublicAccess), c(KindFlowLogBucketEncryption),
+			c(KindFlowLogBucketPolicy), c(KindFlowLogBucketLifecycle), c(KindFlowLog))
+	default:
 		out = append(out, c(KindFlowLogGroup), c(KindFlowLogRole), c(KindFlowLogPolicy), c(KindFlowLog))
 	}
 

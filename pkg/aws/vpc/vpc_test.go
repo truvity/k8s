@@ -24,6 +24,7 @@ type registration struct {
 	typ, name, parent, provider string
 	aliases                     []alias
 	protect                     bool
+	retain                      bool
 	inputs                      resource.PropertyMap
 }
 
@@ -39,6 +40,7 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 		reg.parent = rpc.GetParent()
 		reg.provider = rpc.GetProvider()
 		reg.protect = rpc.GetProtect()
+		reg.retain = rpc.GetRetainOnDelete()
 
 		for _, a := range rpc.GetAliases() {
 			if spec := a.GetSpec(); spec != nil && spec.GetName() == "" {
@@ -1288,5 +1290,81 @@ func TestValidateOnItsOwn(t *testing.T) {
 	a.CIDR = ""
 	if err := a.Validate(); err == nil {
 		t.Fatal("an args with no CIDR passes Validate")
+	}
+}
+
+func TestFlowLogsToS3(t *testing.T) {
+	res, err := run(t, base(), func(a *vpc.Args) {
+		a.FlowLogs.Destination = vpc.FlowLogsS3
+		a.FlowLogs.S3 = vpc.FlowLogsS3Bucket{BucketName: "flow-bucket", AccountID: "111122223333"}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, r := range children(res.regs) {
+		if strings.Contains(r.typ, "logGroup") || strings.Contains(r.typ, "iam/") {
+			t.Errorf("%s registered with the S3 destination", r.typ)
+		}
+	}
+
+	b := find(t, res.regs, "aws:s3/bucketV2:BucketV2", "net-flow-log-bucket")
+	if str(b, "bucket") != "flow-bucket" {
+		t.Errorf("bucket: %v", b.inputs)
+	}
+
+	find(t, res.regs, "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock", "net-flow-log-bucket-public-access")
+	find(t, res.regs, "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2", "net-flow-log-bucket-encryption")
+	find(t, res.regs, "aws:s3/bucketPolicy:BucketPolicy", "net-flow-log-bucket-policy")
+
+	l := find(t, res.regs, "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2", "net-flow-log-bucket-lifecycle")
+	rules := l.inputs["rules"].ArrayValue()
+	if len(rules) != 1 || rules[0].ObjectValue()["expiration"].ObjectValue()["days"].NumberValue() != 90 {
+		t.Errorf("lifecycle: %v", l.inputs)
+	}
+
+	f := find(t, res.regs, "aws:ec2/flowLog:FlowLog", "net-flow-log")
+	if str(f, "logDestinationType") != "s3" || str(f, "trafficType") != "ALL" {
+		t.Errorf("flow log: %v", f.inputs)
+	}
+
+	if _, ok := f.inputs["iamRoleArn"]; ok {
+		t.Error("a role with the S3 destination")
+	}
+}
+
+func TestFlowLogsS3Validation(t *testing.T) {
+	a := base()
+	a.FlowLogs.Destination = vpc.FlowLogsS3
+
+	if _, err := run(t, a); err == nil || !strings.Contains(err.Error(), "BucketName") {
+		t.Errorf("S3 without a bucket: %v", err)
+	}
+
+	a = base()
+	a.FlowLogs.Destination = "kinesis"
+
+	if _, err := run(t, a); err == nil || !strings.Contains(err.Error(), "Destination") {
+		t.Errorf("bad destination: %v", err)
+	}
+}
+
+func TestRetainLogGroup(t *testing.T) {
+	res, err := run(t, base(), func(a *vpc.Args) { a.FlowLogs.RetainLogGroup = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g := find(t, res.regs, "aws:cloudwatch/logGroup:LogGroup", "net-flow-log-group"); !g.retain {
+		t.Error("log group not retained on delete")
+	}
+
+	res, err = run(t, base())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g := find(t, res.regs, "aws:cloudwatch/logGroup:LogGroup", "net-flow-log-group"); g.retain {
+		t.Error("log group retained by default")
 	}
 }
