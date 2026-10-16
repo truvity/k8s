@@ -62,11 +62,10 @@ func ptr[T any](v T) *T { return &v }
 
 func base() *eksoidc.Args {
 	return &eksoidc.Args{
-		ClusterName:    pulumi.String("c1"),
-		ConfigName:     "issuer",
-		IssuerURL:      "https://issuer.example.test",
-		ClientID:       "k8s:c1",
-		LegacyTopLevel: true,
+		ClusterName: pulumi.String("c1"),
+		ConfigName:  "issuer",
+		IssuerURL:   "https://issuer.example.test",
+		ClientID:    "k8s:c1",
 	}
 }
 
@@ -186,50 +185,8 @@ func TestTheChildIsUnderTheComponentAndItsProvider(t *testing.T) {
 	}
 }
 
-func TestAliasIsNoParentWithLegacyTopLevel(t *testing.T) {
-	regs, err := run(t, base())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var plain int
-
-	for _, al := range only(t, regs).aliases {
-		if al.noParent && al.typ == "" {
-			plain++
-		}
-	}
-
-	if plain != 1 {
-		t.Errorf("want exactly one plain NoParent alias, got %d", plain)
-	}
-}
-
-// The AWS SDK may declare aliases of its own on this type without a parent.
-// Under a component those resolve beneath the component, so a state still
-// holding the former type at the top level would be missed. ADR 0003 item 6:
-// whatever the SDK aliases, the legacy set must repeat. The SDK declares none
-// on this type today; this goes red when an upgrade adds one.
-func TestTheSDKAliasesNoneOfThisType(t *testing.T) {
-	regs, err := run(t, base())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, al := range only(t, regs).aliases {
-		if !al.noParent {
-			t.Errorf("the SDK now aliases from %q; make LegacyTopLevel repeat it with no parent (ADR 0003 item 6)", al.typ)
-		}
-
-		if al.noParent && al.typ != "" {
-			t.Errorf("a typed NoParent alias from %q the SDK does not declare", al.typ)
-		}
-	}
-}
-
-func TestWithoutLegacyTopLevelNoAlias(t *testing.T) {
+func TestNoAlias(t *testing.T) {
 	a := base()
-	a.LegacyTopLevel = false
 
 	regs, err := run(t, a)
 	if err != nil {
@@ -237,7 +194,7 @@ func TestWithoutLegacyTopLevelNoAlias(t *testing.T) {
 	}
 
 	if got := only(t, regs).aliases; len(got) != 0 {
-		t.Errorf("aliases = %v without LegacyTopLevel", got)
+		t.Errorf("aliases = %v", got)
 	}
 }
 

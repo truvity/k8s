@@ -55,7 +55,7 @@ func TestEndpointChildrenDefaultNames(t *testing.T) {
 	}
 }
 
-func TestEndpointChildrenAreTheComponentsWithTheLegacyAlias(t *testing.T) {
+func TestEndpointChildrenAreTheComponents(t *testing.T) {
 	res, err := run(t, withEndpoint())
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestEndpointChildrenAreTheComponentsWithTheLegacyAlias(t *testing.T) {
 
 	for _, name := range []string{"k-api-ingress-0", "k-api-ingress-1"} {
 		r := find(t, res.regs, sgRule, name)
-		if !strings.Contains(r.parent, ekscluster.TypeToken) || len(r.aliases) != 1 || !r.aliases[0].noParent {
+		if !strings.Contains(r.parent, ekscluster.TypeToken) || len(r.aliases) != 0 {
 			t.Errorf("%s: parent %q aliases %v", name, r.parent, r.aliases)
 		}
 
@@ -73,7 +73,7 @@ func TestEndpointChildrenAreTheComponentsWithTheLegacyAlias(t *testing.T) {
 	}
 
 	r := find(t, res.regs, record, "k-api-record")
-	if !strings.Contains(r.parent, ekscluster.TypeToken) || len(r.aliases) != 1 || !r.aliases[0].noParent {
+	if !strings.Contains(r.parent, ekscluster.TypeToken) || len(r.aliases) != 0 {
 		t.Errorf("record: parent %q aliases %v", r.parent, r.aliases)
 	}
 }
@@ -226,15 +226,8 @@ func TestChildOptionsReachTheirChild(t *testing.T) {
 
 	r := find(t, res.regs, record, "k-api-record")
 
-	var named, plain bool
-
-	for _, al := range r.aliases {
-		named = named || (al.name == "old-record" && al.noParent)
-		plain = plain || (al.name == "" && al.noParent)
-	}
-
-	if !named || !plain {
-		t.Errorf("record aliases %v: want the legacy alias and the hook's", r.aliases)
+	if len(r.aliases) != 1 || r.aliases[0].name != "old-record" || !r.aliases[0].noParent {
+		t.Errorf("record aliases %v: want exactly the hook's", r.aliases)
 	}
 
 	for _, c := range children(res.regs) {
