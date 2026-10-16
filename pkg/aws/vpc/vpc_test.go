@@ -1296,7 +1296,7 @@ func TestValidateOnItsOwn(t *testing.T) {
 func TestFlowLogsToS3(t *testing.T) {
 	res, err := run(t, base(), func(a *vpc.Args) {
 		a.FlowLogs.Destination = vpc.FlowLogsS3
-		a.FlowLogs.S3 = vpc.FlowLogsS3Bucket{BucketName: "flow-bucket", AccountID: "111122223333"}
+		a.FlowLogs.S3 = vpc.FlowLogsS3Bucket{BucketName: "flow-bucket", AccountID: "acct-1"}
 	})
 	if err != nil {
 		t.Fatal(err)

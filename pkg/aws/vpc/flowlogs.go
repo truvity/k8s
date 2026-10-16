@@ -166,14 +166,16 @@ func (b *builder) createS3FlowLogs() error {
 		return fmt.Errorf("create flow logs bucket public access block: %w", err)
 	}
 
-	if _, err := s3.NewBucketServerSideEncryptionConfigurationV2(b.ctx, b.child(Child{Kind: KindFlowLogBucketEncryption}), &s3.BucketServerSideEncryptionConfigurationV2Args{
+	sse := &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+		SseAlgorithm: pulumi.String("AES256"),
+	}
+
+	encChild := b.child(Child{Kind: KindFlowLogBucketEncryption})
+
+	if _, err := s3.NewBucketServerSideEncryptionConfigurationV2(b.ctx, encChild, &s3.BucketServerSideEncryptionConfigurationV2Args{
 		Bucket: bucket.ID(),
 		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-					SseAlgorithm: pulumi.String("AES256"),
-				},
-			},
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{ApplyServerSideEncryptionByDefault: sse},
 		},
 	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("create flow logs bucket encryption: %w", err)
