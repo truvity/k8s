@@ -6,6 +6,10 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.31.2
+
+- Dependency updates.
+
 ## v0.31.1
 
 - Release images (`ghcr.io/truvity/k8s/identity-check`) are now signed with cosign keyless and carry a GitHub build-provenance attestation, both by digest. Verify a digest, never a tag:
