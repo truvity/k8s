@@ -16,7 +16,6 @@ capabilities.
 | `pkg/cluster` — the provider-neutral contract: outputs and capabilities, with a validator | Go package, no cloud dependency |
 | `pkg/cluster/clusterout` — the contract as a Pulumi output (`Contract` of every provider component) | Go package |
 | `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component, unreleased |
-| `pkg/aws/backupbucket` — DEPRECATED, moved to `truvity/cnpg` `pkg/aws/backupstore`; a versioned, KMS-encrypted cross-account backup bucket with version deletion denied, optional Object Lock and cross-region replica, `truvity:k8s/aws:BackupBucket` | Pulumi component, unreleased |
 | `pkg/aws/vpcpeering` — a cross-account, cross-region VPC peering with its routes, DNS-resolution options and private-zone associations, `truvity:k8s/aws:VpcPeering` | Pulumi component, unreleased |
 | `pkg/aws/vpc` — a VPC with its subnets, route tables, gateways, NAT, IPv6, hardened defaults, gateway endpoints and flow logs, `truvity:k8s/aws:Vpc` | Pulumi component, unreleased |
 | `pkg/aws/podidentity` — an EKS Pod Identity role with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component, unreleased |
