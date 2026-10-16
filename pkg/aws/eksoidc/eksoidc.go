@@ -73,11 +73,6 @@ type Args struct {
 
 	// Names overrides the logical name of the child. Nil uses DefaultName.
 	Names NameFunc
-	// LegacyTopLevel makes the child carry an alias from the URN it has when
-	// it is registered directly under the stack (no parent), with the same
-	// type and the name Names gives it. Set it when adopting an association
-	// that was created before it was wrapped in this component.
-	LegacyTopLevel bool
 	// Protect marks the association protected, so a preview that would delete
 	// or replace it fails. Nil (the default) protects; point it at false only
 	// for a cluster that is meant to be torn down.
@@ -183,10 +178,6 @@ func New(ctx *pulumi.Context, name string, args *Args, opts ...pulumi.ResourceOp
 		// EKS admits one external OIDC association per cluster: a replace
 		// has to disassociate the old one first.
 		pulumi.DeleteBeforeReplace(true),
-	}
-
-	if args.LegacyTopLevel {
-		childOpts = append(childOpts, pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}}))
 	}
 
 	if args.protect() {

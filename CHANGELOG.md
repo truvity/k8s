@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- **Breaking: `LegacyTopLevel` is removed** from `pkg/aws/ekscluster`, `pkg/aws/eksoidc`, `pkg/aws/podidentity`, `pkg/aws/pullthroughcache`, `pkg/aws/vpc` and `pkg/aws/vpcpeering`, and `pkg/aws/ackfactory` no longer sets it on its Pod Identity roles. The option aliased every child from the URN it had directly under the stack, to adopt resources created before the component (ADR 0003). Once a stack has been applied with the component its state holds the component URNs, and the alias matches nothing. Before upgrading: apply every stack that sets it with your current version, then drop the field, and preview: no create or delete. A stack that still needs an alias for some children carries it itself (`ekscluster.Args.ChildOptions`, or a `pulumi.Transforms` on the component's options). Wrapper modules that set the field (truvity/cnpg backupstore, ci-plane runneridentity, cd registryread, artifacts ecrcache, observability credentials) drop it in their own releases first.
+
 ## v0.31.1
 
 - Release images (`ghcr.io/truvity/k8s/identity-check`) are now signed with cosign keyless and carry a GitHub build-provenance attestation, both by digest. Verify a digest, never a tag:

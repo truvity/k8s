@@ -70,7 +70,6 @@ cache, err := pullthroughcache.NewPullThroughCache(ctx, "cache", &pullthroughcac
 | `Upstreams` | `[]Upstream` | The registries to cache; at least one. `Prefix` (2 to 30 characters ECR accepts, unique), `RegistryURL` (host, no scheme), `NeedsCredentials`. |
 | `Credentials` | `map[string]Credentials` | By `Prefix`: `Username` and `Token` (`pulumi.StringInput`). Required for every upstream with `NeedsCredentials`, refused for any other prefix. The component reads no parameter store. |
 | `Names` | `NameFunc` | Optional hook returning the logical name of a child for a `Kind` (`rule`, `secret`, `secret-version`) and prefix. Nil uses `DefaultName`. Names must be non-empty and unique. |
-| `LegacyTopLevel` | `bool` | Alias every child from the URN it has as a loose resource directly under the stack. For adopting existing resources. |
 
 `Args.Validate()` (called by the constructor before anything is registered)
 returns one error joining every problem: no upstreams, an empty, malformed
@@ -94,10 +93,7 @@ customer key); its payload is `{"username": ..., "accessToken": ...}` and is
 marked secret. The rule carries the secret's ARN and depends on the secret
 and its version, because ECR treats a secret with no version as not found.
 
-With `LegacyTopLevel` every child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the same
-name and type, no parent. The AWS provider resource is not a child and is
-not aliased.
+The component declares no aliases of its own. A caller adopting resources registered elsewhere adds them itself, for example with a `pulumi.Transforms` on the component's options. The AWS provider resource is not a child.
 
 ### Outputs
 
@@ -252,7 +248,6 @@ p, err := vpcpeering.New(ctx, "hub-spoke", &vpcpeering.Args{
 | `ZoneAssociations` | Private hosted zones to associate with a VPC (`Name`, `ZoneID`, `VPCID`, `Region`, `CrossAccount`, `ZoneProvider`, `VPCProvider`). Cross-account ones need both providers and register an authorization first. |
 | `Tags` | Set on the connection and the accepter. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
-| `LegacyTopLevel` | Adopt loose resources by alias. |
 | `Protect` | `*bool`; nil means true. |
 
 `Args.Validate()` (called by the constructor before anything is registered)
@@ -287,11 +282,7 @@ Requester-side children use `RequesterProvider`, accepter-side children
 
 ### Aliases
 
-With `LegacyTopLevel` every child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
-hook gives it, the same type, no parent. The AWS SDK declares no aliases of
-its own on these types today (ADR 0003 item 6); a test fails when an upgrade
-adds one the component does not mirror.
+The component declares no aliases of its own. A caller adopting resources registered elsewhere adds them itself, for example with a `pulumi.Transforms` on the component's options.
 
 ### Protection
 
@@ -349,7 +340,6 @@ v, err := vpc.New(ctx, "net", &vpc.Args{
 | `Tags` | none | On every child that takes tags. |
 | `ChildTags` | none | `func(Child) map[string]string`, extra tags per child, such as `Name`. |
 | `Names` | `DefaultName` | Naming hook, `func(Child) string`. |
-| `LegacyTopLevel` | false | Adopt loose resources by alias. |
 | `Protect` | true | `*bool`. |
 
 A child's tags, in increasing precedence: `Name` (the child's `DefaultName`),
@@ -422,11 +412,7 @@ rule. IPv6 rules appear only with IPv6.
 
 ### Aliases
 
-With `LegacyTopLevel` every child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
-hook gives it, the same type, no parent. The AWS SDK declares no aliases of
-its own on these types today (ADR 0003 item 6); a test fails when an upgrade
-adds one the component does not mirror.
+The component declares no aliases of its own. A caller adopting resources registered elsewhere adds them itself, for example with a `pulumi.Transforms` on the component's options.
 
 ### Protection
 
@@ -488,7 +474,6 @@ id, err := podidentity.New(ctx, "reports", &podidentity.Args{
 | `IgnoreAssociationTags` | Ignore changes to the associations' `tags` and `tagsAll`. |
 | `Imports` | IDs of existing `Role`, `Policy`, `Attachment` and per-service-account `Associations` to adopt. Empty creates the child. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
-| `LegacyTopLevel` | Adopt loose resources by alias. |
 | `Protect` | `bool`; false (the default) protects nothing. |
 
 `Args.Validate()` (called by the constructor before anything is registered)
@@ -531,11 +516,7 @@ replacement, whose delete succeeds and whose create may not. Set
 
 ### Aliases
 
-With `LegacyTopLevel` every child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
-hook gives it, the same type, no parent. The AWS SDK declares no aliases of
-its own on these types today (ADR 0003 item 6); a test fails when an upgrade
-adds one the component does not mirror.
+The component declares no aliases of its own. A caller adopting resources registered elsewhere adds them itself, for example with a `pulumi.Transforms` on the component's options.
 
 ### Protection
 
@@ -613,7 +594,6 @@ c, err := ekscluster.New(ctx, "main", &ekscluster.Args{
 | `Tags` | Set on the key, the roles, the log group and the cluster. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
 | `ChildOptions` | `func(Child) []pulumi.ResourceOption`: options added to one child's (an alias from an older name, say). Nil adds none. Not for the parent or the provider. |
-| `LegacyTopLevel` | Adopt loose resources by alias. |
 | `Protect` | `*bool`; nil (the default) protects. |
 
 `Args.Validate()` (called by the constructor before anything is registered)
@@ -682,11 +662,7 @@ API.
 
 ### Aliases
 
-With `LegacyTopLevel` every child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
-hook gives it, the same type, no parent. The AWS SDK declares no aliases of
-its own on these types today (ADR 0003 item 6); a test fails when an upgrade
-adds one the component does not mirror.
+The component declares no aliases of its own. `ChildOptions` adds options, an alias for example, to one child.
 
 ### Protection
 
@@ -742,7 +718,6 @@ o, err := eksoidc.New(ctx, "main", &eksoidc.Args{
 | `UsernamePrefix` | Default `-`, EKS's value for no prefix. Left unset EKS prefixes the issuer, which turns every binding on a bare name into another name. |
 | `GroupsClaim` | Default `groups`. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
-| `LegacyTopLevel` | Adopt a loose resource by alias. |
 | `Protect` | `*bool`; nil (the default) protects. |
 
 `Args.Validate()` (called by the constructor before anything is registered)
@@ -763,11 +738,7 @@ registered with delete-before-replace.
 
 ### Aliases
 
-With `LegacyTopLevel` the child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the name the
-hook gives it, the same type, no parent. The AWS SDK declares no aliases of its
-own on this type today (ADR 0003 item 6); a test fails when an upgrade adds one
-the component does not mirror.
+The component declares no aliases of its own. A caller adopting resources registered elsewhere adds them itself, for example with a `pulumi.Transforms` on the component's options.
 
 ### Protection
 
@@ -824,9 +795,7 @@ must equal the live one when adopting.
 
 ### Aliases
 
-Every Pod Identity role is registered with `LegacyTopLevel`, so a stack that
-registered the same names directly is a no-change preview. The roles and policies
-of `ProjectRoles` are registered directly under the stack, as they always were.
+The Pod Identity roles are podidentity components, and the roles and policies of `ProjectRoles` are registered directly under the stack, as they always were. Neither carries an alias.
 
 ## Other provider components
 

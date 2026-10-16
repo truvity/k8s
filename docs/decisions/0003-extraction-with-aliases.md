@@ -1,6 +1,6 @@
 # 0003 — A component carries its own adoption alias
 
-**Status:** Accepted
+**Status:** Accepted; the option it introduced is retired (see Retirement)
 
 ## Context
 
@@ -48,3 +48,14 @@ from a replace.
 - A component's children names are API (0002); the naming hook is how a
   caller keeps names that were chosen before the component existed, and it
   is refused when it returns an empty or repeated name.
+
+## Retirement
+
+Every stack that set `LegacyTopLevel` on these components has since been
+applied, so its state holds the component URNs and the alias matches
+nothing; a preview with the option dropped shows no create or delete. The
+option is removed from ekscluster, eksoidc, podidentity, pullthroughcache,
+vpc and vpcpeering, and ackfactory no longer sets it. A caller with a stack
+that was never applied after its adoption applies it with an earlier release
+first, or carries the alias itself (`ChildOptions` on ekscluster, or a
+`pulumi.Transforms` on any component's options).

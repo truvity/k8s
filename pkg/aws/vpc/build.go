@@ -251,10 +251,6 @@ func (b *builder) child(c Child) string {
 func (b *builder) childOpts(extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
 	out := append([]pulumi.ResourceOption{pulumi.Parent(b.comp), pulumi.Provider(b.args.Provider)}, extra...)
 
-	if b.args.LegacyTopLevel {
-		out = append(out, pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}}))
-	}
-
 	return out
 }
 
