@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/vpc`: the flow logs can go to S3. `FlowLogs.Destination: "s3"` (with `FlowLogs.S3{BucketName, AccountID, Partition, ExpireDays}`) creates a private bucket (public access blocked, SSE-S3, TLS only, log-delivery policy, expiry after `ExpireDays`, default 90) and a flow log with the default format; no log group, role or role policy is registered. The flow log keeps its name, so switching an existing VPC replaces the flow log (its destination cannot change in place) and removes the group, role and policy from the program. `FlowLogs.RetainLogGroup` registers the log group with `RetainOnDelete`, so a later `Disable` or switch to S3 forgets the group in the state and leaves it, with its data, in the account. Set it in one update, switch in the next. The default (CloudWatch, no retain) is unchanged.
+
 - **Breaking: `pkg/aws/backupbucket` is removed.** It was a forwarder, deprecated since v0.13.0, to `github.com/truvity/cnpg/v2/pkg/aws/backupstore`. To migrate, import `backupstore` and rename `BackupBucket` to `BackupStore`; every other name (`New`, `Args`, `Replica`, `Backstop`, `BackstopArgs`, `Transition`, `TypeToken`, `DefaultPartition`) is the same. Resource URNs do not move: the component's type has been `truvity:cnpg/aws:BackupStore` since the move. No importer is left in the truvity, trust-form or finttech organisations. The module no longer depends on `github.com/truvity/cnpg/v2`.
 
 ## v0.31.2
