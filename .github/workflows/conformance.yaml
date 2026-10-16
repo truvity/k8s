@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: truvity/ci-actions/setup-devbox@598251d570fd99ba403b99bfa65ae4472ed25e73 # v1.8.0
+      - uses: truvity/ci-actions/setup-devbox@f9130c63db2899c18884c027a7eade20d0ab796a # v1.18.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install kind and talosctl (pinned, checksummed)
