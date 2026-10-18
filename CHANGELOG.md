@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.34.0
+
 - `cmd/identity-check`: new flag `-expect-account ID` (12 digits, optional, validated at startup; a malformed value fails the Job at once). The check fails unless the caller's account equals `ID`, and also fails if the STS `Account` field and the account in the caller's ARN disagree. Without the flag nothing changes. An image older than this release rejects the flag as unknown, so pin the release that carries it before passing `-expect-account`. The success log line gains an `account` attribute.
 
 ## v0.33.0
