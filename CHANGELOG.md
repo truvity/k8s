@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `cmd/identity-check`: new flag `-expect-account ID` (12 digits, optional, validated at startup; a malformed value fails the Job at once). The check fails unless the caller's account equals `ID`, and also fails if the STS `Account` field and the account in the caller's ARN disagree. Without the flag nothing changes. An image older than this release rejects the flag as unknown, so pin the release that carries it before passing `-expect-account`. The success log line gains an `account` attribute.
+
 ## v0.33.0
 
 - `pkg/aws/vpc`: the flow logs can go to S3. `FlowLogs.Destination: "s3"` (with `FlowLogs.S3{BucketName, AccountID, Partition, ExpireDays}`) creates a private bucket (public access blocked, SSE-S3, TLS only, log-delivery policy, expiry after `ExpireDays`, default 90) and a flow log with the default format; no log group, role or role policy is registered. The flow log keeps its name, so switching an existing VPC replaces the flow log (its destination cannot change in place) and removes the group, role and policy from the program. `FlowLogs.RetainLogGroup` registers the log group with `RetainOnDelete`, so a later `Disable` or switch to S3 forgets the group in the state and leaves it, with its data, in the account. Set it in one update, switch in the next. The default (CloudWatch, no retain) is unchanged.

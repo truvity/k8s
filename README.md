@@ -150,6 +150,7 @@ cannot stand in for a missing pod identity. It logs JSON.
 | Flag | Default | |
 | --- | --- | --- |
 | `-expect-role NAME` | none | fail unless the assumed role's name is `NAME` |
+| `-expect-account ID` | none | fail unless the caller's AWS account is `ID` (12 digits, validated at startup; the STS `Account` field must also agree with the ARN's account) |
 | `-timeout` | `30s` | bound on the STS call, retries included |
 
 The image is `ghcr.io/truvity/k8s/identity-check:<version>` (the release
