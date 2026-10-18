@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -52,4 +53,50 @@ func roleName(arn string) (string, error) {
 		return "", fmt.Errorf("%q is not an assumed-role ARN", arn)
 	}
 	return resource[1], nil
+}
+
+var accountPattern = regexp.MustCompile(`^[0-9]{12}$`)
+
+// validateAccount refuses a malformed -expect-account at startup, so a typo
+// fails the Job at once instead of reading as an account mismatch. Empty
+// means the flag was not given.
+func validateAccount(id string) error {
+	if id != "" && !accountPattern.MatchString(id) {
+		return fmt.Errorf("-expect-account %q is not a 12-digit AWS account id", id)
+	}
+	return nil
+}
+
+// arnAccount is the account segment of an ARN
+// (arn:<partition>:<service>:<region>:<account>:<resource>).
+func arnAccount(arn string) string {
+	parts := strings.SplitN(arn, ":", 6)
+	if len(parts) != 6 {
+		return ""
+	}
+	return parts[4]
+}
+
+// accountOf is the caller's account for logging: the GetCallerIdentity
+// Account field, or the ARN's segment when the field is empty.
+func accountOf(account, arn string) string {
+	if account != "" {
+		return account
+	}
+	return arnAccount(arn)
+}
+
+// checkAccount verifies the caller runs in the expected account. The
+// GetCallerIdentity Account field and the ARN's account segment must both
+// equal want; if they disagree with each other the response is not trusted
+// and the check fails, whichever of them matches.
+func checkAccount(account, arn, want string) error {
+	fromARN := arnAccount(arn)
+	if account != fromARN {
+		return fmt.Errorf("the caller's account is inconsistent: GetCallerIdentity says %q, its ARN says %q", account, fromARN)
+	}
+	if account != want {
+		return fmt.Errorf("the pod runs in account %q, want %q", account, want)
+	}
+	return nil
 }

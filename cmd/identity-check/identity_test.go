@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -101,6 +102,56 @@ func TestRoleName(t *testing.T) {
 				t.Fatalf("role = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestValidateAccount(t *testing.T) {
+	for _, id := range []string{"", "111122223333"} {
+		if err := validateAccount(id); err != nil {
+			t.Errorf("validateAccount(%q) = %v, want nil", id, err)
+		}
+	}
+	for _, id := range []string{"1111", "11112222333", "1111222233334", "11112222333a", " 111122223333", "arn:example:iam::111122223333:root"} {
+		if err := validateAccount(id); err == nil {
+			t.Errorf("validateAccount(%q) = nil, want an error", id)
+		}
+	}
+}
+
+func TestCheckAccount(t *testing.T) {
+	const arn = "arn:example:sts::111122223333:assumed-role/app-role/s"
+	tests := []struct {
+		name, account, arn, want, errPart string
+	}{
+		{name: "match", account: "111122223333", arn: arn, want: "111122223333"},
+		{name: "mismatch", account: "111122223333", arn: arn, want: "444455556666", errPart: "want"},
+		{name: "arn and field disagree, field matches", account: "444455556666", arn: arn, want: "444455556666", errPart: "inconsistent"},
+		{name: "arn and field disagree, arn matches", account: "444455556666", arn: arn, want: "111122223333", errPart: "inconsistent"},
+		{name: "empty field", account: "", arn: arn, want: "111122223333", errPart: "inconsistent"},
+		{name: "not an ARN", account: "111122223333", arn: "x", want: "111122223333", errPart: "inconsistent"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkAccount(tt.account, tt.arn, tt.want)
+			if tt.errPart == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.errPart) {
+				t.Fatalf("err = %v, want one containing %q", err, tt.errPart)
+			}
+		})
+	}
+}
+
+// TestRunMalformedExpectAccount pins that a malformed flag fails before
+// detection: it is a usage error, not an identity failure.
+func TestRunMalformedExpectAccount(t *testing.T) {
+	err := run(t.Context(), discardLogger(), []string{"-expect-account", "123"}, func(string) string { return "" })
+	if err == nil || errors.Is(err, errNoIdentity) {
+		t.Fatalf("err = %v, want a malformed-flag error", err)
 	}
 }
 

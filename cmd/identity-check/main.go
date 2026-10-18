@@ -20,6 +20,7 @@
 // Flags:
 //
 //	-expect-role NAME  fail unless the assumed role's name is NAME (optional)
+//	-expect-account ID fail unless the caller's AWS account is ID, 12 digits (optional)
 //	-timeout D         bound on the STS call, retries included (default 30s)
 package main
 
@@ -50,8 +51,13 @@ func run(ctx context.Context, log *slog.Logger, args []string, getenv func(strin
 	flags := flag.NewFlagSet("identity-check", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	expect := flags.String("expect-role", "", "the role name the pod must have assumed (optional)")
+	expectAccount := flags.String("expect-account", "", "the 12-digit AWS account the pod must run in (optional)")
 	timeout := flags.Duration("timeout", 30*time.Second, "how long to wait for STS, retries included")
 	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	if err := validateAccount(*expectAccount); err != nil {
 		return err
 	}
 
@@ -87,7 +93,14 @@ func run(ctx context.Context, log *slog.Logger, args []string, getenv func(strin
 		return fmt.Errorf("the pod assumed role %q, want %q", role, *expect)
 	}
 
+	if *expectAccount != "" {
+		if err := checkAccount(aws.ToString(out.Account), arn, *expectAccount); err != nil {
+			return err
+		}
+	}
+
 	log.InfoContext(ctx, "workload identity verified",
-		slog.String("kind", kind), slog.String("role", role), slog.String("arn", arn))
+		slog.String("kind", kind), slog.String("role", role), slog.String("arn", arn),
+		slog.String("account", accountOf(aws.ToString(out.Account), arn)))
 	return nil
 }
