@@ -26,8 +26,9 @@ type registration struct {
 }
 
 type recorder struct {
-	mu   sync.Mutex
-	regs []registration
+	mu    sync.Mutex
+	regs  []registration
+	calls []resource.PropertyMap
 }
 
 func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
@@ -45,7 +46,11 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 	return args.Name + "-id", args.Inputs.Copy(), nil
 }
 
-func (*recorder) Call(_ pulumi.MockCallArgs) (resource.PropertyMap, error) {
+func (r *recorder) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	r.mu.Lock()
+	r.calls = append(r.calls, args.Args)
+	r.mu.Unlock()
+
 	return resource.PropertyMap{"json": resource.NewProperty(`{"stub":true}`)}, nil
 }
 
@@ -68,6 +73,16 @@ func (l lookup) AssociationID(_ context.Context, _, ns, sa string) (string, erro
 func run(t *testing.T, f func(ctx *pulumi.Context, o ackfactory.Options) error) ([]registration, error) {
 	t.Helper()
 
+	rec, err := runRecorded(t, f)
+
+	return rec.regs, err
+}
+
+// runRecorded is run, returning the recorder: the registrations and the
+// policy documents the program asked the provider to render.
+func runRecorded(t *testing.T, f func(ctx *pulumi.Context, o ackfactory.Options) error) (*recorder, error) {
+	t.Helper()
+
 	rec := &recorder{}
 
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
@@ -79,7 +94,7 @@ func run(t *testing.T, f func(ctx *pulumi.Context, o ackfactory.Options) error) 
 		return f(ctx, ackfactory.Options{Provider: p, ClusterName: pulumi.String("c1"), Boundary: "boundary"})
 	}, pulumi.WithMocks("example", "dev", rec))
 
-	return rec.regs, err
+	return rec, err
 }
 
 func names(regs []registration) []string {
@@ -850,5 +865,98 @@ func TestServicesWithoutABoundaryKeepTheSharedOne(t *testing.T) {
 		if got != "arn:part:iam::acct-example:policy/boundary" {
 			t.Errorf("%s: boundary %q", s, got)
 		}
+	}
+}
+
+// policyStatements returns the statements of the only policy document the
+// program asked the provider to render, keyed by Sid, each as its actions and
+// resources.
+func policyStatements(t *testing.T, rec *recorder) map[string]struct{ Actions, Resources []string } {
+	t.Helper()
+
+	if len(rec.calls) != 1 {
+		t.Fatalf("%d policy documents rendered, want 1", len(rec.calls))
+	}
+
+	list := func(v resource.PropertyValue) []string {
+		var out []string
+		for _, e := range v.ArrayValue() {
+			out = append(out, e.StringValue())
+		}
+
+		return out
+	}
+
+	out := map[string]struct{ Actions, Resources []string }{}
+
+	for _, st := range rec.calls[0]["statements"].ArrayValue() {
+		m := st.ObjectValue()
+		out[m["sid"].StringValue()] = struct{ Actions, Resources []string }{list(m["actions"]), list(m["resources"])}
+	}
+
+	return out
+}
+
+func TestEKSDefaultPolicyIsUnchanged(t *testing.T) {
+	rec, err := runRecorded(t, func(ctx *pulumi.Context, o ackfactory.Options) error {
+		_, err := ackfactory.EKS(ctx, cluster, o)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st := policyStatements(t, rec)
+	if len(st) != 2 {
+		t.Fatalf("statements %v", st)
+	}
+
+	if got := st["IAMForPodIdentity"].Resources; !slices.Equal(got, []string{"arn:part:iam::acct-example:role/c1-*"}) {
+		t.Errorf("PassRole scope %q", got)
+	}
+
+	if _, ok := st["AssumeProjectRoles"]; ok {
+		t.Error("the default EKS policy assumes project roles")
+	}
+}
+
+// With IAMRoleSelector on, the EKS controller acts as each namespace's project
+// role, so it must be able to assume them.
+func TestEKSWithProjectAssumeAndNarrowedRoles(t *testing.T) {
+	rec, err := runRecorded(t, func(ctx *pulumi.Context, o ackfactory.Options) error {
+		_, err := ackfactory.EKSWith(ctx, cluster, o, ackfactory.EKSOptions{
+			ProjectAssume: true,
+			RoleNames:     []string{"*-pg-*", "*-tenant-test-*"},
+		})
+
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st := policyStatements(t, rec)
+
+	assume := st["AssumeProjectRoles"]
+	if !slices.Equal(assume.Actions, []string{"sts:AssumeRole", "sts:TagSession"}) ||
+		!slices.Equal(assume.Resources, []string{"arn:part:iam::acct-example:role/c1-ack-project-*"}) {
+		t.Errorf("project assume statement %+v", assume)
+	}
+
+	want := []string{"arn:part:iam::acct-example:role/*-pg-*", "arn:part:iam::acct-example:role/*-tenant-test-*"}
+	if got := st["IAMForPodIdentity"].Resources; !slices.Equal(got, want) {
+		t.Errorf("PassRole scope %q, want %q", got, want)
+	}
+}
+
+func TestEKSWithRefusesWhatEKSRefuses(t *testing.T) {
+	_, err := run(t, func(ctx *pulumi.Context, o ackfactory.Options) error {
+		o.Boundary = ""
+		_, err := ackfactory.EKSWith(ctx, cluster, o, ackfactory.EKSOptions{ProjectAssume: true})
+
+		return err
+	})
+	if err == nil || !strings.Contains(err.Error(), "Boundary is empty") {
+		t.Fatalf("got %v", err)
 	}
 }

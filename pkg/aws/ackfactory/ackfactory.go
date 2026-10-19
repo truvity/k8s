@@ -217,12 +217,44 @@ func IAM(ctx *pulumi.Context, c Cluster, o Options, withProjectAssume bool) (*po
 // The trust is pinned like IAM's, to ack-eks/ack-eks-controller.
 //
 // It returns the identity; the caller exports the role ARN if it wants to.
+// EKSWith is the same with options.
 func EKS(ctx *pulumi.Context, c Cluster, o Options) (*podidentity.PodIdentity, error) {
+	return EKSWith(ctx, c, o, EKSOptions{})
+}
+
+// EKSOptions are the optional inputs of EKSWith. All zero: EKS.
+type EKSOptions struct {
+	// ProjectAssume lets the controller assume the per-project roles
+	// ({cluster}-ack-project-*), as IAM's withProjectAssume does. Required
+	// once the controller runs with the IAMRoleSelector feature gate on
+	// (featureGates.IAMRoleSelector in the controller's Helm values, with
+	// enableCARM off): it then acts in each project namespace as that
+	// namespace's role, so it must be able to assume it. Add "eks" to
+	// ProjectRolesOptions.Controllers so the project roles trust it, and
+	// ProjectRolesOptions.PodIdentity so they may call Pod Identity.
+	ProjectAssume bool
+	// RoleNames narrows iam:GetRole, iam:PassRole and iam:ListAttachedRolePolicies
+	// from every role named after the cluster ({cluster}-*) to these role-name
+	// patterns (`*` allowed), for example "c1-pg-*": the roles the controller
+	// binds as itself, without a selector. Empty keeps {cluster}-*.
+	RoleNames []string
+}
+
+// EKSWith is EKS with options.
+func EKSWith(ctx *pulumi.Context, c Cluster, o Options, e EKSOptions) (*podidentity.PodIdentity, error) {
 	if err := o.validate(c); err != nil {
 		return nil, err
 	}
 
-	policy, err := policyJSON(ctx, o.Provider, []iam.GetPolicyDocumentStatement{
+	roles := []string{c.roleARN(c.Name + "-*")}
+	if len(e.RoleNames) > 0 {
+		roles = roles[:0]
+		for _, pattern := range e.RoleNames {
+			roles = append(roles, c.roleARN(pattern))
+		}
+	}
+
+	statements := []iam.GetPolicyDocumentStatement{
 		{
 			Sid:    pulumi.StringRef("EKSPodIdentityManagement"),
 			Effect: pulumi.StringRef("Allow"),
@@ -245,9 +277,20 @@ func EKS(ctx *pulumi.Context, c Cluster, o Options) (*podidentity.PodIdentity, e
 				"iam:PassRole",
 				"iam:ListAttachedRolePolicies",
 			},
-			Resources: []string{c.roleARN(c.Name + "-*")},
+			Resources: roles,
 		},
-	})
+	}
+
+	if e.ProjectAssume {
+		statements = append(statements, iam.GetPolicyDocumentStatement{
+			Sid:       pulumi.StringRef("AssumeProjectRoles"),
+			Effect:    pulumi.StringRef("Allow"),
+			Actions:   []string{actionAssumeRole, actionTagSession},
+			Resources: []string{c.roleARN(c.Name + "-ack-project-*")},
+		})
+	}
+
+	policy, err := policyJSON(ctx, o.Provider, statements)
 	if err != nil {
 		return nil, fmt.Errorf("build ACK EKS inline policy: %w", err)
 	}
