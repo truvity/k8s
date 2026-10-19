@@ -1,0 +1,166 @@
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: docs
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: docs
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: ci-shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/pod-identities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-s3
+  namespace: ci-shop
+
+---
+# Source: guardrails-projects/templates/pod-identities.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: ci-shop-test-s3
+  namespace: identity-system
+spec:
+  clusterName: example
+  namespace: ci-shop
+  serviceAccount: test-s3
+  roleARN: "arn:example:iam::placeholder:role/example-test-s3"
+
+---
+# Source: guardrails-projects/templates/pod-identity-admission.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ack-pod-identity-association-guard
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["eks.services.k8s.aws"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["podidentityassociations"]
+  matchConditions:
+    - name: platform-namespaces-are-exempt
+      expression: "!(object.metadata.namespace in [\"identity-system\",\"platform-db\"])"
+    - name: only-spec-changes
+      expression: "request.operation == 'CREATE' || object.spec != oldObject.spec"
+  variables:
+    - name: rolePrefixes
+      expression: "{\"docs\":[\"arn:example:iam::placeholder:role/example-docs.\",\"arn:example:iam::placeholder:role/example-docs-legacy-\"],\"shop\":[\"arn:example:iam::placeholder:role/example-shop.\"]}"
+  validations:
+    - expression: "has(object.spec.namespace) && object.spec.namespace == object.metadata.namespace"
+      message: "a PodIdentityAssociation binds the namespace it lives in: spec.namespace must equal metadata.namespace"
+      reason: Forbidden
+    - expression: "object.metadata.namespace in variables.rolePrefixes"
+      message: "this namespace has no IAM role ceiling: it may not create PodIdentityAssociations"
+      reason: Forbidden
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) ||
+        (has(object.spec.roleARN) &&
+         variables.rolePrefixes[object.metadata.namespace].exists(p,
+           object.spec.roleARN.startsWith(p) && !object.spec.roleARN.substring(p.size()).contains('/')))
+      message: "spec.roleARN must be a role of this namespace's project: one of its podIdentityRolePrefixes followed by a name, no path"
+      reason: Forbidden
+
+---
+# Source: guardrails-projects/templates/pod-identity-admission.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ack-pod-identity-association-guard
+spec:
+  policyName: ack-pod-identity-association-guard
+  validationActions: ["Warn","Audit"]

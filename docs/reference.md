@@ -1372,6 +1372,7 @@ renders, per row:
 | ResourceQuota `quotaName`, LimitRange `limitRangeName` | the `quotas` profile the row names in `quota` | no |
 | Roles, RoleBindings | the row's `roles` and `roleBindings` (to a `clusterRole` or a `role` of the row) | no |
 | IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
+| ValidatingAdmissionPolicy and binding `podIdentityAdmission.name` | the rows' `podIdentityRolePrefixes`, with `podIdentityAdmission.enabled` | no |
 | ServiceAccount, PodIdentityAssociation `<name>-<identity>` | the row's `podIdentities` (names under `podIdentities.associations`: `roleARN`, `associationNamespace`); the association lives in its own namespace | no |
 
 plus the shared `clusterRoles` (`aggregateTo`: admin, edit, view). Protected
@@ -1388,4 +1389,25 @@ instance metadata service (`169.254.169.254/32`), the EKS Pod Identity Agent
 (`169.254.170.23/32`, 80) and DNS (53 UDP and TCP to `dnsPeers`, verbatim, then
 the service range and the node ranges). `nodeCIDRs` and `serviceCIDR` are
 required when it is on.
+
+`podIdentityAdmission` (`enabled: true`, off by default) renders a
+ValidatingAdmissionPolicy and its binding (`podIdentityAdmission.name`, default
+`ack-pod-identity-association-guard`) for `podidentityassociations` of
+`eks.services.k8s.aws`. A project that can create an association can bind a pod
+of its namespace to any IAM role the EKS controller may pass, so the policy
+refuses an association unless `spec.namespace` equals the namespace it lives in
+and `spec.roleARN` starts with one of the row's `podIdentityRolePrefixes`
+(role ARN prefixes, for example `arn:<partition>:iam::<account>:role/<cluster>-<project>.`)
+followed by a name with no `/`. A namespace without a row, or a row without
+prefixes, has no ceiling and may create none (default deny). Namespaces are
+matched by name, never by a label. Exempt by name, because their associations
+bind other namespaces by design: `podIdentityAdmission.exemptNamespaces` (a
+database operator's, say) and the `associationNamespace` of every
+`podIdentities.associations` entry. An update that leaves `spec` alone is
+skipped, so a finalizer edit on an association with an older name cannot block
+its deletion. `validationActions` is `[Warn, Audit]` by default (nothing is
+refused: the API server warns and the audit log records the verdict); set it to
+`[Deny, Audit]` to enforce. `Deny` cannot be combined with `Warn` and the chart
+refuses it. `failurePolicy` is `Fail` (`Ignore` is the other value). Roll out in
+the default mode, read the audit log for the policy's name, then enforce.
 

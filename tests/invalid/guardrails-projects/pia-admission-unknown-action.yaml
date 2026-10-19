@@ -1,0 +1,2 @@
+# validationActions are Deny, Warn and Audit.
+podIdentityAdmission: {enabled: true, validationActions: [Block]}
