@@ -794,3 +794,61 @@ func TestProjectRolesTrustOnlyTheNamedControllers(t *testing.T) {
 		t.Errorf("trust does not name the eks controller: %s", trust)
 	}
 }
+
+// Each controller's role can carry its own boundary: IAM and EKS by the
+// Options of their call, a service controller by Service.Boundary. Unset, a
+// service controller keeps the boundary of the ServicesOptions.
+func TestEachControllerCanCarryItsOwnBoundary(t *testing.T) {
+	regs, err := run(t, func(ctx *pulumi.Context, o ackfactory.Options) error {
+		iamOpts, eksOpts := o, o
+		iamOpts.Boundary, eksOpts.Boundary = "b-iam", "b-eks"
+
+		if _, err := ackfactory.IAM(ctx, cluster, iamOpts, false); err != nil {
+			return err
+		}
+
+		if _, err := ackfactory.EKS(ctx, cluster, eksOpts); err != nil {
+			return err
+		}
+
+		svcs := ackfactory.DefaultServices()
+		svcs[0].Boundary = "b-s3"
+		svcs[1].Boundary = "b-kms"
+
+		return ackfactory.Services(ctx, cluster, ackfactory.ServicesOptions{Options: o, Lookup: lookup{}, Services: svcs})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for role, want := range map[string]string{
+		"c1-ack-iam-role":              "b-iam",
+		"c1-ack-eks-role":              "b-eks",
+		"ack-svc/c1-ack-s3/role":       "b-s3",
+		"ack-svc/c1-ack-kms/role":      "b-kms",
+		"ack-svc/c1-ack-dynamodb/role": "boundary", // not set: the ServicesOptions' own
+	} {
+		got := str(find(t, regs, "aws:iam/role:Role", role), "permissionsBoundary")
+		if got != "arn:part:iam::acct-example:policy/"+want {
+			t.Errorf("%s: boundary %q, want policy/%s", role, got, want)
+		}
+	}
+}
+
+// Nothing set, every service controller's role carries the one boundary of
+// the ServicesOptions, as before the field existed.
+func TestServicesWithoutABoundaryKeepTheSharedOne(t *testing.T) {
+	regs, err := run(t, func(ctx *pulumi.Context, o ackfactory.Options) error {
+		return ackfactory.Services(ctx, cluster, ackfactory.ServicesOptions{Options: o, Lookup: lookup{}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, s := range []string{"s3", "kms", "dynamodb"} {
+		got := str(find(t, regs, "aws:iam/role:Role", "ack-svc/c1-ack-"+s+"/role"), "permissionsBoundary")
+		if got != "arn:part:iam::acct-example:policy/boundary" {
+			t.Errorf("%s: boundary %q", s, got)
+		}
+	}
+}
