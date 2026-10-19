@@ -4,6 +4,18 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/ackfactory`, project roles (`ProjectRoles`): **the builders can now create a KMS key.** Their identity policy granted `kms:*` only on keys carrying `aws:ResourceTag/project`, a condition `kms:CreateKey` can never satisfy (a key has no tag before it exists), so the first project key requested through a builder was refused. The policy gains `kms:CreateKey` and `kms:TagResource` under `aws:RequestTag/project` equal to the project, and an explicit deny of `kms:TagResource`/`kms:UntagResource` on a key that carries another project's tag, so the tagging grant cannot be used to claim one. This changes the live role policy in place on the next update (statements added, none removed); a key with no `project` tag at all is not protected by the deny, which is why the permissions boundary of the builders should also name the tag. The rest is opt-in on `ProjectRolesOptions`, all off by default (the policy is otherwise what v0.34.1 renders):
+  - `WorkloadBoundary` (a policy NAME): an explicit deny of `iam:CreateRole` and `iam:PutRolePermissionsBoundary` with any other boundary or none, so the roles a builder mints carry the workload boundary only.
+  - `ProtectTags`: denies setting `project` or `cluster` to anything but the project's own value (`iam:CreateRole`, `CreatePolicy`, `TagRole`, `TagPolicy`, `kms:CreateKey`, `TagResource`, `eks:CreatePodIdentityAssociation`, `TagResource`), removing either from a role, policy, key or association, re-tagging a role or association that carries another project's tag, and changing the builder's own role (tags, inline and attached policies, trust, boundary, deletion). The boundaries and workload roles key on those two tags.
+  - `RestrictKMS`: replaces `kms:*` on the project's keys with the management actions a project needs (describe, tag, rotation, description, enable, aliases) and denies `kms:PutKeyPolicy`, `CreateGrant`, `RetireGrant`, `RevokeGrant`, `ScheduleKeyDeletion` and `DisableKey`. A Key CR deleted through a builder then fails with AccessDenied: retiring a key is a platform act.
+  - `DropSSM`, `DropDynamoDB`: remove the `ssm:*` grant on the parameter prefix and the DynamoDB grants.
+  - `PodIdentity`: adds the Pod Identity association calls on the cluster's associations and `iam:PassRole` of the project's roles to `pods.eks.amazonaws.com` (`StringEqualsIfExists`), so the builder can be the identity of the EKS controller through an IAMRoleSelector. Add `"eks"` to `Controllers` as well.
+  - `Tighten`: shorthand for `ProtectTags`, `RestrictKMS`, `DropSSM` and `DropDynamoDB`.
+
+  The builder's own boundary is `ProjectRolesOptions.Boundary`, as before: passing another name moves the live roles to that boundary in place.
+
 ## v0.34.1
 
 - **Security:** `pkg/aws/ackfactory`: the `{cluster}-ack-iam` and `{cluster}-ack-eks` roles now trust only their controller's service account (`ack-iam/ack-iam-controller`, `ack-eks/ack-eks-controller`). Their trust policy pinned the account and the cluster but not the namespace or service account, so any Pod Identity association in the cluster could name either role; the service controllers' roles already carried both conditions. The trust is now podidentity's default document, derived from the same namespace and service account the association binds. The next update changes the trust policy of the two live roles in place (no replacement, no new names); the calls and their inputs are unchanged. The s3, kms and dynamodb roles are untouched.

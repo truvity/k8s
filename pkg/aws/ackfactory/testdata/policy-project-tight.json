@@ -1,0 +1,289 @@
+{
+  "Statement": [
+    {
+      "Action": [
+        "iam:Get*",
+        "iam:List*"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "IAMRead"
+    },
+    {
+      "Action": "iam:*",
+      "Effect": "Allow",
+      "Resource": [
+        "arn:part:iam::acct-example:role/*alpha*",
+        "arn:part:iam::acct-example:policy/*alpha*",
+        "arn:part:iam::acct-example:instance-profile/*alpha*"
+      ],
+      "Sid": "IAMWriteProjectPrefixed"
+    },
+    {
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "S3AccountReads"
+    },
+    {
+      "Action": "s3:*",
+      "Effect": "Allow",
+      "Resource": [
+        "arn:part:s3:::*alpha*",
+        "arn:part:s3:::*alpha*/*"
+      ],
+      "Sid": "S3ProjectPrefixed"
+    },
+    {
+      "Action": [
+        "kms:DescribeKey",
+        "kms:GetKeyPolicy",
+        "kms:GetKeyRotationStatus",
+        "kms:ListResourceTags",
+        "kms:ListKeyPolicies",
+        "kms:ListGrants",
+        "kms:TagResource",
+        "kms:UntagResource",
+        "kms:UpdateKeyDescription",
+        "kms:EnableKey",
+        "kms:EnableKeyRotation",
+        "kms:DisableKeyRotation",
+        "kms:CreateAlias",
+        "kms:UpdateAlias",
+        "kms:DeleteAlias"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/project": "alpha"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "KMSManageByProjectTag"
+    },
+    {
+      "Action": [
+        "kms:CreateKey",
+        "kms:TagResource"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/project": "alpha"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "KMSCreateKeyWithProjectTag"
+    },
+    {
+      "Action": [
+        "kms:TagResource",
+        "kms:UntagResource"
+      ],
+      "Condition": {
+        "Null": {
+          "aws:ResourceTag/project": "false"
+        },
+        "StringNotEquals": {
+          "aws:ResourceTag/project": "alpha"
+        }
+      },
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyRetagForeignKeys"
+    },
+    {
+      "Action": [
+        "kms:ListAliases",
+        "kms:ListKeys"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "KMSAliasList"
+    },
+    {
+      "Action": [
+        "kms:CreateAlias",
+        "kms:UpdateAlias",
+        "kms:DeleteAlias"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:part:kms:*:acct-example:alias/*-alpha-*",
+      "Sid": "KMSAliasByProjectName"
+    },
+    {
+      "Action": [
+        "iam:CreateRole",
+        "iam:CreatePolicy",
+        "iam:TagRole",
+        "iam:TagPolicy",
+        "kms:CreateKey",
+        "kms:TagResource",
+        "eks:CreatePodIdentityAssociation",
+        "eks:TagResource"
+      ],
+      "Condition": {
+        "Null": {
+          "aws:RequestTag/project": "false"
+        },
+        "StringNotEquals": {
+          "aws:RequestTag/project": "alpha"
+        }
+      },
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyRetagProject"
+    },
+    {
+      "Action": [
+        "iam:CreateRole",
+        "iam:CreatePolicy",
+        "iam:TagRole",
+        "iam:TagPolicy",
+        "kms:CreateKey",
+        "kms:TagResource",
+        "eks:CreatePodIdentityAssociation",
+        "eks:TagResource"
+      ],
+      "Condition": {
+        "Null": {
+          "aws:RequestTag/cluster": "false"
+        },
+        "StringNotEquals": {
+          "aws:RequestTag/cluster": "c1"
+        }
+      },
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyRetagCluster"
+    },
+    {
+      "Action": [
+        "iam:UntagRole",
+        "iam:UntagPolicy",
+        "kms:UntagResource",
+        "eks:UntagResource"
+      ],
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:TagKeys": [
+            "project",
+            "cluster"
+          ]
+        }
+      },
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyUntagProjectOrCluster"
+    },
+    {
+      "Action": [
+        "iam:TagRole",
+        "iam:UntagRole",
+        "eks:TagResource",
+        "eks:UntagResource"
+      ],
+      "Condition": {
+        "Null": {
+          "aws:ResourceTag/project": "false"
+        },
+        "StringNotEquals": {
+          "aws:ResourceTag/project": "alpha"
+        }
+      },
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyRetagForeignResources"
+    },
+    {
+      "Action": [
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePermissionsBoundary",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:UpdateRole",
+        "iam:UpdateRoleDescription",
+        "iam:DeleteRole"
+      ],
+      "Effect": "Deny",
+      "Resource": "arn:part:iam::acct-example:role/c1-ack-project-alpha",
+      "Sid": "DenyTouchOwnRole"
+    },
+    {
+      "Action": [
+        "kms:PutKeyPolicy",
+        "kms:CreateGrant",
+        "kms:RetireGrant",
+        "kms:RevokeGrant",
+        "kms:ScheduleKeyDeletion",
+        "kms:DisableKey"
+      ],
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyKeyPolicyGrantsAndRetirement"
+    },
+    {
+      "Action": [
+        "eks:CreatePodIdentityAssociation",
+        "eks:DeletePodIdentityAssociation",
+        "eks:DescribePodIdentityAssociation",
+        "eks:UpdatePodIdentityAssociation",
+        "eks:ListPodIdentityAssociations",
+        "eks:TagResource",
+        "eks:UntagResource"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:part:eks:eu-central-1:acct-example:cluster/c1",
+        "arn:part:eks:eu-central-1:acct-example:podidentityassociation/c1/*"
+      ],
+      "Sid": "AllowPodIdentityAssociations"
+    },
+    {
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Condition": {
+        "StringEqualsIfExists": {
+          "iam:PassedToService": "pods.eks.amazonaws.com"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": [
+        "arn:part:iam::acct-example:role/*alpha*"
+      ],
+      "Sid": "AllowPassOwnRoleToPodIdentity"
+    },
+    {
+      "Action": [
+        "iam:CreateRole",
+        "iam:PutRolePermissionsBoundary"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "iam:PermissionsBoundary": "arn:part:iam::acct-example:policy/workload"
+        }
+      },
+      "Effect": "Deny",
+      "Resource": "*",
+      "Sid": "DenyOtherBoundary"
+    },
+    {
+      "Action": "iam:*",
+      "Effect": "Deny",
+      "Resource": [
+        "arn:part:iam::acct-example:role/c1-archive-*"
+      ],
+      "Sid": "DenyPlatformMintedRoles"
+    }
+  ],
+  "Version": "2012-10-17"
+}

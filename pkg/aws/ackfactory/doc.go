@@ -16,6 +16,9 @@
 //   - ProjectRoles: one capability role per project, which the controllers
 //     assume for the project's resources, under a permissions boundary that
 //     requires the project and cluster tags and entraps what the role creates.
+//     ProjectRolesOptions tighten its identity policy: tag guards, key
+//     management without key policy or retirement, no SSM or DynamoDB, one
+//     boundary for the roles it mints, Pod Identity for the EKS controller.
 //
 // These are plain functions, not components. They register the same
 // resources, under the same logical names, as the program they were lifted

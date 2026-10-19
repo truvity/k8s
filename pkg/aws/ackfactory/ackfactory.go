@@ -2,7 +2,6 @@ package ackfactory
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -448,9 +447,11 @@ type ProjectRole struct {
 
 // ProjectRolesOptions are the inputs of ProjectRoles.
 type ProjectRolesOptions struct {
-	// Boundary is the NAME of the permissions boundary of the project roles:
-	// one that requires the project and cluster tags on iam:CreateRole and
-	// entraps the roles the controllers create under it. Required.
+	// Boundary is the NAME of the permissions boundary of the project roles
+	// themselves (the builders): one that requires the project and cluster
+	// tags on iam:CreateRole and entraps the roles the controllers create
+	// under it. Changing it moves the live roles to the new boundary in place.
+	// Required.
 	Boundary string
 	// ForbiddenRoles are role-name patterns (`*` allowed) a project role may
 	// NOT touch, whatever its project prefix would otherwise allow: a role the
@@ -463,6 +464,62 @@ type ProjectRolesOptions struct {
 	Controllers []string
 	// ResourceOptions apply to every resource, normally the AWS provider.
 	ResourceOptions []pulumi.ResourceOption
+
+	// The fields below are opt-in tightenings of the role's identity policy.
+	// All zero: the policy is the one earlier releases rendered, plus the
+	// KMS key creation grant (see ProjectRoles).
+
+	// WorkloadBoundary is the NAME of the one permissions boundary the project
+	// may put on the roles it creates (and set with iam:PutRolePermissionsBoundary).
+	// Set, an explicit deny refuses iam:CreateRole and
+	// iam:PutRolePermissionsBoundary with any other boundary, or none. Empty:
+	// the identity policy names none and the role's own Boundary alone limits
+	// what a created role may carry.
+	WorkloadBoundary string
+	// ProtectTags denies changing or removing the project and cluster tags:
+	// setting either to a value other than this project's (iam:CreateRole,
+	// iam:CreatePolicy, iam:TagRole, iam:TagPolicy, kms:CreateKey,
+	// kms:TagResource, eks:TagResource), removing either from any role, policy,
+	// key or association, re-tagging a role or key that carries another
+	// project's tag, and touching the project role itself (tags, policies,
+	// trust, boundary, deletion). Boundaries and workload roles key on those
+	// two tags, so a project that could rewrite them could reach another
+	// project's data.
+	ProtectTags bool
+	// RestrictKMS replaces the "kms:*" grant on keys tagged with the project
+	// by the key-management actions a project needs (describe, tag, rotation,
+	// aliases, description, enable) and denies the rest that decides who owns
+	// a key or when it dies: kms:PutKeyPolicy, kms:CreateGrant,
+	// kms:RetireGrant, kms:RevokeGrant, kms:ScheduleKeyDeletion and
+	// kms:DisableKey. Key policy, grants and retirement are then a platform
+	// act, not a project's.
+	RestrictKMS bool
+	// DropSSM removes the "ssm:*" grant on the project's parameter prefix.
+	// SSMPrefix of the projects is then unused.
+	DropSSM bool
+	// DropDynamoDB removes the dynamodb grants (account reads and "dynamodb:*"
+	// on the project's tables).
+	DropDynamoDB bool
+	// PodIdentity adds what a builder needs to be the identity of the EKS
+	// controller (IAMRoleSelector on ack-eks): the Pod Identity association
+	// calls on this cluster's associations, and iam:PassRole of the project's
+	// roles to pods.eks.amazonaws.com. Add "eks" to Controllers too, or
+	// ack-eks cannot assume the role.
+	PodIdentity bool
+	// Tighten is shorthand for ProtectTags, RestrictKMS, DropSSM and
+	// DropDynamoDB. It does not turn on PodIdentity or set WorkloadBoundary.
+	Tighten bool
+}
+
+func (o ProjectRolesOptions) tightening() tightening {
+	return tightening{
+		workloadBoundary: o.WorkloadBoundary,
+		protectTags:      o.ProtectTags || o.Tighten,
+		restrictKMS:      o.RestrictKMS || o.Tighten,
+		dropSSM:          o.DropSSM || o.Tighten,
+		dropDynamoDB:     o.DropDynamoDB || o.Tighten,
+		podIdentity:      o.PodIdentity,
+	}
 }
 
 // DefaultProjectControllers are the controllers that may assume a project role.
@@ -475,6 +532,13 @@ func DefaultProjectControllers() []string {
 // controllers' roles are created later (by the IAM controller, in two phases),
 // so the trust names the account root with an ArnEquals condition on the
 // controller roles: robust to a controller role being recreated.
+//
+// The identity policy lets the role create a KMS key tagged with its own
+// project (kms:CreateKey and kms:TagResource under aws:RequestTag/project): a
+// key has no tag before it exists, so the grant on keys that carry the tag
+// can never allow the first creation. It also denies re-tagging a key that
+// carries another project's tag. The options of ProjectRolesOptions tighten the
+// rest; none set, the policy is otherwise what earlier releases rendered.
 func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, projects []ProjectRole) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -484,7 +548,31 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 		return errors.New("options: Boundary is empty")
 	}
 
-	controllers := o.Controllers
+	for _, p := range projects {
+		if p.Name == "" {
+			return errors.New("project role: Name is empty")
+		}
+
+		ssm := "/business/" + p.Name
+		if p.SSMPrefix != "" {
+			ssm = p.SSMPrefix
+		}
+
+		policy := projectPolicy(c, p.Name, ssm, o.ForbiddenRoles, o.tightening())
+
+		if err := newBuilderRole(ctx, c, o.Boundary, p.Name, o.Controllers, policy, o.ResourceOptions); err != nil {
+			return fmt.Errorf("project role for %s: %w", p.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// newBuilderRole registers {cluster}-ack-project-{name}, tagged with the
+// project and cluster, trusting the controllers, with its inline policy. The
+// identity policy scopes the builder; the boundary supplies the entrapment
+// (the tag requirement and the child-boundary allow-list).
+func newBuilderRole(ctx *pulumi.Context, c Cluster, boundary, name string, controllers []string, policy string, ro []pulumi.ResourceOption) error {
 	if controllers == nil {
 		controllers = DefaultProjectControllers()
 	}
@@ -499,15 +587,9 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 		arns += fmt.Sprintf("%q", c.roleARN(fmt.Sprintf("%s-ack-%s", c.Name, ctl)))
 	}
 
-	for _, p := range projects {
-		if p.Name == "" {
-			return errors.New("project role: Name is empty")
-		}
+	roleName := fmt.Sprintf("%s-ack-project-%s", c.Name, name)
 
-		name := p.Name
-		roleName := fmt.Sprintf("%s-ack-project-%s", c.Name, name)
-
-		trust := fmt.Sprintf(`{
+	trust := fmt.Sprintf(`{
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
@@ -517,132 +599,26 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
   }]
 }`, c.iamARN("root"), arns)
 
-		role, err := iam.NewRole(ctx, roleName, &iam.RoleArgs{
-			Name:                pulumi.String(roleName),
-			AssumeRolePolicy:    pulumi.String(trust),
-			PermissionsBoundary: pulumi.String(c.policyARN(o.Boundary)),
-			Tags: pulumi.StringMap{
-				"project": pulumi.String(name),
-				"cluster": pulumi.String(c.Name),
-			},
-		}, o.ResourceOptions...)
-		if err != nil {
-			return fmt.Errorf("create ack-project role for %s: %w", name, err)
-		}
+	role, err := iam.NewRole(ctx, roleName, &iam.RoleArgs{
+		Name:                pulumi.String(roleName),
+		AssumeRolePolicy:    pulumi.String(trust),
+		PermissionsBoundary: pulumi.String(c.policyARN(boundary)),
+		Tags: pulumi.StringMap{
+			"project": pulumi.String(name),
+			"cluster": pulumi.String(c.Name),
+		},
+	}, ro...)
+	if err != nil {
+		return fmt.Errorf("create role: %w", err)
+	}
 
-		ssm := "/business/" + name
-		if p.SSMPrefix != "" {
-			ssm = p.SSMPrefix
-		}
-
-		// The identity policy scopes to the project; the boundary supplies the
-		// entrapment (the tag requirement and the child-boundary allow-list).
-		if _, err := iam.NewRolePolicy(ctx, roleName+"-policy", &iam.RolePolicyArgs{
-			Role:   role.Name,
-			Name:   pulumi.String(roleName + "-policy"),
-			Policy: pulumi.String(projectPolicy(c, name, ssm, o.ForbiddenRoles)),
-		}, o.ResourceOptions...); err != nil {
-			return fmt.Errorf("attach ack-project policy for %s: %w", name, err)
-		}
+	if _, err := iam.NewRolePolicy(ctx, roleName+"-policy", &iam.RolePolicyArgs{
+		Role:   role.Name,
+		Name:   pulumi.String(roleName + "-policy"),
+		Policy: pulumi.String(policy),
+	}, ro...); err != nil {
+		return fmt.Errorf("attach policy: %w", err)
 	}
 
 	return nil
-}
-
-// projectPolicy is a project role's identity policy.
-func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string) string {
-	return withForbiddenRoles(c, forbidden, fmt.Sprintf(`{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Sid": "IAMRead",
-    "Effect": "Allow",
-    "Action": ["iam:Get*", "iam:List*"],
-    "Resource": "*"
-  },{
-    "Sid": "IAMWriteProjectPrefixed",
-    "Effect": "Allow",
-    "Action": "iam:*",
-    "Resource": [
-      "arn:%[4]s:iam::%[1]s:role/*%[2]s*",
-      "arn:%[4]s:iam::%[1]s:policy/*%[2]s*",
-      "arn:%[4]s:iam::%[1]s:instance-profile/*%[2]s*"
-    ]
-  },{
-    "Sid": "S3AccountReads",
-    "Effect": "Allow",
-    "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"],
-    "Resource": "*"
-  },{
-    "Sid": "S3ProjectPrefixed",
-    "Effect": "Allow",
-    "Action": "s3:*",
-    "Resource": ["arn:%[4]s:s3:::*%[2]s*", "arn:%[4]s:s3:::*%[2]s*/*"]
-  },{
-    "Sid": "KMSByProjectTag",
-    "Effect": "Allow",
-    "Action": "kms:*",
-    "Resource": "*",
-    "Condition": {"StringEquals": {"aws:ResourceTag/project": "%[2]s"}}
-  },{
-    "Sid": "KMSAliasList",
-    "Effect": "Allow",
-    "Action": "kms:ListAliases",
-    "Resource": "*"
-  },{
-    "Sid": "KMSAliasByProjectName",
-    "Effect": "Allow",
-    "Action": ["kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias"],
-    "Resource": "arn:%[4]s:kms:*:%[1]s:alias/*-%[2]s-*"
-  },{
-    "Sid": "DynamoDBAccountReads",
-    "Effect": "Allow",
-    "Action": ["dynamodb:ListTables", "dynamodb:DescribeLimits"],
-    "Resource": "*"
-  },{
-    "Sid": "DynamoDBProjectPrefixed",
-    "Effect": "Allow",
-    "Action": "dynamodb:*",
-    "Resource": [
-      "arn:%[4]s:dynamodb:*:%[1]s:table/*%[2]s*",
-      "arn:%[4]s:dynamodb:*:%[1]s:table/*%[2]s*/*"
-    ]
-  },{
-    "Sid": "SSMByProjectPrefix",
-    "Effect": "Allow",
-    "Action": "ssm:*",
-    "Resource": "arn:%[4]s:ssm:*:%[1]s:parameter%[3]s/*"
-  }]
-}`, c.AccountID, name, ssmPrefix, c.partition()))
-}
-
-// withForbiddenRoles appends the explicit deny for ForbiddenRoles to a policy
-// document, or returns it as it is when there are none.
-func withForbiddenRoles(c Cluster, forbidden []string, doc string) string {
-	if len(forbidden) == 0 {
-		return doc
-	}
-
-	resources := make([]string, 0, len(forbidden))
-	for _, pattern := range forbidden {
-		resources = append(resources, c.roleARN(pattern))
-	}
-
-	var policy map[string]any
-	if err := json.Unmarshal([]byte(doc), &policy); err != nil {
-		panic(fmt.Sprintf("ackfactory: project policy is not JSON: %v", err))
-	}
-
-	policy["Statement"] = append(policy["Statement"].([]any), map[string]any{
-		"Sid":      "DenyPlatformMintedRoles",
-		"Effect":   "Deny",
-		"Action":   "iam:*",
-		"Resource": resources,
-	})
-
-	out, err := json.MarshalIndent(policy, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-
-	return string(out)
 }

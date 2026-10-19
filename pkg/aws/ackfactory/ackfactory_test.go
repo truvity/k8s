@@ -348,8 +348,8 @@ func TestProjectRolesCanForbidRolesThePlatformMints(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if strings.Contains(str(find(t, plain, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy"), "Deny") {
-		t.Error("a policy with no forbidden roles carries a deny")
+	if strings.Contains(str(find(t, plain, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy"), "DenyPlatformMintedRoles") {
+		t.Error("a policy with no forbidden roles carries the forbidden-roles deny")
 	}
 }
 
@@ -360,8 +360,14 @@ var update = flag.Bool("update", false, "rewrite testdata/trust-*.json")
 // of the live role.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
+	goldenFile(t, "trust-"+name, got)
+}
 
-	path := filepath.Join("testdata", "trust-"+name+".json")
+// goldenFile compares a document with testdata/<file>.json, byte for byte.
+func goldenFile(t *testing.T, file, got string) {
+	t.Helper()
+
+	path := filepath.Join("testdata", file+".json")
 	if *update {
 		if err := os.WriteFile(path, []byte(got+"\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -472,5 +478,319 @@ func TestServicesTrustIsUnchanged(t *testing.T) {
 
 	for _, s := range []string{"s3", "kms", "dynamodb"} {
 		golden(t, s, str(find(t, regs, "aws:iam/role:Role", "ack-svc/c1-ack-"+s+"/role"), "assumeRolePolicy"))
+	}
+}
+
+// projectPolicyOf deploys one project role under the options and returns its
+// identity policy.
+func projectPolicyOf(t *testing.T, o ackfactory.ProjectRolesOptions) string {
+	t.Helper()
+
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.ProjectRoles(ctx, cluster, o, []ackfactory.ProjectRole{{Name: "alpha"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy")
+}
+
+type statement struct {
+	Sid       string
+	Effect    string
+	Action    any
+	Resource  any
+	Condition map[string]map[string]any
+}
+
+func statements(t *testing.T, doc string) map[string]statement {
+	t.Helper()
+
+	var policy struct{ Statement []statement }
+	if err := json.Unmarshal([]byte(doc), &policy); err != nil {
+		t.Fatalf("policy is not JSON: %v: %s", err, doc)
+	}
+
+	out := map[string]statement{}
+
+	for _, s := range policy.Statement {
+		if _, dup := out[s.Sid]; dup {
+			t.Fatalf("two statements named %q", s.Sid)
+		}
+
+		out[s.Sid] = s
+	}
+
+	return out
+}
+
+// actions flattens a statement's Action to a set.
+func actions(s statement) map[string]bool {
+	out := map[string]bool{}
+
+	switch a := s.Action.(type) {
+	case string:
+		out[a] = true
+	case []any:
+		for _, v := range a {
+			out[v.(string)] = true
+		}
+	}
+
+	return out
+}
+
+// A key has no tag before it exists, so a grant under aws:ResourceTag/project
+// can never allow kms:CreateKey: the builder needs its own grant, under the
+// tag the request sets.
+func TestProjectRolesMayCreateAKeyTaggedWithTheirProject(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "deploy"})
+	st := statements(t, doc)
+
+	create, ok := st["KMSCreateKeyWithProjectTag"]
+	if !ok {
+		t.Fatalf("no key creation grant: %s", doc)
+	}
+
+	if create.Effect != "Allow" || !actions(create)["kms:CreateKey"] || !actions(create)["kms:TagResource"] {
+		t.Errorf("creation grant is %+v", create)
+	}
+
+	if got := create.Condition["StringEquals"]["aws:RequestTag/project"]; got != "alpha" {
+		t.Errorf("creation is not tied to the project tag of the request: %v", create.Condition)
+	}
+
+	if _, ok := create.Condition["StringEquals"]["aws:ResourceTag/project"]; ok {
+		t.Errorf("a resource tag condition can never allow CreateKey: %v", create.Condition)
+	}
+
+	// The tagging grant must not let a project claim another project's key.
+	deny := st["DenyRetagForeignKeys"]
+	if deny.Effect != "Deny" || !actions(deny)["kms:TagResource"] || !actions(deny)["kms:UntagResource"] {
+		t.Fatalf("no deny of re-tagging another project's key: %+v", deny)
+	}
+
+	if got := deny.Condition["StringNotEquals"]["aws:ResourceTag/project"]; got != "alpha" {
+		t.Errorf("deny is not scoped to the project: %v", deny.Condition)
+	}
+
+	if got := deny.Condition["Null"]["aws:ResourceTag/project"]; got != "false" {
+		t.Errorf("deny must skip a key with no project tag (creation): %v", deny.Condition)
+	}
+}
+
+// With no option set, the policy keeps every grant earlier releases rendered.
+func TestProjectPolicyDefaultKeepsEveryEarlierGrant(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "deploy"})
+	st := statements(t, doc)
+
+	for _, sid := range []string{
+		"IAMRead", "IAMWriteProjectPrefixed", "S3AccountReads", "S3ProjectPrefixed", "KMSByProjectTag",
+		"KMSAliasList", "KMSAliasByProjectName", "DynamoDBAccountReads", "DynamoDBProjectPrefixed", "SSMByProjectPrefix",
+	} {
+		if _, ok := st[sid]; !ok {
+			t.Errorf("default policy lost %s", sid)
+		}
+	}
+
+	if !actions(st["KMSByProjectTag"])["kms:*"] {
+		t.Errorf("default KMS grant is not kms:*: %+v", st["KMSByProjectTag"])
+	}
+
+	for _, sid := range []string{"DenyOtherBoundary", "DenyRetagProject", "DenyTouchOwnRole", "AllowPodIdentityAssociations", "DenyKeyPolicyGrantsAndRetirement"} {
+		if _, ok := st[sid]; ok {
+			t.Errorf("default policy carries the opt-in statement %s", sid)
+		}
+	}
+
+	goldenFile(t, "policy-project-default", doc)
+}
+
+func TestProjectPolicyDropSSMAndDynamoDBAreOptIn(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		o             ackfactory.ProjectRolesOptions
+		ssm, dynamodb bool
+	}{
+		{"ssm", ackfactory.ProjectRolesOptions{Boundary: "deploy", DropSSM: true}, false, true},
+		{"dynamodb", ackfactory.ProjectRolesOptions{Boundary: "deploy", DropDynamoDB: true}, true, false},
+		{"tighten", ackfactory.ProjectRolesOptions{Boundary: "deploy", Tighten: true}, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := projectPolicyOf(t, tc.o)
+
+			if got := strings.Contains(doc, "ssm:"); got != tc.ssm {
+				t.Errorf("ssm grant present = %v, want %v", got, tc.ssm)
+			}
+
+			if got := strings.Contains(doc, "dynamodb:"); got != tc.dynamodb {
+				t.Errorf("dynamodb grant present = %v, want %v", got, tc.dynamodb)
+			}
+		})
+	}
+}
+
+// Key policy, grants and retirement are the platform's, not a project's.
+func TestProjectPolicyRestrictKMSDropsKeyPolicyGrantsAndRetirement(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "deploy", RestrictKMS: true})
+	st := statements(t, doc)
+
+	if _, ok := st["KMSByProjectTag"]; ok {
+		t.Error("the kms:* grant is still there")
+	}
+
+	manage := st["KMSManageByProjectTag"]
+	if manage.Effect != "Allow" || manage.Condition["StringEquals"]["aws:ResourceTag/project"] != "alpha" {
+		t.Fatalf("management grant is %+v", manage)
+	}
+
+	for a := range actions(manage) {
+		if strings.HasSuffix(a, "*") {
+			t.Errorf("management grant has a wildcard action %s", a)
+		}
+	}
+
+	for _, a := range []string{"kms:PutKeyPolicy", "kms:CreateGrant", "kms:RetireGrant", "kms:ScheduleKeyDeletion"} {
+		if actions(manage)[a] {
+			t.Errorf("management grant allows %s", a)
+		}
+
+		if deny := st["DenyKeyPolicyGrantsAndRetirement"]; deny.Effect != "Deny" || !actions(deny)[a] {
+			t.Errorf("no explicit deny of %s: %+v", a, deny)
+		}
+	}
+
+	if !actions(st["KMSCreateKeyWithProjectTag"])["kms:CreateKey"] {
+		t.Error("restricting KMS must keep the key creation grant")
+	}
+
+	if !actions(st["KMSAliasList"])["kms:ListKeys"] {
+		t.Errorf("key list missing: %+v", st["KMSAliasList"])
+	}
+}
+
+func TestProjectPolicyProtectTagsDeniesRetaggingAndTouchingTheRole(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "deploy", ProtectTags: true})
+	st := statements(t, doc)
+
+	for key, want := range map[string]string{"DenyRetagProject": "alpha", "DenyRetagCluster": "c1"} {
+		deny := st[key]
+		if deny.Effect != "Deny" || !actions(deny)["iam:CreateRole"] || !actions(deny)["iam:TagRole"] || !actions(deny)["kms:TagResource"] {
+			t.Fatalf("%s is %+v", key, deny)
+		}
+
+		tag := "aws:RequestTag/" + strings.ToLower(strings.TrimPrefix(key, "DenyRetag"))
+		if got := deny.Condition["StringNotEquals"][tag]; got != want {
+			t.Errorf("%s: %s must equal %q, is %v", key, tag, want, got)
+		}
+
+		if got := deny.Condition["Null"][tag]; got != "false" {
+			t.Errorf("%s: an absent tag must not be denied (a request that does not set it), Null is %v", key, got)
+		}
+	}
+
+	untag := st["DenyUntagProjectOrCluster"]
+	if untag.Effect != "Deny" || !actions(untag)["iam:UntagRole"] || !actions(untag)["kms:UntagResource"] {
+		t.Fatalf("untag guard is %+v", untag)
+	}
+
+	keys, _ := untag.Condition["ForAnyValue:StringEquals"]["aws:TagKeys"].([]any)
+	if len(keys) != 2 || keys[0] != "project" || keys[1] != "cluster" {
+		t.Errorf("untag guard names the wrong keys: %v", untag.Condition)
+	}
+
+	own := st["DenyTouchOwnRole"]
+	if own.Effect != "Deny" || own.Resource != "arn:part:iam::acct-example:role/c1-ack-project-alpha" {
+		t.Errorf("own-role guard is %+v", own)
+	}
+
+	for _, a := range []string{"iam:TagRole", "iam:UntagRole", "iam:PutRolePolicy", "iam:PutRolePermissionsBoundary"} {
+		if !actions(own)[a] {
+			t.Errorf("own-role guard lacks %s", a)
+		}
+	}
+}
+
+func TestProjectPolicyWorkloadBoundaryIsTheOnlyOneARoleMayCarry(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "project-ack", WorkloadBoundary: "workload"})
+	deny := statements(t, doc)["DenyOtherBoundary"]
+
+	if deny.Effect != "Deny" || !actions(deny)["iam:CreateRole"] || !actions(deny)["iam:PutRolePermissionsBoundary"] {
+		t.Fatalf("boundary guard is %+v", deny)
+	}
+
+	if got := deny.Condition["StringNotEquals"]["iam:PermissionsBoundary"]; got != "arn:part:iam::acct-example:policy/workload" {
+		t.Errorf("guard names the boundary %v", got)
+	}
+}
+
+func TestProjectPolicyPodIdentityIsScopedToTheClusterAndTheProjectsRoles(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "deploy", PodIdentity: true})
+	st := statements(t, doc)
+
+	assoc := st["AllowPodIdentityAssociations"]
+	if !actions(assoc)["eks:CreatePodIdentityAssociation"] {
+		t.Fatalf("association grant is %+v", assoc)
+	}
+
+	res, _ := assoc.Resource.([]any)
+	if len(res) != 2 || res[0] != cluster.ARN() || res[1] != "arn:part:eks:eu-central-1:acct-example:podidentityassociation/c1/*" {
+		t.Errorf("association grant resources %v", assoc.Resource)
+	}
+
+	pass := st["AllowPassOwnRoleToPodIdentity"]
+	if !actions(pass)["iam:PassRole"] || pass.Resource == nil {
+		t.Fatalf("pass role grant is %+v", pass)
+	}
+
+	if got := pass.Condition["StringEqualsIfExists"]["iam:PassedToService"]; got != "pods.eks.amazonaws.com" {
+		t.Errorf("pass role is not tied to Pod Identity: %v", pass.Condition)
+	}
+
+	if r, _ := pass.Resource.([]any); len(r) != 1 || r[0] != "arn:part:iam::acct-example:role/*alpha*" {
+		t.Errorf("pass role resources %v", pass.Resource)
+	}
+}
+
+func TestProjectPolicyTightenedGolden(t *testing.T) {
+	doc := projectPolicyOf(t, ackfactory.ProjectRolesOptions{
+		Boundary: "project-ack", WorkloadBoundary: "workload", Tighten: true, PodIdentity: true,
+		ForbiddenRoles: []string{"c1-archive-*"},
+	})
+
+	goldenFile(t, "policy-project-tight", doc)
+}
+
+// The builder's own boundary is an input: gitops moves the roles to a new
+// boundary by passing another name.
+func TestProjectRolesTakeTheirBoundaryFromTheOptions(t *testing.T) {
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.ProjectRoles(ctx, cluster, ackfactory.ProjectRolesOptions{Boundary: "project-ack"},
+			[]ackfactory.ProjectRole{{Name: "alpha"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	role := find(t, regs, "aws:iam/role:Role", "c1-ack-project-alpha")
+	if got := str(role, "permissionsBoundary"); got != "arn:part:iam::acct-example:policy/project-ack" {
+		t.Errorf("boundary %q", got)
+	}
+}
+
+func TestProjectRolesTrustOnlyTheNamedControllers(t *testing.T) {
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.ProjectRoles(ctx, cluster,
+			ackfactory.ProjectRolesOptions{Boundary: "deploy", Controllers: append(ackfactory.DefaultProjectControllers(), "eks")},
+			[]ackfactory.ProjectRole{{Name: "alpha"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	trust := str(find(t, regs, "aws:iam/role:Role", "c1-ack-project-alpha"), "assumeRolePolicy")
+	if !strings.Contains(trust, `"arn:part:iam::acct-example:role/c1-ack-eks"`) {
+		t.Errorf("trust does not name the eks controller: %s", trust)
 	}
 }
