@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.34.1
 
 - **Security:** `pkg/aws/ackfactory`: the `{cluster}-ack-iam` and `{cluster}-ack-eks` roles now trust only their controller's service account (`ack-iam/ack-iam-controller`, `ack-eks/ack-eks-controller`). Their trust policy pinned the account and the cluster but not the namespace or service account, so any Pod Identity association in the cluster could name either role; the service controllers' roles already carried both conditions. The trust is now podidentity's default document, derived from the same namespace and service account the association binds. The next update changes the trust policy of the two live roles in place (no replacement, no new names); the calls and their inputs are unchanged. The s3, kms and dynamodb roles are untouched.
 
