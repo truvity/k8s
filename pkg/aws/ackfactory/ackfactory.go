@@ -127,25 +127,6 @@ func policyJSON(ctx *pulumi.Context, provider *aws.Provider, statements []iam.Ge
 	return doc.Json, nil
 }
 
-// trustPodIdentity is the trust policy that lets EKS Pod Identity assume a
-// role, pinned to the cluster: SourceAccount alone would admit any Pod
-// Identity principal in the account, another cluster's included.
-func trustPodIdentity(ctx *pulumi.Context, provider *aws.Provider, accountID, clusterARN string) (string, error) {
-	return policyJSON(ctx, provider, []iam.GetPolicyDocumentStatement{
-		{
-			Effect: pulumi.StringRef("Allow"),
-			Principals: []iam.GetPolicyDocumentStatementPrincipal{
-				{Type: "Service", Identifiers: []string{"pods.eks.amazonaws.com"}},
-			},
-			Actions: []string{actionAssumeRole, actionTagSession},
-			Conditions: []iam.GetPolicyDocumentStatementCondition{
-				{Test: "StringEquals", Variable: "aws:SourceAccount", Values: []string{accountID}},
-				{Test: "ArnEquals", Variable: "aws:SourceArn", Values: []string{clusterARN}},
-			},
-		},
-	})
-}
-
 // IAM deploys the {cluster}-ack-iam role and its association: the
 // controller that mints every other IAM role in the bundle.
 //
@@ -153,15 +134,15 @@ func trustPodIdentity(ctx *pulumi.Context, provider *aws.Provider, accountID, cl
 // capability roles ({cluster}-ack-project-*): set it on clusters that host
 // projects.
 //
+// The trust is podidentity's default: the cluster's account and ARN, and the
+// controller's namespace and service account (ack-iam/ack-iam-controller),
+// the same pair the association binds. Without the last two, any Pod Identity
+// association in the cluster could name this role.
+//
 // It returns the identity; the caller exports the role ARN if it wants to.
 func IAM(ctx *pulumi.Context, c Cluster, o Options, withProjectAssume bool) (*podidentity.PodIdentity, error) {
 	if err := o.validate(c); err != nil {
 		return nil, err
-	}
-
-	trust, err := trustPodIdentity(ctx, o.Provider, c.AccountID, c.ARN())
-	if err != nil {
-		return nil, fmt.Errorf("build ACK IAM trust policy: %w", err)
 	}
 
 	statements := []iam.GetPolicyDocumentStatement{
@@ -207,7 +188,8 @@ func IAM(ctx *pulumi.Context, c Cluster, o Options, withProjectAssume bool) (*po
 		ServiceAccounts:     []string{"ack-iam-controller"},
 		RoleName:            c.Name + "-ack-iam",
 		PermissionsBoundary: c.policyARN(o.Boundary),
-		TrustPolicy:         pulumi.String(trust),
+		AccountID:           c.AccountID,
+		ClusterARN:          c.ARN(),
 		InlinePolicy:        &podidentity.InlinePolicy{Name: c.Name + "-ack-iam-policy", Document: pulumi.String(policy)},
 		LegacyTopLevel:      true,
 		Names: func(k podidentity.Child) string {
@@ -233,15 +215,12 @@ func IAM(ctx *pulumi.Context, c Cluster, o Options, withProjectAssume bool) (*po
 // controller's recommended inline policy, with the IAM reads and PassRole
 // scoped to roles named after the cluster.
 //
+// The trust is pinned like IAM's, to ack-eks/ack-eks-controller.
+//
 // It returns the identity; the caller exports the role ARN if it wants to.
 func EKS(ctx *pulumi.Context, c Cluster, o Options) (*podidentity.PodIdentity, error) {
 	if err := o.validate(c); err != nil {
 		return nil, err
-	}
-
-	trust, err := trustPodIdentity(ctx, o.Provider, c.AccountID, c.ARN())
-	if err != nil {
-		return nil, fmt.Errorf("build ACK EKS trust policy: %w", err)
 	}
 
 	policy, err := policyJSON(ctx, o.Provider, []iam.GetPolicyDocumentStatement{
@@ -281,7 +260,8 @@ func EKS(ctx *pulumi.Context, c Cluster, o Options) (*podidentity.PodIdentity, e
 		ServiceAccounts:     []string{"ack-eks-controller"},
 		RoleName:            c.Name + "-ack-eks",
 		PermissionsBoundary: c.policyARN(o.Boundary),
-		TrustPolicy:         pulumi.String(trust),
+		AccountID:           c.AccountID,
+		ClusterARN:          c.ARN(),
 		InlinePolicy:        &podidentity.InlinePolicy{Name: c.Name + "-ack-eks-policy", Document: pulumi.String(policy)},
 		LegacyTopLevel:      true,
 		Names: func(k podidentity.Child) string {

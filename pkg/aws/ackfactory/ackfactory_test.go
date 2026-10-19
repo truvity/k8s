@@ -2,7 +2,11 @@ package ackfactory_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"flag"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -346,5 +350,127 @@ func TestProjectRolesCanForbidRolesThePlatformMints(t *testing.T) {
 
 	if strings.Contains(str(find(t, plain, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-alpha-policy"), "policy"), "Deny") {
 		t.Error("a policy with no forbidden roles carries a deny")
+	}
+}
+
+var update = flag.Bool("update", false, "rewrite testdata/trust-*.json")
+
+// golden compares a trust policy with testdata/trust-<name>.json, byte for
+// byte: the provider compares the string, so any change to it is an update
+// of the live role.
+func golden(t *testing.T, name, got string) {
+	t.Helper()
+
+	path := filepath.Join("testdata", "trust-"+name+".json")
+	if *update {
+		if err := os.WriteFile(path, []byte(got+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got != strings.TrimSuffix(string(want), "\n") {
+		t.Errorf("%s differs (run with -update and review):\n got: %s\nwant: %s", path, got, want)
+	}
+}
+
+// trustConditions returns the StringEquals and ArnEquals conditions of a
+// single-statement trust policy.
+func trustConditions(t *testing.T, doc string) (stringEquals, arnEquals map[string]any) {
+	t.Helper()
+
+	var policy struct {
+		Statement []struct {
+			Condition map[string]map[string]any
+		}
+	}
+
+	if err := json.Unmarshal([]byte(doc), &policy); err != nil {
+		t.Fatalf("trust policy is not JSON: %v: %s", err, doc)
+	}
+
+	if len(policy.Statement) != 1 {
+		t.Fatalf("trust policy has %d statements, want 1: %s", len(policy.Statement), doc)
+	}
+
+	c := policy.Statement[0].Condition
+
+	return c["StringEquals"], c["ArnEquals"]
+}
+
+// The controller roles trust only their own controller's service account:
+// without the namespace and service-account conditions, any Pod Identity
+// association in the cluster could name the role, and the EKS controller may
+// pass every role named after the cluster.
+func TestIAMAndEKSTrustOnlyTheirControllerServiceAccount(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		deploy func(*pulumi.Context, ackfactory.Options) error
+	}{
+		{"iam", func(ctx *pulumi.Context, o ackfactory.Options) error {
+			_, err := ackfactory.IAM(ctx, cluster, o, true)
+			return err
+		}},
+		{"eks", func(ctx *pulumi.Context, o ackfactory.Options) error {
+			_, err := ackfactory.EKS(ctx, cluster, o)
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			regs, err := run(t, tc.deploy)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ns, sa := "ack-"+tc.name, "ack-"+tc.name+"-controller"
+			trust := str(find(t, regs, "aws:iam/role:Role", "c1-ack-"+tc.name+"-role"), "assumeRolePolicy")
+
+			stringEquals, arnEquals := trustConditions(t, trust)
+			for k, want := range map[string]string{
+				"aws:SourceAccount":                         "acct-example",
+				"aws:RequestTag/kubernetes-namespace":       ns,
+				"aws:RequestTag/kubernetes-service-account": sa,
+			} {
+				if got := stringEquals[k]; got != want {
+					t.Errorf("StringEquals %s = %v, want %q: %s", k, got, want, trust)
+				}
+			}
+
+			if got, want := arnEquals["aws:SourceArn"], cluster.ARN(); got != want {
+				t.Errorf("ArnEquals aws:SourceArn = %v, want %q: %s", got, want, trust)
+			}
+
+			// The association binds the same pair the trust names.
+			assoc := find(t, regs, "aws:eks/podIdentityAssociation:PodIdentityAssociation", "ack-"+tc.name+"-c1-assoc")
+			if got := str(assoc, "namespace"); got != ns {
+				t.Errorf("association namespace %q, want %q", got, ns)
+			}
+
+			if got := str(assoc, "serviceAccount"); got != sa {
+				t.Errorf("association service account %q, want %q", got, sa)
+			}
+
+			golden(t, tc.name, trust)
+		})
+	}
+}
+
+// The service controllers' trust documents are pinned: they already carried
+// the namespace and service-account conditions, and a re-rendered string is
+// an update of every live role.
+func TestServicesTrustIsUnchanged(t *testing.T) {
+	regs, err := run(t, func(ctx *pulumi.Context, o ackfactory.Options) error {
+		return ackfactory.Services(ctx, cluster, ackfactory.ServicesOptions{Options: o, Lookup: lookup{}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, s := range []string{"s3", "kms", "dynamodb"} {
+		golden(t, s, str(find(t, regs, "aws:iam/role:Role", "ack-svc/c1-ack-"+s+"/role"), "assumeRolePolicy"))
 	}
 }
