@@ -307,7 +307,15 @@ type Service struct {
 	Description string
 	// Action is the wildcard grant, for example "s3:*".
 	Action string
+	// Boundary is the NAME of the permissions boundary of this controller's
+	// role. Empty means the Boundary of the ServicesOptions, as before: each
+	// controller can carry its own boundary, sized to what it does as itself.
+	Boundary string
 }
+
+// IAM and EKS take their boundary from the Options of their own call, so each
+// of the five controllers can carry a different one: pass IAM and EKS their own
+// Options, and set Service.Boundary for the service controllers.
 
 // DefaultServices is the controller set the factory was built for.
 func DefaultServices() []Service {
@@ -323,7 +331,8 @@ type ServicesOptions struct {
 	Options
 	// Lookup adopts what is live. Required.
 	Lookup Lookup
-	// Services is the controller set. Nil means DefaultServices.
+	// Services is the controller set. Nil means DefaultServices. A Service with
+	// its own Boundary overrides Options.Boundary for its role.
 	Services []Service
 }
 
@@ -359,6 +368,11 @@ func deployService(ctx *pulumi.Context, c Cluster, o ServicesOptions, svc Servic
 	ns := "ack-" + svc.Name
 	sa := ns + "-controller"
 	policyARN := c.policyARN(name)
+
+	boundary := svc.Boundary
+	if boundary == "" {
+		boundary = o.Boundary
+	}
 
 	policyDoc := fmt.Sprintf(
 		`{"Version":"2012-10-17","Statement":[`+
@@ -412,7 +426,7 @@ func deployService(ctx *pulumi.Context, c Cluster, o ServicesOptions, svc Servic
 		Namespace:             ns,
 		ServiceAccounts:       []string{sa},
 		RoleName:              name,
-		PermissionsBoundary:   c.policyARN(o.Boundary),
+		PermissionsBoundary:   c.policyARN(boundary),
 		TrustPolicy:           pulumi.String(trust),
 		ManagedPolicy:         &podidentity.ManagedPolicy{Name: name, Description: svc.Description, Document: pulumi.String(policyDoc)},
 		IgnoreAssociationTags: true,

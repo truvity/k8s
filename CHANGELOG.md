@@ -16,6 +16,8 @@ them, and for anything breaking, what to do.
 
   The builder's own boundary is `ProjectRolesOptions.Boundary`, as before: passing another name moves the live roles to that boundary in place.
 
+- `pkg/aws/ackfactory`: each ACK controller's own role can carry its own permissions boundary. `Service.Boundary` (a policy NAME) sets it for a service controller (s3, kms, dynamodb); empty keeps the `ServicesOptions` boundary, so nothing changes for a caller that does not set it. `IAM` and `EKS` already take the boundary from the `Options` of their own call. Changing a boundary moves the live role to it in place (no replacement).
+
 ## v0.34.1
 
 - **Security:** `pkg/aws/ackfactory`: the `{cluster}-ack-iam` and `{cluster}-ack-eks` roles now trust only their controller's service account (`ack-iam/ack-iam-controller`, `ack-eks/ack-eks-controller`). Their trust policy pinned the account and the cluster but not the namespace or service account, so any Pod Identity association in the cluster could name either role; the service controllers' roles already carried both conditions. The trust is now podidentity's default document, derived from the same namespace and service account the association binds. The next update changes the trust policy of the two live roles in place (no replacement, no new names); the calls and their inputs are unchanged. The s3, kms and dynamodb roles are untouched.
