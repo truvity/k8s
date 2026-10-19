@@ -1,0 +1,74 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "IAMRead",
+    "Effect": "Allow",
+    "Action": ["iam:Get*", "iam:List*"],
+    "Resource": "*"
+  },{
+    "Sid": "IAMWriteProjectPrefixed",
+    "Effect": "Allow",
+    "Action": "iam:*",
+    "Resource": [
+      "arn:part:iam::acct-example:role/*alpha*",
+      "arn:part:iam::acct-example:policy/*alpha*",
+      "arn:part:iam::acct-example:instance-profile/*alpha*"
+    ]
+  },{
+    "Sid": "S3AccountReads",
+    "Effect": "Allow",
+    "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"],
+    "Resource": "*"
+  },{
+    "Sid": "S3ProjectPrefixed",
+    "Effect": "Allow",
+    "Action": "s3:*",
+    "Resource": ["arn:part:s3:::*alpha*", "arn:part:s3:::*alpha*/*"]
+  },{
+    "Sid": "KMSByProjectTag",
+    "Effect": "Allow",
+    "Action": "kms:*",
+    "Resource": "*",
+    "Condition": {"StringEquals": {"aws:ResourceTag/project": "alpha"}}
+  },{
+    "Sid": "KMSCreateKeyWithProjectTag",
+    "Effect": "Allow",
+    "Action": ["kms:CreateKey", "kms:TagResource"],
+    "Resource": "*",
+    "Condition": {"StringEquals": {"aws:RequestTag/project": "alpha"}}
+  },{
+    "Sid": "DenyRetagForeignKeys",
+    "Effect": "Deny",
+    "Action": ["kms:TagResource", "kms:UntagResource"],
+    "Resource": "*",
+    "Condition": {"Null": {"aws:ResourceTag/project": "false"}, "StringNotEquals": {"aws:ResourceTag/project": "alpha"}}
+  },{
+    "Sid": "KMSAliasList",
+    "Effect": "Allow",
+    "Action": "kms:ListAliases",
+    "Resource": "*"
+  },{
+    "Sid": "KMSAliasByProjectName",
+    "Effect": "Allow",
+    "Action": ["kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias"],
+    "Resource": "arn:part:kms:*:acct-example:alias/*-alpha-*"
+  },{
+    "Sid": "DynamoDBAccountReads",
+    "Effect": "Allow",
+    "Action": ["dynamodb:ListTables", "dynamodb:DescribeLimits"],
+    "Resource": "*"
+  },{
+    "Sid": "DynamoDBProjectPrefixed",
+    "Effect": "Allow",
+    "Action": "dynamodb:*",
+    "Resource": [
+      "arn:part:dynamodb:*:acct-example:table/*alpha*",
+      "arn:part:dynamodb:*:acct-example:table/*alpha*/*"
+    ]
+  },{
+    "Sid": "SSMByProjectPrefix",
+    "Effect": "Allow",
+    "Action": "ssm:*",
+    "Resource": "arn:part:ssm:*:acct-example:parameter/business/alpha/*"
+  }]
+}
