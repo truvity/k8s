@@ -707,6 +707,31 @@ the permissions boundary of the controller roles, not its ARN) are required.
 the project and cluster tags on `iam:CreateRole` and entrap what the roles
 create. Every refusal is reported before anything is registered.
 
+### Project roles: the builder's policy
+
+`ProjectRoles` mints the role the controllers assume for a project's namespace.
+Its identity policy lets it create a KMS key tagged with its own project
+(`kms:CreateKey` and `kms:TagResource` under `aws:RequestTag/project`: a key has
+no tag before it exists, so a grant under `aws:ResourceTag/project` alone can
+never allow the first one) and denies re-tagging a key that carries another
+project's tag. `ProjectRolesOptions` tighten the rest; all are off by default,
+and each turns a statement of the policy on or off, so enable one, read the
+role's CloudTrail for denials, then the next:
+
+| Option | Effect |
+| --- | --- |
+| `WorkloadBoundary` | A policy NAME: an explicit deny of `iam:CreateRole` and `iam:PutRolePermissionsBoundary` with any other boundary, or none. |
+| `ProtectTags` | Denies setting `project` or `cluster` to another value, removing them, re-tagging a role or association that carries another project's tag, and changing the builder's own role. |
+| `RestrictKMS` | Replaces `kms:*` on the project's keys with the management actions a project needs, and denies `kms:PutKeyPolicy`, grants, `ScheduleKeyDeletion` and `DisableKey`: a Key CR cannot be deleted through the builder. |
+| `DropSSM`, `DropDynamoDB` | Remove those grants. |
+| `PodIdentity` | Pod Identity association calls on the cluster and `iam:PassRole` of the project's roles to `pods.eks.amazonaws.com`, for the EKS controller. |
+| `Tighten` | `ProtectTags`, `RestrictKMS`, `DropSSM` and `DropDynamoDB`. |
+
+The builder's own boundary is `ProjectRolesOptions.Boundary`; passing another
+name moves the live roles to it in place. A key with no `project` tag is not
+protected by the key tag deny, so the builder's boundary should name the tag
+too.
+
 ### `Lookup`
 
 `Services` asks the caller what already exists (`PolicyExists`, `RoleExists`,
