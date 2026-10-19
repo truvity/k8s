@@ -707,6 +707,13 @@ the permissions boundary of the controller roles, not its ARN) are required.
 the project and cluster tags on `iam:CreateRole` and entrap what the roles
 create. Every refusal is reported before anything is registered.
 
+Each of the five controllers' roles can carry its own boundary, sized to what
+the controller does as itself: `IAM` and `EKS` take the `Boundary` of the
+`Options` of their own call, and `Service.Boundary` (a policy NAME, in
+`ServicesOptions.Services`) sets it for a service controller. Empty keeps
+`ServicesOptions.Boundary`, so a caller that sets none is unchanged. Changing a
+boundary moves the live role to it in place.
+
 ### Project roles: the builder's policy
 
 `ProjectRoles` mints the role the controllers assume for a project's namespace.
