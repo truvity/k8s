@@ -1,0 +1,5 @@
+# A role prefix names a role in the account's root path, never a path.
+projects:
+  - name: shop
+    kind: product
+    podIdentityRolePrefixes: ["arn:example:iam::placeholder:role/team/example-shop."]

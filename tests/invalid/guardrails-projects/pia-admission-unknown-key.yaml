@@ -1,0 +1,2 @@
+# An unknown key is an error, not a silent no-op.
+podIdentityAdmission: {enabled: true, mode: enforce}

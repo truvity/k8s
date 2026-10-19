@@ -1,0 +1,5 @@
+# A role prefix is a role ARN prefix.
+projects:
+  - name: shop
+    kind: product
+    podIdentityRolePrefixes: ["example-shop."]

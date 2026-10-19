@@ -1,0 +1,2 @@
+# Deny and Warn cannot be combined in one binding.
+podIdentityAdmission: {enabled: true, validationActions: [Deny, Warn]}

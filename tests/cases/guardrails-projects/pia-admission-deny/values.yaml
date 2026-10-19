@@ -1,0 +1,25 @@
+# Enforcing, with no exemption and a different policy name. Compare pia-admission: a ceiling per namespace, the
+# platform namespaces exempt (the listed one and the chart's own association
+# namespace), a row with no prefixes (default deny).
+podIdentities:
+  clusterName: example
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3", associationNamespace: identity-system}
+projects:
+  - name: shop
+    kind: product
+    podIdentityRolePrefixes:
+      - "arn:example:iam::placeholder:role/example-shop."
+  - name: docs
+    kind: product
+    podIdentityRolePrefixes:
+      - "arn:example:iam::placeholder:role/example-docs."
+      - "arn:example:iam::placeholder:role/example-docs-legacy-"
+  - name: ci-shop
+    kind: ci
+    podIdentities: [test-s3]
+podIdentityAdmission:
+  enabled: true
+  name: pia-guard
+  validationActions: [Deny, Audit]
+  failurePolicy: Ignore

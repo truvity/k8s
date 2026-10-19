@@ -95,6 +95,36 @@ podIdentities:
   clusterName: ""
   associations: {}
 
+# --- PodIdentityAssociation admission -----------------------------------------
+# A ValidatingAdmissionPolicy and its binding for ACK PodIdentityAssociations
+# (eks.services.k8s.aws). A project that can create one can bind a pod of its
+# namespace to any IAM role the EKS controller may pass, so the policy refuses
+# an association unless spec.namespace is the namespace it lives in and
+# spec.roleARN is a role of that namespace's project: one of the row's
+# `podIdentityRolePrefixes` followed by a name without a path. A namespace with
+# no row, or a row with no prefixes, has no ceiling and may not create any
+# (default deny).
+#
+# Off by default: the render is unchanged until a cluster turns it on.
+#
+# Exempt by name, because their associations bind other namespaces by design:
+# `exemptNamespaces` and the `associationNamespace` of every
+# `podIdentities.associations` entry above.
+#
+# Roll out in observe mode, read the audit log, then enforce:
+#   validationActions: [Warn, Audit]   # default: admitted, warned, audited
+#   validationActions: [Deny, Audit]   # enforce (Deny cannot be combined with Warn)
+podIdentityAdmission:
+  enabled: false
+  name: ack-pod-identity-association-guard
+  validationActions: [Warn, Audit]
+  # Fail: an evaluation error follows validationActions like any other failure.
+  failurePolicy: Fail
+  # Namespaces whose associations are not a project's, for example the one
+  # of a database operator:
+  #   exemptNamespaces: [cnpg-system]
+  exemptNamespaces: []
+
 # --- The rows -----------------------------------------------------------------
 # One per project namespace:
 #
@@ -111,5 +141,7 @@ podIdentities:
 #         - {name: deployers, clusterRole: edit, subjects: [{kind: Group, name: "shop:deployer"}]}
 #         - {name: certs, role: read-certs, subjects: [{kind: Group, name: "system:serviceaccounts:shop"}]}
 #       ackRoleARN: "<the IAM role ARN>"
+#       podIdentityRolePrefixes:           # with podIdentityAdmission: the roles the namespace's associations may bind
+#         - "arn:<partition>:iam::<account>:role/<cluster>-<project>."
 #       podIdentities: [test-s3]           # names under podIdentities.associations
 projects: []

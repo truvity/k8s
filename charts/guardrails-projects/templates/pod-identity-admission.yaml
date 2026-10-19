@@ -1,0 +1,76 @@
+{{- /*
+`podIdentityAdmission.enabled`: a ValidatingAdmissionPolicy and its binding for
+ACK PodIdentityAssociations (eks.services.k8s.aws). A project that can create
+an association can bind a pod of its namespace to any IAM role the EKS
+controller may pass, so the policy refuses it unless
+  - spec.namespace is the namespace the association lives in, and
+  - spec.roleARN is a role of the project: one of the row's
+    `podIdentityRolePrefixes` followed by a name without a path.
+A namespace with no row, or a row with no prefixes, has no ceiling and may not
+create associations (default deny). Exempt by name: `podIdentityAdmission.
+exemptNamespaces` and the `associationNamespace` of every
+`podIdentities.associations` entry, whose associations bind other namespaces
+by design (the platform's, not a project's). A namespace is named by
+kubernetes.io/metadata.name, never by a label a tenant could set. An UPDATE
+that does not change spec is skipped, so a finalizer edit cannot deadlock a
+deletion.
+*/ -}}
+{{- $pa := .Values.podIdentityAdmission | default dict -}}
+{{- if $pa.enabled }}
+{{- $actions := $pa.validationActions | default (list "Warn" "Audit") -}}
+{{- if and (has "Deny" $actions) (has "Warn" $actions) }}
+{{- fail "podIdentityAdmission.validationActions: Deny and Warn cannot be combined (the API server refuses the binding); use [Deny, Audit] to enforce or [Warn, Audit] to observe" }}
+{{- end }}
+{{- $prefixes := dict -}}
+{{- range $p := .Values.projects }}
+{{- if $p.podIdentityRolePrefixes }}{{ $_ := set $prefixes $p.name $p.podIdentityRolePrefixes }}{{ end }}
+{{- end }}
+{{- $exempt := $pa.exemptNamespaces | default list -}}
+{{- range $a := (.Values.podIdentities.associations | default dict) }}
+{{- $exempt = append $exempt $a.associationNamespace }}
+{{- end }}
+{{- $name := $pa.name | default "ack-pod-identity-association-guard" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: {{ $pa.failurePolicy | default "Fail" }}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["eks.services.k8s.aws"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["podidentityassociations"]
+  matchConditions:
+    - name: platform-namespaces-are-exempt
+      expression: {{ printf "!(object.metadata.namespace in %s)" (uniq $exempt | sortAlpha | toJson) | toJson }}
+    - name: only-spec-changes
+      expression: "request.operation == 'CREATE' || object.spec != oldObject.spec"
+  variables:
+    - name: rolePrefixes
+      expression: {{ $prefixes | toJson | toJson }}
+  validations:
+    - expression: "has(object.spec.namespace) && object.spec.namespace == object.metadata.namespace"
+      message: "a PodIdentityAssociation binds the namespace it lives in: spec.namespace must equal metadata.namespace"
+      reason: Forbidden
+    - expression: "object.metadata.namespace in variables.rolePrefixes"
+      message: "this namespace has no IAM role ceiling: it may not create PodIdentityAssociations"
+      reason: Forbidden
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) ||
+        (has(object.spec.roleARN) &&
+         variables.rolePrefixes[object.metadata.namespace].exists(p,
+           object.spec.roleARN.startsWith(p) && !object.spec.roleARN.substring(p.size()).contains('/')))
+      message: "spec.roleARN must be a role of this namespace's project: one of its podIdentityRolePrefixes followed by a name, no path"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: {{ $actions | toJson }}
+{{- end }}
