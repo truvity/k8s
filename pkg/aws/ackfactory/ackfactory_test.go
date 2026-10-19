@@ -960,3 +960,211 @@ func TestEKSWithRefusesWhatEKSRefuses(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func employeeOptions() ackfactory.EmployeeRolesOptions {
+	return ackfactory.EmployeeRolesOptions{Boundary: "project-ack", WorkloadBoundary: "workload", BucketPrefix: "acme-"}
+}
+
+func employeePolicyOf(t *testing.T, o ackfactory.EmployeeRolesOptions) (string, []registration) {
+	t.Helper()
+
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.EmployeeRoles(ctx, cluster, o, []ackfactory.EmployeeSandbox{{Name: "emp-alice"}, {Name: "emp-bob"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-emp-alice-policy"), "policy"), regs
+}
+
+func TestEmployeeRolesAreOneBuilderPerSandboxKeyedOnItsOwnTags(t *testing.T) {
+	policy, regs := employeePolicyOf(t, employeeOptions())
+
+	want := []string{
+		"aws:iam/role:Role c1-ack-project-emp-alice",
+		"aws:iam/role:Role c1-ack-project-emp-bob",
+		"aws:iam/rolePolicy:RolePolicy c1-ack-project-emp-alice-policy",
+		"aws:iam/rolePolicy:RolePolicy c1-ack-project-emp-bob-policy",
+	}
+	if got := names(regs); !slices.Equal(got, want) {
+		t.Fatalf("resources differ.\n got: %q\nwant: %q", got, want)
+	}
+
+	role := find(t, regs, "aws:iam/role:Role", "c1-ack-project-emp-alice")
+	if got := str(role, "name"); got != "c1-ack-project-emp-alice" {
+		t.Errorf("role name %q", got)
+	}
+
+	if got := str(role, "permissionsBoundary"); got != "arn:part:iam::acct-example:policy/project-ack" {
+		t.Errorf("builder boundary %q", got)
+	}
+
+	tags := role.inputs["tags"].ObjectValue()
+	if tags["project"].StringValue() != "emp-alice" || tags["cluster"].StringValue() != "c1" {
+		t.Errorf("tags %v", tags)
+	}
+
+	trust := str(role, "assumeRolePolicy")
+	for _, ctl := range []string{"iam", "s3", "kms", "dynamodb"} {
+		if !strings.Contains(trust, `"arn:part:iam::acct-example:role/c1-ack-`+ctl+`"`) {
+			t.Errorf("trust does not name the %s controller: %s", ctl, trust)
+		}
+	}
+
+	// One document serves every sandbox: nothing in it names one.
+	if bob := str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-emp-bob-policy"), "policy"); bob != policy {
+		t.Error("the policy differs between sandboxes")
+	}
+
+	if strings.Contains(policy, "emp-") {
+		t.Errorf("the policy names a sandbox: %s", policy)
+	}
+
+	goldenFile(t, "policy-employee", policy)
+}
+
+func TestEmployeePolicyDelegatesOnlyTheWorkloadBoundary(t *testing.T) {
+	policy, _ := employeePolicyOf(t, employeeOptions())
+	st := statements(t, policy)
+
+	create := st["AllowCreateWorkloadRole"]
+	if create.Effect != "Allow" || !actions(create)["iam:CreateRole"] {
+		t.Fatalf("create grant is %+v", create)
+	}
+
+	eq := create.Condition["StringEquals"]
+	if eq["iam:PermissionsBoundary"] != "arn:part:iam::acct-example:policy/workload" ||
+		eq["aws:RequestTag/project"] != "${aws:PrincipalTag/project}" ||
+		eq["aws:RequestTag/cluster"] != "${aws:PrincipalTag/cluster}" {
+		t.Errorf("create conditions %v", create.Condition)
+	}
+
+	if r, _ := create.Resource.(string); r != "arn:part:iam::acct-example:role/${aws:PrincipalTag/cluster}-${aws:PrincipalTag/project}.*" {
+		t.Errorf("create resource %v", create.Resource)
+	}
+
+	deny := st["DenyOtherBoundary"]
+	if deny.Effect != "Deny" || !actions(deny)["iam:CreateRole"] || !actions(deny)["iam:PutRolePermissionsBoundary"] {
+		t.Fatalf("boundary guard is %+v", deny)
+	}
+
+	if got := deny.Condition["StringNotEquals"]["iam:PermissionsBoundary"]; got != "arn:part:iam::acct-example:policy/workload" {
+		t.Errorf("guard names %v", got)
+	}
+
+	// Only the project's own policies can be attached, never an AWS-managed one.
+	attach := st["AllowAttachOwnPolicy"]
+	if got := attach.Condition["ArnLike"]["iam:PolicyARN"]; got != "arn:part:iam::acct-example:policy/${aws:PrincipalTag/cluster}-${aws:PrincipalTag/project}.*" {
+		t.Errorf("attach is scoped to %v", got)
+	}
+}
+
+func TestEmployeePolicyHasNoObjectAccessSSMDynamoDBKeyPolicyOrRetirement(t *testing.T) {
+	policy, _ := employeePolicyOf(t, employeeOptions())
+	st := statements(t, policy)
+
+	for sid, s := range st {
+		if s.Effect != "Allow" {
+			continue
+		}
+
+		for a := range actions(s) {
+			switch {
+			case strings.HasPrefix(a, "ssm:"), strings.HasPrefix(a, "dynamodb:"), strings.HasSuffix(a, ":*"),
+				a == "s3:GetObject", a == "s3:PutObject", a == "s3:DeleteObject",
+				a == "kms:PutKeyPolicy", a == "kms:CreateGrant", a == "kms:ScheduleKeyDeletion", a == "kms:DisableKey":
+				t.Errorf("%s allows %s", sid, a)
+			}
+		}
+	}
+
+	buckets := st["AllowOwnBucketAdmin"]
+	if r, _ := buckets.Resource.(string); r != "arn:part:s3:::acme-${aws:PrincipalTag/cluster}-${aws:PrincipalTag/project}-*" {
+		t.Errorf("bucket scope %v", buckets.Resource)
+	}
+
+	create := st["KMSCreateKeyWithProjectTag"]
+	if !actions(create)["kms:CreateKey"] || create.Condition["StringEquals"]["aws:RequestTag/project"] != "${aws:PrincipalTag/project}" {
+		t.Errorf("key creation is %+v", create)
+	}
+
+	for _, sid := range []string{
+		"DenyKeyPolicyGrantsAndRetirement", "DenyRetagForeignKeys", "DenyRetagProject", "DenyRetagCluster",
+		"DenyUntagProjectOrCluster", "DenyTouchOwnRole",
+	} {
+		if st[sid].Effect != "Deny" {
+			t.Errorf("no deny %s", sid)
+		}
+	}
+
+	ownRole := "arn:part:iam::acct-example:role/${aws:PrincipalTag/cluster}-ack-project-${aws:PrincipalTag/project}"
+	if r, _ := st["DenyTouchOwnRole"].Resource.(string); r != ownRole {
+		t.Errorf("own role %v", st["DenyTouchOwnRole"].Resource)
+	}
+
+	for _, sid := range []string{"AllowPodIdentityAssociations", "AllowPassOwnRoleToPodIdentity"} {
+		if st[sid].Effect != "Allow" {
+			t.Errorf("no grant %s", sid)
+		}
+	}
+}
+
+func TestEmployeeRolesRefuseWhatWouldMakeAnOpenBuilder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		o    func(*ackfactory.EmployeeRolesOptions)
+		sbs  []string
+		want string
+	}{
+		{"no boundary", func(o *ackfactory.EmployeeRolesOptions) { o.Boundary = "" }, []string{"emp-a"}, "Boundary is empty"},
+		{"no workload boundary", func(o *ackfactory.EmployeeRolesOptions) { o.WorkloadBoundary = "" }, []string{"emp-a"}, "WorkloadBoundary is empty"},
+		{"the builder's boundary is the workload's", func(o *ackfactory.EmployeeRolesOptions) {
+			o.WorkloadBoundary = o.Boundary
+		}, []string{"emp-a"}, "equals Boundary"},
+		{"a name outside the prefix", func(*ackfactory.EmployeeRolesOptions) {}, []string{"shop"}, `must start with "emp-"`},
+		{"only the prefix", func(*ackfactory.EmployeeRolesOptions) {}, []string{"emp-"}, `must start with "emp-"`},
+		{"upper case", func(*ackfactory.EmployeeRolesOptions) {}, []string{"emp-Alice"}, `must start with "emp-"`},
+		{"a wildcard", func(*ackfactory.EmployeeRolesOptions) {}, []string{"emp-*"}, `must start with "emp-"`},
+		{"another prefix", func(o *ackfactory.EmployeeRolesOptions) { o.NamePrefix = "sbx-" }, []string{"emp-a"}, `must start with "sbx-"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := employeeOptions()
+			tc.o(&o)
+
+			var sbs []ackfactory.EmployeeSandbox
+			for _, n := range tc.sbs {
+				sbs = append(sbs, ackfactory.EmployeeSandbox{Name: n})
+			}
+
+			regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+				return ackfactory.EmployeeRoles(ctx, cluster, o, sbs)
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want an error with %q", err, tc.want)
+			}
+
+			if got := names(regs); len(got) != 0 {
+				t.Errorf("registered %q before refusing", got)
+			}
+		})
+	}
+}
+
+func TestEmployeeRolesTakeAnotherPrefixAndControllers(t *testing.T) {
+	o := employeeOptions()
+	o.NamePrefix = "sbx-"
+	o.Controllers = []string{"iam", "eks"}
+
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.EmployeeRoles(ctx, cluster, o, []ackfactory.EmployeeSandbox{{Name: "sbx-a"}})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	trust := str(find(t, regs, "aws:iam/role:Role", "c1-ack-project-sbx-a"), "assumeRolePolicy")
+	if !strings.Contains(trust, `role/c1-ack-eks"`) || strings.Contains(trust, `role/c1-ack-s3"`) {
+		t.Errorf("trust %s", trust)
+	}
+}

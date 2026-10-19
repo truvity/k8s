@@ -3,7 +3,8 @@
 // cannot bootstrap themselves need, plus the per-project capability roles
 // the controllers assume.
 //
-// Four functions, each run from the caller's cluster program:
+// Four functions, each run from the caller's cluster program, and a fifth for
+// employee sandboxes:
 //
 //   - IAM and EKS: the identities of the ACK IAM and EKS controllers. The IAM
 //     controller mints every other in-bundle IAM role, the EKS controller
@@ -19,6 +20,9 @@
 //     ProjectRolesOptions tighten its identity policy: tag guards, key
 //     management without key policy or retirement, no SSM or DynamoDB, one
 //     boundary for the roles it mints, Pod Identity for the EKS controller.
+//   - EmployeeRoles: the same for employee sandboxes, every tightening on and
+//     keyed on the role's own project and cluster tags, so one policy document
+//     serves every sandbox.
 //
 // These are plain functions, not components. They register the same
 // resources, under the same logical names, as the program they were lifted
