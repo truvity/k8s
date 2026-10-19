@@ -697,6 +697,7 @@ err = ackfactory.ProjectRoles(ctx, c, ackfactory.ProjectRolesOptions{Boundary: "
 | `EKS`, `EKSWith` | A `podidentity` component `ack-eks-<cluster>`: role `<cluster>-ack-eks` and its association for `ack-eks/ack-eks-controller`. `EKSWith` takes `EKSOptions` (below). |
 | `Services` | One `podidentity` component `ack-svc/<cluster>-ack-<svc>` per service (default `s3`, `kms`, `dynamodb`): managed policy, role, attachment and association for `ack-<svc>/ack-<svc>-controller`. A policy, role or association that is live is adopted (`Lookup`) instead of created. |
 | `ProjectRoles` | Per project a role `<cluster>-ack-project-<name>` and its policy `<cluster>-ack-project-<name>-policy`, resources scoped to the project name, assumed by the controllers. |
+| `EmployeeRoles` | Per employee sandbox the same pair, `<cluster>-ack-project-<name>` and `-policy`, with the project builder's tightened policy keyed on the role's own tags (see below). |
 
 ### Inputs
 
@@ -766,6 +767,28 @@ that does nothing:
 Enable it in order: the project roles first (trust and `PodIdentity`), then the
 controller's role (`ProjectAssume`), then the gate; the gate before the
 role makes every association reconcile fail until the role is updated.
+
+### Employee sandboxes
+
+`EmployeeRoles(ctx, c, ackfactory.EmployeeRolesOptions{...}, sandboxes)` mints
+a builder for each sandbox project (`EmployeeSandbox.Name`, which must start
+with `NamePrefix`, default `emp-`, and be lower-case letters, digits and single
+hyphens), for namespaces whose ACK resources are not a product project's. It
+mirrors `ProjectRoles` with every tightening on, with one difference: the policy
+is keyed on the role's own `project` and `cluster` tags
+(`${aws:PrincipalTag/project}`, `${aws:PrincipalTag/cluster}`), not on a name
+written into it, so every sandbox of a cluster carries one identical document.
+Roles and policies it manages are `<cluster>-<project>.*`, buckets
+`<BucketPrefix><cluster>-<project>-*` (bucket-level actions only, no object
+access), KMS aliases `alias/<cluster>-<project>-*`. It may create roles only
+under `WorkloadBoundary` (the boundary of data-only workload roles) and may not
+re-tag, change its own role, set a key policy, create a grant or retire a key;
+it has no SSM or DynamoDB access. It carries the Pod Identity statements, so the
+EKS controller can be its identity (add `"eks"` to `Controllers`). `Boundary`
+(the builder's own) and `WorkloadBoundary` are required and must differ. Every
+refusal is reported before anything is registered. The tag-keyed policy relies on
+the builder carrying both tags in the session, which the role's own tags
+provide; if a session ever lacks them, every create fails closed.
 
 ### `Lookup`
 
