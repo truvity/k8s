@@ -99,11 +99,22 @@ podIdentities:
 # A ValidatingAdmissionPolicy and its binding for ACK PodIdentityAssociations
 # (eks.services.k8s.aws). A project that can create one can bind a pod of its
 # namespace to any IAM role the EKS controller may pass, so the policy refuses
-# an association unless spec.namespace is the namespace it lives in and
-# spec.roleARN is a role of that namespace's project: one of the row's
-# `podIdentityRolePrefixes` followed by a name without a path. A namespace with
-# no row, or a row with no prefixes, has no ceiling and may not create any
-# (default deny).
+# an association unless spec.namespace is the namespace it lives in and its
+# role is a role of that namespace's project, by one of two checks (both must
+# pass when both are set):
+#   - spec.roleARN: one of the row's `podIdentityRolePrefixes` followed by a
+#     name without a path (the project prefix within the ceiling).
+#   - spec.roleRef: an ACK iam Role of the same namespace only
+#     (roleRef.from.namespace absent or equal), whose name starts with the
+#     role-name part of one of the prefixes. This is a name-convention check:
+#     CEL cannot read the Role, so the charts name a Role after its IAM role
+#     and the namespace's own Roles stay bounded by their builder and
+#     permissions boundary.
+# A namespace with no row, or a row with no prefixes, has no ceiling and may
+# not create any (default deny).
+#
+# The policy does not check spec.clusterName, spec.clusterRef or
+# spec.serviceAccount.
 #
 # Off by default: the render is unchanged until a cluster turns it on.
 #
