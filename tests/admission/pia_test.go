@@ -168,6 +168,37 @@ func pia(ns, specNs, role string) map[string]any {
 	}
 }
 
+// piaRef is an association that names its role by reference (an ACK Role CR).
+// fromNs "" leaves roleRef.from.namespace unset.
+func piaRef(ns, specNs, name, fromNs string) map[string]any {
+	from := map[string]any{"name": name}
+	if fromNs != "" {
+		from["namespace"] = fromNs
+	}
+
+	return map[string]any{
+		"metadata": map[string]any{"namespace": ns},
+		"spec":     map[string]any{"namespace": specNs, "roleRef": map[string]any{"from": from}},
+	}
+}
+
+// withSpec is a shop association with one extra spec field (none when key is "").
+func withSpec(key string, val any) map[string]any {
+	spec := map[string]any{"namespace": "shop"}
+	if key != "" {
+		spec[key] = val
+	}
+
+	return map[string]any{"metadata": map[string]any{"namespace": "shop"}, "spec": spec}
+}
+
+// withRef adds a same-namespace roleRef to an association.
+func withRef(obj map[string]any, name string) map[string]any {
+	obj["spec"].(map[string]any)["roleRef"] = map[string]any{"from": map[string]any{"name": name}}
+
+	return obj
+}
+
 const (
 	rolePrefix   = "arn:example:iam::placeholder:role/"
 	skipExempt   = "skipped: platform-namespaces-are-exempt"
@@ -175,6 +206,8 @@ const (
 	badRole      = "spec.roleARN must be a role"
 	badNamespace = "spec.namespace must equal"
 	noCeiling    = "no IAM role ceiling"
+	badRef       = "spec.roleRef must name a Role"
+	noRole       = "names its role"
 )
 
 func TestPodIdentityAdmissionPolicy(t *testing.T) {
@@ -199,6 +232,23 @@ func TestPodIdentityAdmissionPolicy(t *testing.T) {
 		{"binding another namespace", "CREATE", pia("shop", "kube-system", rolePrefix+"example-shop.vault"), nil, badNamespace},
 		{"a namespace with no prefixes", "CREATE", pia("ci-shop", "ci-shop", rolePrefix+"example-ci.x"), nil, noCeiling},
 		{"a namespace with no row", "CREATE", pia("sandbox", "sandbox", rolePrefix+"example-sandbox.x"), nil, noCeiling},
+		{"a Role of the project by reference", "CREATE", piaRef("shop", "shop", "example-shop.vault", ""), nil, ""},
+		{"a Role of the project by reference, namespace spelled out", "CREATE", piaRef("shop", "shop", "example-shop.vault", "shop"), nil, ""},
+		{"a Role by a legacy name of the namespace", "CREATE", piaRef("docs", "docs", "example-docs-legacy-static", ""), nil, ""},
+		{"a Role of another namespace", "CREATE", piaRef("shop", "shop", "example-shop.vault", "docs"), nil, badRef},
+		{"a Role of another namespace, empty namespace", "CREATE", piaRef("shop", "shop", "example-shop.vault", " "), nil, badRef},
+		{"another project's Role by reference", "CREATE", piaRef("shop", "shop", "example-docs.static", ""), nil, badRef},
+		{"a controller's Role by reference", "CREATE", piaRef("shop", "shop", "example-ack-iam", ""), nil, badRef},
+		{"a legacy name the namespace has no prefix for, by reference", "CREATE", piaRef("shop", "shop", "example-shop-vault", ""), nil, badRef},
+		{"a reference with no name", "CREATE", withSpec("roleRef", map[string]any{"from": map[string]any{}}), nil, badRef},
+		{"a reference with no from", "CREATE", withSpec("roleRef", map[string]any{}), nil, badRef},
+		{"a reference in a namespace with no prefixes", "CREATE", piaRef("ci-shop", "ci-shop", "example-ci.x", ""), nil, noCeiling},
+		{"a reference binding another namespace", "CREATE", piaRef("shop", "kube-system", "example-shop.vault", ""), nil, badNamespace},
+		{"a good roleARN beside a foreign reference", "CREATE", withRef(pia("shop", "shop", rolePrefix+"example-shop.vault"), "example-docs.x"), nil, badRef},
+		{"a foreign roleARN beside a good reference", "CREATE", withRef(pia("shop", "shop", rolePrefix+"example-docs.x"), "example-shop.vault"), nil, badRole},
+		{"neither a roleARN nor a reference", "CREATE", withSpec("", nil), nil, noRole},
+		{"an update to a bad reference", "UPDATE", piaRef("shop", "shop", "example-docs.x", ""), piaRef("shop", "shop", "example-shop.x", ""), badRef},
+		{"an update to a good reference", "UPDATE", piaRef("shop", "shop", "example-shop.y", ""), piaRef("shop", "shop", "example-shop.x", ""), ""},
 		{"an exempt namespace may bind another", "CREATE", pia("platform-db", "shop", rolePrefix+"example-pg-shop"), nil, skipExempt},
 		{"the chart's association namespace is exempt", "CREATE", pia("identity-system", "ci-shop", rolePrefix+"example-test-s3"), nil, skipExempt},
 		{"an update that leaves spec alone", "UPDATE", pia("shop", "shop", rolePrefix+"example-shop-old"), oldShop, skipSpec},

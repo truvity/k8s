@@ -149,10 +149,22 @@ spec:
       reason: Forbidden
     - expression: >-
         !(object.metadata.namespace in variables.rolePrefixes) ||
-        (has(object.spec.roleARN) &&
-         variables.rolePrefixes[object.metadata.namespace].exists(p,
-           object.spec.roleARN.startsWith(p) && !object.spec.roleARN.substring(p.size()).contains('/')))
+        has(object.spec.roleARN) || has(object.spec.roleRef)
+      message: "a PodIdentityAssociation names its role: set spec.roleARN or spec.roleRef"
+      reason: Forbidden
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) || !has(object.spec.roleARN) ||
+        variables.rolePrefixes[object.metadata.namespace].exists(p,
+          object.spec.roleARN.startsWith(p) && !object.spec.roleARN.substring(p.size()).contains('/'))
       message: "spec.roleARN must be a role of this namespace's project: one of its podIdentityRolePrefixes followed by a name, no path"
+      reason: Forbidden
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) || !has(object.spec.roleRef) ||
+        (has(object.spec.roleRef.from) && has(object.spec.roleRef.from.name) &&
+         (!has(object.spec.roleRef.from.namespace) || object.spec.roleRef.from.namespace == object.metadata.namespace) &&
+         variables.rolePrefixes[object.metadata.namespace].exists(p,
+           object.spec.roleRef.from.name.startsWith(p.substring(p.lastIndexOf('/') + 1))))
+      message: "spec.roleRef must name a Role of this namespace's project: roleRef.from.namespace absent or this namespace, and a name that starts with the role-name part of one of its podIdentityRolePrefixes"
       reason: Forbidden
 
 ---

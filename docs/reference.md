@@ -1449,7 +1449,14 @@ of its namespace to any IAM role the EKS controller may pass, so the policy
 refuses an association unless `spec.namespace` equals the namespace it lives in
 and `spec.roleARN` starts with one of the row's `podIdentityRolePrefixes`
 (role ARN prefixes, for example `arn:<partition>:iam::<account>:role/<cluster>-<project>.`)
-followed by a name with no `/`. A namespace without a row, or a row without
+followed by a name with no `/`, or names its role by reference: `spec.roleRef.from.name`
+(an ACK iam `Role` of the same namespace; `from.namespace` must be absent or the
+association's own) must start with the role-name part of one of those prefixes (what
+follows the last `/`, for example `<cluster>-<project>.`). The policy cannot read the
+`Role` to learn its ARN, so this checks the `Role`'s name, which in these charts equals
+the IAM role's; the namespace's own `Role`s remain bounded by its builder and permissions
+boundary. With both `roleARN` and `roleRef` set, both must pass; with neither, the
+association is refused. A namespace without a row, or a row without
 prefixes, has no ceiling and may create none (default deny). Namespaces are
 matched by name, never by a label. Exempt by name, because their associations
 bind other namespaces by design: `podIdentityAdmission.exemptNamespaces` (a
