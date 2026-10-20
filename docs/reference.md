@@ -699,6 +699,12 @@ err = ackfactory.ProjectRoles(ctx, c, ackfactory.ProjectRolesOptions{Boundary: "
 | `ProjectRoles` | Per project a role `<cluster>-ack-project-<name>` and its policy `<cluster>-ack-project-<name>-policy`, resources scoped to the project name, assumed by the controllers. |
 | `EmployeeRoles` | Per employee sandbox the same pair, `<cluster>-ack-project-<name>` and `-policy`, with the project builder's tightened policy keyed on the role's own tags (see below). |
 
+The roles of the IAM and EKS controllers trust only their own controller's
+service account (`ack-iam/ack-iam-controller`, `ack-eks/ack-eks-controller`),
+derived from the namespace and service account their association binds, as the
+service controllers' roles always did; a Pod Identity association for another
+service account of the cluster cannot assume them.
+
 ### Inputs
 
 `Cluster`: `Name`, `AccountID`, `Region` required; `Partition` defaults to the
@@ -1458,7 +1464,12 @@ the IAM role's; the namespace's own `Role`s remain bounded by its builder and pe
 boundary. With both `roleARN` and `roleRef` set, both must pass; with neither, the
 association is refused. A namespace without a row, or a row without
 prefixes, has no ceiling and may create none (default deny). Namespaces are
-matched by name, never by a label. Exempt by name, because their associations
+matched by name, never by a label. **The cluster is not checked:** the policy
+does not read `spec.clusterName` or `spec.clusterRef`, so it does not stop an
+association from naming another cluster the EKS controller can reach. What bounds
+the cluster is the identity policy of the project's builder role (Pod Identity
+association calls only on its own cluster, `ProjectRolesOptions.PodIdentity`),
+not this policy. Exempt by name, because their associations
 bind other namespaces by design: `podIdentityAdmission.exemptNamespaces` (a
 database operator's, say) and the `associationNamespace` of every
 `podIdentities.associations` entry. An update that leaves `spec` alone is

@@ -3,25 +3,30 @@
 **Kubernetes clusters as Pulumi components, behind one provider-neutral contract.**
 
 Provisions the cluster and the things a cluster needs around it — the
-network, the peering, a registry pull-through cache, a backup store — as
-Pulumi `ComponentResource`s with documented child names and names the
-caller supplies. EKS Auto Mode is the first provider; self-hosted Talos is
-the second. Whichever provider made it, the consumer of a cluster sees the
+network, the peering, a registry pull-through cache, the identity of the
+cluster's controllers — as Pulumi `ComponentResource`s with documented child
+names and names the caller supplies, plus the Helm charts that render the
+cluster's own objects. EKS Auto Mode is the first provider; self-hosted
+Talos is the second. Whichever provider made it, the consumer of a cluster sees the
 same thing: a name, an endpoint, a CA, an OIDC issuer and a set of
 capabilities.
 
 | What | Where |
 | --- | --- |
-| Go module `github.com/truvity/k8s` | `go get github.com/truvity/k8s@v0.1.0` |
+| Go module `github.com/truvity/k8s` | `go get github.com/truvity/k8s` |
 | `pkg/cluster` — the provider-neutral contract: outputs and capabilities, with a validator | Go package, no cloud dependency |
 | `pkg/cluster/clusterout` — the contract as a Pulumi output (`Contract` of every provider component) | Go package |
-| `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component, unreleased |
-| `pkg/aws/vpcpeering` — a cross-account, cross-region VPC peering with its routes, DNS-resolution options and private-zone associations, `truvity:k8s/aws:VpcPeering` | Pulumi component, unreleased |
-| `pkg/aws/vpc` — a VPC with its subnets, route tables, gateways, NAT, IPv6, hardened defaults, gateway endpoints and flow logs, `truvity:k8s/aws:Vpc` | Pulumi component, unreleased |
-| `pkg/aws/podidentity` — an EKS Pod Identity role with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component, unreleased |
-| `pkg/aws/ekscluster` — an EKS Auto Mode cluster with its secrets key, cluster and node roles and control-plane log group, `truvity:k8s/aws:EksCluster` | Pulumi component, unreleased |
-| `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component, unreleased |
-| `pkg/aws/ackfactory` — the AWS identity of the ACK controllers: the IAM and EKS controller roles, the service controllers' roles (adopting what is live) and the per-project capability roles; plain functions, names are API | Go package, unreleased |
+| `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component |
+| `pkg/aws/vpcpeering` — a cross-account, cross-region VPC peering with its routes, DNS-resolution options and private-zone associations, `truvity:k8s/aws:VpcPeering` | Pulumi component |
+| `pkg/aws/vpc` — a VPC with its subnets, route tables, gateways, NAT, IPv6, hardened defaults, gateway endpoints and flow logs, `truvity:k8s/aws:Vpc` | Pulumi component |
+| `pkg/aws/podidentity` — an EKS Pod Identity role with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component |
+| `pkg/aws/ekscluster` — an EKS Auto Mode cluster with its secrets key, cluster and node roles and control-plane log group, `truvity:k8s/aws:EksCluster` | Pulumi component |
+| `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component |
+| `pkg/aws/ackfactory` — the AWS identity of the ACK controllers: the IAM and EKS controller roles (the EKS one optionally for the IAMRoleSelector feature gate), the service controllers' roles (adopting what is live, each with its own boundary), the per-project builder roles with opt-in tightenings and a builder per employee sandbox; plain functions, names are API | Go package |
+| `pkg/aws/iamkit` — loose IAM policies, roles and attachments registered with one provider, one permissions boundary and one logical-name prefix; names the IAM policy language | Go package |
+| `pkg/aws/vpclayout` — the address plan of a fleet of VPCs as arithmetic over declared facts (CIDRs per network, subnet and availability zone) and a hub-and-spoke peering plan | Go package, no cloud dependency |
+| `pkg/aws/autolb` — finds the load balancer EKS Auto Mode provisioned for a Service, by its tags | Go package (an AWS SDK read, not a resource) |
+| `pkg/nscatalog` — the namespace catalog: one row per cluster and namespace, one column group per concern, its YAML encoding and a read-only check against a live cluster | Go package |
 | `pkg/talos/schematic` — a Talos Image Factory schematic, its ID computed offline, the pinned installer image reference | Go package |
 | `pkg/talos/machineconfig` — a self-hosted Talos cluster's machine configs rendered offline from a declared cluster and its secrets, validated as Talos does; the talosconfig; the contract | Go package |
 | `pkg/talos/cilium` — the upstream Cilium chart's values for a Talos cluster | Go package |
@@ -29,15 +34,15 @@ capabilities.
 | `charts/cilium-config` — LoadBalancer IP pools, L2 announcements (default) and optional BGP for Cilium, as data | Helm chart, `oci://ghcr.io/truvity/charts/cilium-config` |
 | `pkg/talos/oidc` — a ServiceAccount issuer's discovery document and JWKS, generated offline | Go package |
 | `pkg/aws/oidcissuer` — publishes them to an S3-compatible bucket and registers the IAM OIDC provider (IAM roles for service accounts off EKS), `truvity:k8s/aws:OidcIssuer` | Pulumi component |
-| `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline`, unreleased |
-| `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses, PriorityClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation`, unreleased |
+| `charts/cluster-baseline` — Pod Security Admission labels per namespace (default level, reasoned exemptions, warn-first rollout), a guard, and opt-in default-deny, quota and limit range | Helm chart, `oci://ghcr.io/truvity/charts/cluster-baseline` |
+| `charts/cluster-foundation` — Namespaces with their Pod Security labels and deletion protection, ClusterRoleBindings, StorageClasses, PriorityClasses and the EKS Auto Mode NetworkPolicy switch, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/cluster-foundation` |
 | `charts/cluster-pki` — the cluster's internal CA as cert-manager objects: a self-signed or offline root, an optional intermediate, the issuer workloads use | Helm chart, `oci://ghcr.io/truvity/charts/cluster-pki` |
-| `charts/cluster-network-policies` — a cluster's own NetworkPolicies as data: selector, policy types and rules per entry, each with a required reason, sync wave and optional deletion protection | Helm chart, `oci://ghcr.io/truvity/charts/cluster-network-policies`, unreleased |
-| `charts/eks-auto-node-pools` — Karpenter NodePools and NodeClasses for EKS Auto Mode, one disruption budget per pool, subnet tags and roles as values | Helm chart, `oci://ghcr.io/truvity/charts/eks-auto-node-pools`, unreleased |
-| `charts/guardrails-projects` — the guardrails of every project namespace from a list of project rows: Namespace with labels and Pod Security, baseline NetworkPolicy (shared rules filtered by the row's kind), quota and LimitRange by profile, Roles and RoleBindings, an ACK IAMRoleSelector for the row's ceiling role; data-bearing objects carry `Prune=false,Delete=false` | Helm chart, `oci://ghcr.io/truvity/charts/guardrails-projects` |
+| `charts/cluster-network-policies` — a cluster's own NetworkPolicies as data: selector, policy types and rules per entry, each with a required reason, sync wave and optional deletion protection | Helm chart, `oci://ghcr.io/truvity/charts/cluster-network-policies` |
+| `charts/eks-auto-node-pools` — Karpenter NodePools and NodeClasses for EKS Auto Mode, one disruption budget per pool, subnet tags and roles as values | Helm chart, `oci://ghcr.io/truvity/charts/eks-auto-node-pools` |
+| `charts/guardrails-projects` — the guardrails of every project namespace from a list of project rows: Namespace with labels and Pod Security, baseline NetworkPolicy (shared rules filtered by the row's kind), quota and LimitRange by profile, Roles and RoleBindings, an ACK IAMRoleSelector for the row's ceiling role, and an opt-in ValidatingAdmissionPolicy that holds a project's PodIdentityAssociations to its own namespace and roles; data-bearing objects carry `Prune=false,Delete=false` | Helm chart, `oci://ghcr.io/truvity/charts/guardrails-projects` |
 | `charts/local-volumes` — local PersistentVolumes on the nodes' user volumes, pinned to their node and claim, with no-provisioner StorageClasses | Helm chart, `oci://ghcr.io/truvity/charts/local-volumes` |
 | `charts/talos-etcd-backup` — scheduled, age-encrypted etcd snapshots of a Talos cluster to an S3-compatible bucket | Helm chart, `oci://ghcr.io/truvity/charts/talos-etcd-backup` |
-| `charts/tenancy` — DEPRECATED ([window](docs/decisions/0004-tenancy-deprecation.md)): per-tenant NetworkPolicy, quota, RBAC, NATS account and Pod Identity and the Namespace itself with its Pod Security labels, one profile per tier, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/tenancy`, unreleased |
+| `charts/tenancy` — DEPRECATED ([window](docs/decisions/0004-tenancy-deprecation.md)): per-tenant NetworkPolicy, quota, RBAC, NATS account and Pod Identity and the Namespace itself with its Pod Security labels, one profile per tier, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/tenancy` |
 | `charts/volume-snapshot-crds` — the CSI external-snapshotter CustomResourceDefinitions, mirrored verbatim at the upstream version pinned in `crdctl.yaml` | Helm chart, `oci://ghcr.io/truvity/charts/volume-snapshot-crds` |
 | `charts/cilium-crds` — the Cilium CustomResourceDefinitions, mirrored verbatim at the upstream version pinned in `crdctl.yaml` | Helm chart, `oci://ghcr.io/truvity/charts/cilium-crds` |
 
@@ -47,10 +52,9 @@ registry yet. Their CRDs are generated by `just crds` (which also sets the
 chart version) and committed; `just crds-check` proves they still equal the
 upstream.
 
-The provider packages (EKS first) are not in `v0.1.0`; they arrive one
-reviewed extraction at a time and are listed in the [CHANGELOG](CHANGELOG.md).
-The extracted components so far, the pull-through cache, the backup
-bucket, the VPC peering, the VPC and the Pod Identity role, are unreleased.
+Every package and chart above is in the current release; each release's
+changes, and the version a package or chart arrived in, are in the
+[CHANGELOG](CHANGELOG.md). The other charts are published at the release's version.
 
 ## Who it is for
 
@@ -91,8 +95,11 @@ default that belongs to one estate.
 ## Install and a worked example
 
 ```sh
-go get github.com/truvity/k8s@v0.1.0
+go get github.com/truvity/k8s
 ```
+
+Pin an exact version in your `go.mod` and read the [CHANGELOG](CHANGELOG.md)
+bullets between the old pin and the new.
 
 The contract is what a consumer of any provider writes against:
 
@@ -115,10 +122,10 @@ if out.Capabilities.Has(cluster.WorkloadIdentity) {
 
 ## Consumers
 
-The estate this is being extracted from will adopt it cluster by cluster,
-each adoption proven by an empty Pulumi preview (see
+A consumer adopts it cluster by cluster, each adoption proven by an empty
+Pulumi preview (see
 [docs/decisions/0002-urn-stability.md](docs/decisions/0002-urn-stability.md)).
-No consumer is recorded at v0; a repository that adopts it adds a line here.
+No consumer is recorded; a repository that adopts it adds a line here.
 
 ## Neighbours
 
@@ -185,9 +192,10 @@ over tracked files and runs in the gate.
 ## Status
 
 v0: the API may still move in a minor release, and every move is a
-`Breaking:` bullet in the [CHANGELOG](CHANGELOG.md). Today the module holds
-the contract only; providers are added by extraction from a running
-estate, each with its URN-stability proof.
+`Breaking:` bullet in the [CHANGELOG](CHANGELOG.md). The module holds the
+contract, the EKS provider's components and the Talos packages, and the
+charts; providers are added by extraction from a running estate, each with
+its URN-stability proof.
 
 ## Development
 
