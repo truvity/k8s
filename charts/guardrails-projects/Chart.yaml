@@ -7,7 +7,10 @@ description: >-
   own pods, the shared allow rules, filtered by the row's kind), a quota
   and LimitRange by profile, its Roles and RoleBindings, and an ACK
   IAMRoleSelector binding its capability-ceiling role by name; plus the
-  shared ClusterRoles. One Application renders every project's rows.
+  shared ClusterRoles. Optionally, a ValidatingAdmissionPolicy and binding
+  for ACK PodIdentityAssociations that confines each project's
+  associations to its own IAM role prefixes (roleARN) or same-namespace
+  Role names (roleRef). One Application renders every project's rows.
   Cluster-agnostic: every name, rule and number is a value.
 type: application
 # Placeholder: the git tag is the sole version authority. The release
