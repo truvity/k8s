@@ -208,8 +208,11 @@ just vuln           # reachable Go advisories (its own workflow in CI, not in ch
 ## Releasing
 
 Releases are a `v*` tag, which the shared release workflow turns into the
-Go module version and a GitHub Release. Automatic patch releases are not
-armed; the first release and every minor and major are hand-cut tags.
+Go module version and a GitHub Release. Minors and majors are hand-cut
+tags. Patch releases for dependency bumps are cut automatically where the
+`AUTO_RELEASE` variable is `true` for the repository: weekly, or at once for
+a merged pull request labelled `security`. A version with no CHANGELOG
+heading is such a patch.
 
 ## Licence
 
