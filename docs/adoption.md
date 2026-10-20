@@ -3,7 +3,7 @@
 ## Using the contract
 
 ```sh
-go get github.com/truvity/k8s@v0.1.0
+go get github.com/truvity/k8s
 ```
 
 `pkg/cluster` has no cloud dependency. A provider component reports a
@@ -104,6 +104,32 @@ is watching.
 
 Apply the chart server-side (see the [reference](reference.md#chartscluster-baseline)).
 Client-side apply makes the chart the owner of the whole namespace object.
+
+## guardrails-projects: PodIdentityAssociation admission
+
+`podIdentityAdmission` (off by default) holds the PodIdentityAssociations that
+a project's namespace creates to that namespace's own roles. Turning it on is
+a values change; the render of a cluster that leaves it off does not move. Roll
+it out in three steps, per cluster, the least important cluster first.
+
+1. **Fill the ceiling.** Give every project row the `podIdentityRolePrefixes`
+   its associations may bind, and list in `podIdentityAdmission.exemptNamespaces`
+   the namespaces whose associations are not a project's. A namespace without a
+   row, or with no prefixes, may create none.
+2. **Observe.** Keep the default `validationActions: [Warn, Audit]`. Nothing is
+   refused: the API server warns on a violating create or update and the audit
+   log records the verdict under the policy's name
+   (`ack-pod-identity-association-guard`, unless you renamed it). Read it for a
+   few days; an association that names its role by `roleARN` or by
+   `roleRef` in its own namespace passes.
+3. **Enforce.** Switch to `[Deny, Audit]`. `Deny` with `Warn` is refused by the
+   chart. Rolling back is the previous values.
+
+Know what it does not check. The policy does not read the association's
+cluster (`spec.clusterName` or `spec.clusterRef`): the cluster is bounded by the
+identity policy of the project's builder role, not here. A `roleRef` is judged
+by the referenced `Role`'s name, because the policy cannot read the `Role` to
+learn its ARN. See the [reference](reference.md#guardrails-projects).
 
 ## Upgrading
 
