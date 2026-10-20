@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+## v0.35.1
+
 - `charts/guardrails-projects`: the `podIdentityAdmission` policy accepts an association that names its role by reference. `spec.roleRef.from.name` (an ACK iam `Role` CR) passes when `roleRef.from.namespace` is absent or the association's own namespace, and the name starts with the role-name part of one of the row's `podIdentityRolePrefixes` (what follows the last `/`: `<cluster>-<project>.` or the transition `<cluster>-<slug>-`). A cross-namespace reference, a foreign name, or a reference with no name is refused (warned, in the default mode). The policy cannot read the `Role` to learn its ARN, so this is a check of the `Role`'s name, which these charts keep equal to the IAM role's. Before this, validation 3 required `spec.roleARN`, so an association with only `roleRef` was flagged. Validation 3 is now three: a role must be named (`roleARN` or `roleRef`), a `roleARN` must pass the prefix rule as before, a `roleRef` must pass the rule above; when both are set, both must pass. Validations 1 and 2 are unchanged. The rendered CEL changes, so a cluster's `kubectl diff` shows the policy object only; nothing changes for a cluster with `podIdentityAdmission` off.
 
 ## v0.35.0
