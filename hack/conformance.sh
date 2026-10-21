@@ -11,7 +11,11 @@
 #      - local volumes (charts/local-volumes) bind and hold data on their node;
 #      - the internal CA (charts/cluster-pki) issues a certificate;
 #      - the etcd backup objects (charts/talos-etcd-backup) pass the API
-#        server and Pod Security restricted.
+#        server and Pod Security restricted;
+#      - netpol-stuck-pod-repair: its chart installs under Pod Security
+#        restricted, and the command, as the chart's ServiceAccount, reports a
+#        crash-looping pod in a NetworkPolicy namespace in report mode and
+#        deletes it exactly once in act mode.
 #
 # Needs: docker, kind, kubectl, helm, go, talosctl, curl, python3. CI runs it
 # (.github/workflows/conformance.yaml); it creates and deletes a kind cluster.
@@ -203,5 +207,91 @@ print("\n---\n".join(docs))' > "$work/backup.yaml"
 kubectl apply --dry-run=server -n etcd-backup -f "$work/backup.yaml" 2> "$work/backup.err" || { cat "$work/backup.err"; fail "the API server refuses the backup objects"; }
 if grep -q "would violate PodSecurity" "$work/backup.err"; then cat "$work/backup.err"; fail "the backup job violates Pod Security restricted"; fi
 echo "accepted, no Pod Security warning"
+
+step "9. netpol-stuck-pod-repair: the chart's objects pass Pod Security restricted; report-only logs a candidate, act deletes it once"
+# A crash-looping single-replica Deployment in a namespace with a
+# NetworkPolicy stands in for a pod the EKS agent race stranded
+# (aws/aws-network-policy-agent#676): its log says what the race's victims
+# say. The binary runs from the runner as the chart's ServiceAccount (a token
+# kubeconfig), so the chart's RBAC is what is exercised; the image is not
+# built here, so the chart's Deployment is scaled to zero.
+kubectl create namespace netpol-repair
+kubectl label namespace netpol-repair pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/warn=restricted
+repair_values=(--set mode=act --set podMonitor.enabled=false --set nodeDiagnostic.enabled=true)
+helm template netpol-stuck-pod-repair charts/netpol-stuck-pod-repair -n netpol-repair "${repair_values[@]}" \
+  | kubectl apply --dry-run=server -n netpol-repair -f - 2> "$work/repair.err" \
+  || { cat "$work/repair.err"; fail "the API server refuses the repair objects"; }
+if grep -q "would violate PodSecurity" "$work/repair.err"; then cat "$work/repair.err"; fail "the repair Deployment violates Pod Security restricted"; fi
+helm upgrade --install netpol-stuck-pod-repair charts/netpol-stuck-pod-repair -n netpol-repair "${repair_values[@]}"
+kubectl -n netpol-repair scale deployment/netpol-stuck-pod-repair --replicas 0
+
+kubectl create namespace repair-e2e
+kubectl apply -f - <<YAML
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-egress, namespace: repair-e2e}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: stranded, namespace: repair-e2e}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: stranded}}
+  template:
+    metadata: {labels: {app: stranded}}
+    spec:
+      containers:
+        - name: app
+          image: $BUSYBOX
+          command: [sh, -c, 'echo "dial tcp 10.96.0.1:443: i/o timeout" >&2; sleep 2; exit 1']
+          terminationMessagePolicy: FallbackToLogsOnError
+YAML
+pod_uid() { kubectl -n repair-e2e get pods -l app=stranded -o jsonpath='{.items[*].metadata.uid}'; }
+for _ in $(seq 1 60); do
+  restarts="$(kubectl -n repair-e2e get pods -l app=stranded -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}' 2>/dev/null || true)"
+  [ "${restarts:-0}" -ge 2 ] && break
+  sleep 3
+done
+[ "${restarts:-0}" -ge 2 ] || fail "the stand-in pod did not crash-loop"
+first="$(pod_uid)"
+
+token="$(kubectl -n netpol-repair create token netpol-stuck-pod-repair --duration 1h)"
+server="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
+kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$work/ca.crt"
+cat > "$work/repair.kubeconfig" <<YAML
+apiVersion: v1
+kind: Config
+clusters: [{name: kind, cluster: {server: "$server", certificate-authority: "$work/ca.crt"}}]
+users: [{name: repair, user: {token: "$token"}}]
+contexts: [{name: repair, context: {cluster: kind, user: repair}}]
+current-context: repair
+YAML
+go build -o "$work/netpol-stuck-pod-repair" ./cmd/netpol-stuck-pod-repair
+repair() { "$work/netpol-stuck-pod-repair" --kubeconfig "$work/repair.kubeconfig" --metrics-address= \
+  --namespaces=repair-e2e --restart-threshold=2 --single-replica-stuck-after=1s --require-timeout-evidence "$@"; }
+
+repair --once > "$work/report.log" 2>&1 || { cat "$work/report.log"; fail "report mode failed"; }
+grep -q '"WOULD repair' "$work/report.log" || { cat "$work/report.log"; fail "report mode did not report the candidate"; }
+grep -q 'i/o timeout' "$work/report.log" || { cat "$work/report.log"; fail "report mode did not record the timeout evidence"; }
+[ "$(pod_uid)" = "$first" ] || fail "report mode deleted the pod"
+echo "report-only: candidate logged, nothing deleted"
+
+repair --mode=act --interval=3s --node-diagnostic=false > "$work/act.log" 2>&1 &
+repair_pid=$!
+for _ in $(seq 1 20); do
+  [ "$(pod_uid)" != "$first" ] && break
+  sleep 1
+done
+sleep 15 # several more ticks, while the replacement crash-loops too: the owner's cooldown must hold
+kill "$repair_pid" 2>/dev/null || true; wait "$repair_pid" || true
+[ "$(grep -c '"REPAIRED' "$work/act.log")" = 1 ] || { cat "$work/act.log"; fail "act mode did not delete exactly once"; }
+left="$(kubectl -n repair-e2e get pods -l app=stranded \
+  -o jsonpath='{range .items[*]}{.metadata.uid} {.metadata.deletionTimestamp}{"\n"}{end}' | awk -v u="$first" '$1 == u && $2 == ""')"
+[ -z "$left" ] || fail "the stranded pod is still there and not terminating"
+kubectl -n repair-e2e get events --field-selector reason=NetpolStuckPodRepaired -o name | grep -q . || fail "no NetpolStuckPodRepaired Event on the Deployment"
+echo "act: deleted once, Event recorded, the owner's cooldown held"
 
 printf '\nconformance: all checks passed\n'

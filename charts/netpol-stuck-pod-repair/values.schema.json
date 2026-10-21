@@ -1,0 +1,248 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "netpol-stuck-pod-repair values",
+  "description": "An unknown key is an error: a misspelt limit would leave a controller that deletes pods running on a default nobody chose.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm's shared values. Unused by this chart; allowed so a parent chart can set it."
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^(|v?[0-9][0-9A-Za-z.+-]*)$"
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "report",
+        "act"
+      ],
+      "description": "report deletes nothing; act deletes within the limits."
+    },
+    "interval": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "restartThreshold": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "restartWindow": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "notReadyAfter": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "singleReplicaStuckAfter": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "ownerCooldown": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "minDeleteInterval": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "maxRepairs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "The self-stop cannot be switched off; 20 is the ceiling."
+    },
+    "haltWindow": {
+      "type": "string",
+      "pattern": "^(0*[1-9][0-9]*(\\.[0-9]+)?(ns|us|ms|s|m|h))([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))*$",
+      "description": "A Go duration greater than zero."
+    },
+    "namespaces": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+      },
+      "uniqueItems": true
+    },
+    "excludeNamespaces": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+      },
+      "uniqueItems": true
+    },
+    "maxNodeAge": {
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))+$"
+    },
+    "requireTimeoutEvidence": {
+      "type": "boolean"
+    },
+    "timeoutPatterns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^,]+$"
+      }
+    },
+    "logTailLines": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "nodeDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(node|https://\\S+)$"
+        }
+      }
+    },
+    "logLevel": {
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "podMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^(|[0-9]+(ms|s|m|h))$"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "apiServer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "peers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "ports": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^(|[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?)$"
+        }
+      }
+    },
+    "priorityClassName": {
+      "type": "string"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "podSecurityContext": {
+      "type": "object"
+    },
+    "securityContext": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "podLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podAnnotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{{- include "netpol-stuck-pod-repair.check" . }}
+{{- $name := include "netpol-stuck-pod-repair.name" . }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "netpol-stuck-pod-repair.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "netpol-stuck-pod-repair.labels" . | nindent 4 }}
+---
+# Cluster-wide, because the race can strand a pod in any namespace with a
+# NetworkPolicy. Reads are what selection and evidence need; the only writes
+# are deleting a pod, recording an Event and (opt-in) a NodeDiagnostic.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "netpol-stuck-pod-repair.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [list]
+  # The AWS network policy controller's endpoint lists, read as evidence.
+  - apiGroups: [networking.k8s.aws]
+    resources: [policyendpoints]
+    verbs: [list]
+  {{- if .Values.nodeDiagnostic.enabled }}
+  # EKS Auto Mode node log capture (nodeDiagnostic.enabled).
+  - apiGroups: [eks.amazonaws.com]
+    resources: [nodediagnostics]
+    verbs: [create]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "netpol-stuck-pod-repair.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "netpol-stuck-pod-repair.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
