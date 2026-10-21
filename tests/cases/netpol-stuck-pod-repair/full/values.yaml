@@ -1,0 +1,22 @@
+image:
+  tag: 0.37.0
+mode: act
+namespaces: [apps, edge]
+excludeNamespaces: [kube-system, databases]
+maxNodeAge: 6h
+requireTimeoutEvidence: true
+nodeDiagnostic:
+  enabled: true
+  destination: node
+logLevel: debug
+priorityClassName: platform-critical
+podMonitor:
+  interval: 30s
+  labels: {team: platform}
+networkPolicy:
+  enabled: true
+  apiServer:
+    peers:
+      - ipBlock: {cidr: 10.0.0.0/16}
+  metrics:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}

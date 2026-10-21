@@ -1,0 +1,3 @@
+nodeDiagnostic:
+  enabled: true
+  destination: http://example.com/x

@@ -1,0 +1,100 @@
+{{- include "netpol-stuck-pod-repair.check" . }}
+{{- $v := .Values }}
+---
+# TEMPORARY WORKAROUND for https://github.com/aws/aws-network-policy-agent/issues/676
+# (fix https://github.com/aws/aws-network-policy-agent/pull/705). One replica,
+# Recreate: the limits and the halt live in the process's memory.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "netpol-stuck-pod-repair.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "netpol-stuck-pod-repair.labels" . | nindent 4 }}
+  annotations:
+    netpol-stuck-pod-repair.truvity.io/temporary: "Remove when the node image ships aws-network-policy-agent with PR 705 (issue 676)."
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "netpol-stuck-pod-repair.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "netpol-stuck-pod-repair.selector" . | nindent 8 }}
+        {{- with $v.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "netpol-stuck-pod-repair.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml $v.podSecurityContext | nindent 8 }}
+      {{- with $v.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with $v.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: repair
+          image: "{{ $v.image.repository }}:{{ $v.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          args:
+            - --mode={{ $v.mode }}
+            - --interval={{ $v.interval }}
+            - --restart-threshold={{ $v.restartThreshold }}
+            - --restart-window={{ $v.restartWindow }}
+            - --not-ready-after={{ $v.notReadyAfter }}
+            - --single-replica-stuck-after={{ $v.singleReplicaStuckAfter }}
+            - --owner-cooldown={{ $v.ownerCooldown }}
+            - --min-delete-interval={{ $v.minDeleteInterval }}
+            - --max-repairs={{ $v.maxRepairs }}
+            - --halt-window={{ $v.haltWindow }}
+            - {{ printf "--namespaces=%s" (join "," $v.namespaces) | quote }}
+            - {{ printf "--exclude-namespaces=%s" (join "," $v.excludeNamespaces) | quote }}
+            - --max-node-age={{ $v.maxNodeAge }}
+            - --require-timeout-evidence={{ $v.requireTimeoutEvidence }}
+            - {{ printf "--timeout-patterns=%s" (join "," $v.timeoutPatterns) | quote }}
+            - --log-tail-lines={{ $v.logTailLines }}
+            - --node-diagnostic={{ $v.nodeDiagnostic.enabled }}
+            - {{ printf "--node-diagnostic-destination=%s" $v.nodeDiagnostic.destination | quote }}
+            - --log-level={{ $v.logLevel }}
+            - --metrics-address=:8080
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet: {path: /readyz, port: metrics}
+            periodSeconds: 30
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 30
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $v.securityContext | nindent 12 }}
