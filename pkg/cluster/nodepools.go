@@ -88,6 +88,9 @@ type (
 	// NodeClassSpec is a shared NodeClass as a consumer declares it.
 	NodeClassSpec struct {
 		EphemeralStorage EphemeralStorage
+		// PodSubnets puts the pod IPs of every node of this class in the
+		// cluster's pods subnets (needs a network that has them).
+		PodSubnets bool
 	}
 
 	// PoolDefaults are the choices a pool gets when it makes none. They are
@@ -255,6 +258,8 @@ func DeriveNodeClasses(classes map[string]NodeClassSpec, nodeRoleArn string) ([]
 		if err != nil {
 			return nil, err
 		}
+
+		nc.PodSubnets = classes[name].PodSubnets
 
 		out = append(out, *nc)
 	}
