@@ -52,6 +52,10 @@ type candidate struct {
 	otherReady int
 	onlyPod    bool
 	node       *corev1.Node // nil when it could not be read
+
+	// The race evidence the selection required (see candidates).
+	policyEndpoints []string // PolicyEndpoints that list the pod: network policy is enforced on it
+	timeoutMatch    string   // the first -timeout-patterns hit, with where it was found
 }
 
 type sample struct {
@@ -73,6 +77,7 @@ type Repairer struct {
 
 	history    map[types.UID][]sample  // container restart samples per pod
 	badSince   map[types.UID]time.Time // first tick a pod met a trigger, while it keeps meeting one
+	skipped    map[types.UID]string    // why a triggered pod is not the race, logged once per change
 	lastAction map[string]time.Time    // owner key -> last repair (or would-be repair in report mode)
 	repairs    []time.Time             // act-mode deletions within HaltWindow
 	lastDelete time.Time
@@ -87,6 +92,7 @@ func NewRepairer(cfg Config, kube kubernetes.Interface, dyn dynamic.Interface, l
 		cfg: cfg, kube: kube, dyn: dyn, log: log, metrics: m, now: now,
 		history:    map[types.UID][]sample{},
 		badSince:   map[types.UID]time.Time{},
+		skipped:    map[types.UID]string{},
 		lastAction: map[string]time.Time{},
 		started:    now(),
 	}
@@ -180,6 +186,7 @@ func (r *Repairer) observeRestarts(now time.Time, byNamespace map[string][]*core
 		if !seen[uid] {
 			delete(r.history, uid)
 			delete(r.badSince, uid)
+			delete(r.skipped, uid)
 		}
 	}
 }
@@ -215,6 +222,7 @@ func (r *Repairer) candidates(ctx context.Context, now time.Time, byNamespace ma
 			reason, restarts, notReadyFor := r.trigger(now, p)
 			if reason == "" {
 				delete(r.badSince, p.UID)
+				delete(r.skipped, p.UID)
 				continue
 			}
 			if _, ok := r.badSince[p.UID]; !ok {
@@ -255,16 +263,36 @@ func (r *Repairer) candidates(ctx context.Context, now time.Time, byNamespace ma
 					continue
 				}
 			}
-			if r.cfg.RequireTimeoutEvidence {
-				if ev := r.timeoutEvidence(ctx, p); ev == "" {
-					r.log.DebugContext(ctx, "not a candidate", podAttrs(p), slog.String("why", "no timeout evidence"))
-					continue
-				}
+			// The race needs both: network policy enforced on the pod (a
+			// PolicyEndpoint lists it) and its signature (a timeout in the
+			// pod's termination message or log). A pod that crash-loops or
+			// stays NotReady for any other reason is not this bug, and
+			// deleting it would only burn the cooldown and the self-stop.
+			if c.policyEndpoints = r.policyEndpoints(ctx, p); len(c.policyEndpoints) == 0 {
+				r.notTheRace(ctx, &c, "no-policy-endpoint", "no PolicyEndpoint selects the pod, so network policy is not enforced on it")
+				continue
 			}
+			if c.timeoutMatch = r.timeoutEvidence(ctx, p); c.timeoutMatch == "" {
+				r.notTheRace(ctx, &c, "no-timeout-evidence", "no timeout in the pod's termination message or log")
+				continue
+			}
+			delete(r.skipped, p.UID)
 			out = append(out, c)
 		}
 	}
 	return out
+}
+
+// notTheRace logs, once per pod and reason, that a triggered pod does not
+// show the bug's signature. No metric: a pod re-skipped every tick would make
+// the series grow with crash loops, which are none of this tool's business.
+func (r *Repairer) notTheRace(ctx context.Context, c *candidate, reason, why string) {
+	if r.skipped[c.pod.UID] == reason {
+		return
+	}
+	r.skipped[c.pod.UID] = reason
+	r.log.InfoContext(ctx, "skipped: not the race", podAttrs(c.pod), ownerAttrs(c.owner),
+		slog.String("trigger", c.reason), slog.String("skip", reason), slog.String("why", why))
 }
 
 // trigger says why the pod is a candidate, if it is one: restarts within
@@ -356,7 +384,7 @@ func (r *Repairer) handle(ctx context.Context, now time.Time, c *candidate) bool
 	}
 	attrs = append(attrs, slog.String("mode", string(mode)), slog.Bool("halted", r.halted))
 
-	ev := r.evidence(ctx, now, c)
+	ev := r.evidence(now, c)
 	r.recordEvent(ctx, now, c, mode, ev)
 	if r.cfg.NodeDiagnostic {
 		r.nodeDiagnostic(ctx, c)

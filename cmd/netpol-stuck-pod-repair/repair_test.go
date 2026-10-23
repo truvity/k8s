@@ -64,16 +64,20 @@ func ctrlRef(kind, name string, uid types.UID) metav1.OwnerReference {
 }
 
 type podSpec struct {
-	ready         bool
-	readySince    time.Duration // how long ago the Ready condition last changed
-	started       time.Duration // how long ago the pod started
-	restarts      int32
-	labels        map[string]string
-	terminating   bool
-	node          string
-	termMessage   string
-	noController  bool
-	ownerOverride *metav1.OwnerReference
+	ready        bool
+	readySince   time.Duration // how long ago the Ready condition last changed
+	started      time.Duration // how long ago the pod started
+	restarts     int32
+	labels       map[string]string
+	terminating  bool
+	node         string
+	termMessage  string
+	noController bool
+	// By default a not-Ready pod is the race: a PolicyEndpoint lists it and
+	// its termination message shows a timeout. These make it something else.
+	noPolicyEndpoint bool
+	noEvidence       bool
+	ownerOverride    *metav1.OwnerReference
 }
 
 func (w *world) pod(ns, name string, ref metav1.OwnerReference, s podSpec) {
@@ -89,6 +93,12 @@ func (w *world) pod(ns, name string, ref metav1.OwnerReference, s podSpec) {
 	status := corev1.ConditionFalse
 	if s.ready {
 		status = corev1.ConditionTrue
+	}
+	if s.termMessage == "" && !s.noEvidence && !s.ready {
+		s.termMessage = "dial tcp 172.20.0.1:443: i/o timeout"
+	}
+	if !s.noPolicyEndpoint {
+		w.dyn = append(w.dyn, policyEndpoint(ns, "pe-"+name, name))
 	}
 	p := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(ns + "-" + name), Labels: s.labels},
@@ -297,6 +307,7 @@ func TestExclusions(t *testing.T) {
 	dsRef := ctrlRef("DaemonSet", "agent", "ds-uid")
 	cases := []struct {
 		name   string
+		skip   string // the "skipped: not the race" reason expected, if any
 		setup  func(w *world)
 		mutate func(*Config)
 	}{
@@ -407,12 +418,26 @@ func TestExclusions(t *testing.T) {
 			w.pod("app", "web-1", ref, crashLooping())
 			w.pod("app", "web-2", ref, healthyPod())
 		}},
-		{name: "no timeout evidence when it is required", mutate: func(c *Config) { c.RequireTimeoutEvidence = true }, setup: func(w *world) {
+		{name: "no PolicyEndpoint selects the pod (an ordinary crash loop)", skip: "no-policy-endpoint", setup: func(w *world) {
+			w.netpol("app")
+			ref := w.deployment("app", "web")
+			s := crashLooping()
+			s.noPolicyEndpoint = true
+			w.pod("app", "web-1", ref, s)
+			w.pod("app", "web-2", ref, healthyPod())
+		}},
+		{name: "a PolicyEndpoint but no timeout evidence", skip: "no-timeout-evidence", setup: func(w *world) {
 			w.netpol("app")
 			ref := w.deployment("app", "web")
 			s := crashLooping()
 			s.termMessage = "panic: nil map"
 			w.pod("app", "web-1", ref, s)
+			w.pod("app", "web-2", ref, healthyPod())
+		}},
+		{name: "NotReady with no restarts, no PolicyEndpoint, no evidence", skip: "no-policy-endpoint", setup: func(w *world) {
+			w.netpol("app")
+			ref := w.deployment("app", "web")
+			w.pod("app", "web-1", ref, podSpec{readySince: 11 * time.Minute, noPolicyEndpoint: true, noEvidence: true})
 			w.pod("app", "web-2", ref, healthyPod())
 		}},
 	}
@@ -433,6 +458,9 @@ func TestExclusions(t *testing.T) {
 			}
 			if got := h.candidateCount(); got != 0 {
 				t.Fatalf("candidate series = %d, want 0\n%s", got, h.logs)
+			}
+			if tc.skip != "" && (!strings.Contains(h.logs.String(), "skipped: not the race") || !strings.Contains(h.logs.String(), `"skip":"`+tc.skip+`"`)) {
+				t.Fatalf("no %q skip logged:\n%s", tc.skip, h.logs)
 			}
 		})
 	}
@@ -469,7 +497,7 @@ func TestInclusions(t *testing.T) {
 			w.pod("app", "web-1", ref, crashLooping())
 			w.pod("app", "web-2", ref, healthyPod())
 		}},
-		{name: "timeout evidence in the termination message", reason: reasonRestarts, mutate: func(c *Config) { c.RequireTimeoutEvidence = true },
+		{name: "timeout evidence in the termination message", reason: reasonRestarts,
 			setup: func(w *world) {
 				ref := w.deployment("app", "web")
 				s := crashLooping()
@@ -508,7 +536,7 @@ func TestRestartHistory(t *testing.T) {
 	w := &world{}
 	w.netpol("app")
 	ref := w.deployment("app", "web")
-	w.pod("app", "web-1", ref, podSpec{ready: true, restarts: 10, started: 48 * time.Hour})
+	w.pod("app", "web-1", ref, podSpec{ready: true, restarts: 10, started: 48 * time.Hour, termMessage: "dial tcp 172.20.0.1:443: i/o timeout"})
 	w.pod("app", "web-2", ref, healthyPod())
 	h := w.start(t, func(c *Config) { c.Mode = ModeAct })
 
@@ -723,7 +751,7 @@ func TestConfigValidate(t *testing.T) {
 		func(c *Config) { c.OwnerCooldown = 0 },
 		func(c *Config) { c.MinDeleteInterval = 0 },
 		func(c *Config) { c.RestartThreshold = 0 },
-		func(c *Config) { c.RequireTimeoutEvidence = true; c.TimeoutPatterns = nil },
+		func(c *Config) { c.TimeoutPatterns = nil },
 		func(c *Config) { c.NodeDiagnostic = true; c.NodeDiagnosticDestination = "" },
 		func(c *Config) { c.MaxNodeAge = -time.Second },
 	}

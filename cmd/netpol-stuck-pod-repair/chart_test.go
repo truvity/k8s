@@ -34,7 +34,7 @@ func TestChartArgsParse(t *testing.T) {
 				}
 				if o.cfg.MaxRepairs != want.MaxRepairs || o.cfg.OwnerCooldown != want.OwnerCooldown ||
 					o.cfg.MinDeleteInterval != want.MinDeleteInterval || o.cfg.HaltWindow != want.HaltWindow ||
-					o.cfg.Interval != time.Minute || o.cfg.MaxNodeAge != 0 || o.cfg.RequireTimeoutEvidence || o.cfg.NodeDiagnostic {
+					o.cfg.Interval != time.Minute || o.cfg.MaxNodeAge != 0 || o.cfg.NodeDiagnostic {
 					t.Errorf("chart defaults differ from the command's: %+v", o.cfg)
 				}
 				if len(o.cfg.TimeoutPatterns) != 2 || o.cfg.TimeoutPatterns[1] != "connect: connection timed out" {

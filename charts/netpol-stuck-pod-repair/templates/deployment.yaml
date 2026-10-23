@@ -72,7 +72,6 @@ spec:
             - {{ printf "--namespaces=%s" (join "," $v.namespaces) | quote }}
             - {{ printf "--exclude-namespaces=%s" (join "," $v.excludeNamespaces) | quote }}
             - --max-node-age={{ $v.maxNodeAge }}
-            - --require-timeout-evidence={{ $v.requireTimeoutEvidence }}
             - {{ printf "--timeout-patterns=%s" (join "," $v.timeoutPatterns) | quote }}
             - --log-tail-lines={{ $v.logTailLines }}
             - --node-diagnostic={{ $v.nodeDiagnostic.enabled }}

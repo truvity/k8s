@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `cmd/netpol-stuck-pod-repair`, `charts/netpol-stuck-pod-repair`: **Behaviour change, the candidate rule is narrowed.** In report mode v0.37.0 flagged an ordinary crash-looping Deployment pod (a failing readiness probe, no network involvement); in `act` mode that would delete such pods every cooldown and could trip the self-stop that disables real repairs. A pod is now a candidate only when BOTH a `PolicyEndpoint` in its namespace lists it (network policy is enforced on it) AND a `timeoutPatterns` hit (default `i/o timeout`, `connect: connection timed out`) is in a container's last termination message or the tail of its log. A triggered pod that fails either is logged once at info as `skipped: not the race` (`skip`: `no-policy-endpoint` or `no-timeout-evidence`), is not counted in `netpol_repair_candidates` and is never deleted; no metric was added and the existing names are unchanged. A cluster without the PolicyEndpoint API, or a controller that cannot list it, therefore reports nothing. **Breaking for values and flags:** `requireTimeoutEvidence` / `-require-timeout-evidence` is removed (the rule is no longer optional; the chart's schema rejects the key, so delete it from your values), and `timeoutPatterns` must have at least one entry. The container logs are now read for every pod that meets a trigger, not only when the flag was on.
+
 ## v0.37.0
 
 - Go toolchain go1.27.3 (was go1.27.2): fixes GO-2026-6809 in `crypto/x509`, reported by `govulncheck`. The `go` directive stays 1.27.0, so consumers need no change; binaries and images built from this module are rebuilt with the fixed standard library.

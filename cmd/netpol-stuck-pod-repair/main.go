@@ -87,9 +87,8 @@ func parseFlags(args []string) (options, error) {
 	namespaces := fs.String("namespaces", "", "comma-separated namespaces to consider; empty: every namespace")
 	exclude := fs.String("exclude-namespaces", "", "comma-separated namespaces never considered")
 	fs.DurationVar(&o.cfg.MaxNodeAge, "max-node-age", 0, "consider only pods on nodes younger than this; 0: off (same-node replacements happen on old nodes too)")
-	fs.BoolVar(&o.cfg.RequireTimeoutEvidence, "require-timeout-evidence", false,
-		"consider only pods whose last termination message or recent log contains one of -timeout-patterns")
-	patterns := fs.String("timeout-patterns", strings.Join(d.TimeoutPatterns, ","), "comma-separated substrings that are the bug's evidence")
+	patterns := fs.String("timeout-patterns", strings.Join(d.TimeoutPatterns, ","),
+		"comma-separated substrings that are the bug's evidence; a candidate's last termination message or recent log must contain one")
 	fs.Int64Var(&o.cfg.LogTailLines, "log-tail-lines", d.LogTailLines, "log lines read per container when looking for -timeout-patterns")
 	fs.BoolVar(&o.cfg.NodeDiagnostic, "node-diagnostic", false, "create an EKS Auto Mode NodeDiagnostic for the node before a repair")
 	fs.StringVar(&o.cfg.NodeDiagnosticDestination, "node-diagnostic-destination", d.NodeDiagnosticDestination,
@@ -147,7 +146,7 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 	log.InfoContext(ctx, "starting: a TEMPORARY workaround for aws/aws-network-policy-agent#676 (fix: #705)",
 		slog.String("mode", string(o.cfg.Mode)), slog.String("interval", o.cfg.Interval.String()),
 		slog.Any("namespaces", o.cfg.Namespaces), slog.Any("excludeNamespaces", o.cfg.ExcludeNamespaces),
-		slog.String("maxNodeAge", o.cfg.MaxNodeAge.String()), slog.Bool("requireTimeoutEvidence", o.cfg.RequireTimeoutEvidence),
+		slog.String("maxNodeAge", o.cfg.MaxNodeAge.String()), slog.Any("timeoutPatterns", o.cfg.TimeoutPatterns),
 		slog.Bool("nodeDiagnostic", o.cfg.NodeDiagnostic))
 
 	if o.once {

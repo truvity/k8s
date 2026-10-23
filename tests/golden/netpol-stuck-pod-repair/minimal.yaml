@@ -129,7 +129,6 @@ spec:
             - "--namespaces="
             - "--exclude-namespaces=kube-system"
             - --max-node-age=0s
-            - --require-timeout-evidence=false
             - "--timeout-patterns=i/o timeout,connect: connection timed out"
             - --log-tail-lines=100
             - --node-diagnostic=false

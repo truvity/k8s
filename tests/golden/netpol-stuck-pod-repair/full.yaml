@@ -167,7 +167,6 @@ spec:
             - "--namespaces=apps,edge"
             - "--exclude-namespaces=kube-system,databases"
             - --max-node-age=6h
-            - --require-timeout-evidence=true
             - "--timeout-patterns=i/o timeout,connect: connection timed out"
             - --log-tail-lines=100
             - --node-diagnostic=true

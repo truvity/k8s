@@ -1282,7 +1282,7 @@ It renders a ServiceAccount, a ClusterRole and its binding, one Deployment
 | `maxRepairs`, `haltWindow` | `5`, `1h` | The self-stop: after `maxRepairs` deletions within the window, the next candidate halts acting until the pod restarts. 1 to 20; cannot be switched off. |
 | `namespaces`, `excludeNamespaces` | all, `[kube-system]` | Which namespaces with a NetworkPolicy are considered. A namespace in both is refused. |
 | `maxNodeAge` | `0s` (off) | Only pods on nodes younger than this. |
-| `requireTimeoutEvidence`, `timeoutPatterns`, `logTailLines` | `false`, `i/o timeout` and `connect: connection timed out`, `100` | Only pods with a pattern in a termination message or log tail. Patterns may not contain a comma. |
+| `timeoutPatterns`, `logTailLines` | `i/o timeout` and `connect: connection timed out`, `100` | A candidate must be listed by a PolicyEndpoint AND show a pattern in a termination message or log tail; otherwise it is logged as `skipped: not the race` and never deleted. Not switchable; at least one pattern. Patterns may not contain a comma. |
 | `nodeDiagnostic.enabled`, `.destination` | `false`, `node` | Create an EKS Auto Mode `NodeDiagnostic` for the node first (adds `create` on `nodediagnostics`); `node` or an `https://` presigned PUT URL. |
 | `podMonitor.enabled`, `.interval`, `.labels` | `true` | A `monitoring.coreos.com/v1` PodMonitor with `honorLabels`. Set `false` without that API. |
 | `networkPolicy.enabled`, `.apiServer.peers`, `.apiServer.ports`, `.metrics` | `false`, none, `[443]`, none | Egress to the API server peers only (required when enabled), ingress on 8080 from the `metrics` peers. |
@@ -1291,8 +1291,7 @@ It renders a ServiceAccount, a ClusterRole and its binding, one Deployment
 | `podSecurityContext`, `securityContext` | restricted | Non-root, read-only root, no capabilities, RuntimeDefault seccomp. |
 
 Refused: an unknown key or mode, a duration that is not a positive Go
-duration where one is required, `maxRepairs` below 1, evidence required with
-no pattern, a NetworkPolicy without API server peers, a namespace both
+duration where one is required, `maxRepairs` below 1, no timeout pattern, a NetworkPolicy without API server peers, a namespace both
 allowed and excluded, a plain-HTTP diagnostic destination.
 
 ## `charts/talos-etcd-backup`

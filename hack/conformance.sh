@@ -258,6 +258,34 @@ done
 [ "${restarts:-0}" -ge 2 ] || fail "the stand-in pod did not crash-loop"
 first="$(pod_uid)"
 
+# kind has no AWS network policy controller: stand in for it with a minimal
+# PolicyEndpoint CRD and one object listing the stranded pod, which the
+# selection rule requires (an unlisted crash-looper is "not the race").
+pod_name="$(kubectl -n repair-e2e get pods -l app=stranded -o jsonpath='{.items[0].metadata.name}')"
+kubectl apply -f - <<YAML
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: {name: policyendpoints.networking.k8s.aws}
+spec:
+  group: networking.k8s.aws
+  scope: Namespaced
+  names: {kind: PolicyEndpoint, listKind: PolicyEndpointList, plural: policyendpoints, singular: policyendpoint}
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema: {openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}}
+YAML
+kubectl wait --for=condition=Established crd/policyendpoints.networking.k8s.aws --timeout 1m
+kubectl apply -f - <<YAML
+apiVersion: networking.k8s.aws/v1alpha1
+kind: PolicyEndpoint
+metadata: {name: stranded-egress, namespace: repair-e2e}
+spec:
+  podSelectorEndpoints:
+    - {name: $pod_name, namespace: repair-e2e}
+YAML
+
 token="$(kubectl -n netpol-repair create token netpol-stuck-pod-repair --duration 1h)"
 server="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
 kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$work/ca.crt"
@@ -271,7 +299,7 @@ current-context: repair
 YAML
 go build -o "$work/netpol-stuck-pod-repair" ./cmd/netpol-stuck-pod-repair
 repair() { "$work/netpol-stuck-pod-repair" --kubeconfig "$work/repair.kubeconfig" --metrics-address= \
-  --namespaces=repair-e2e --restart-threshold=2 --single-replica-stuck-after=1s --require-timeout-evidence "$@"; }
+  --namespaces=repair-e2e --restart-threshold=2 --single-replica-stuck-after=1s "$@"; }
 
 repair --once > "$work/report.log" 2>&1 || { cat "$work/report.log"; fail "report mode failed"; }
 grep -q '"WOULD repair' "$work/report.log" || { cat "$work/report.log"; fail "report mode did not report the candidate"; }

@@ -4,7 +4,6 @@ mode: act
 namespaces: [apps, edge]
 excludeNamespaces: [kube-system, databases]
 maxNodeAge: 6h
-requireTimeoutEvidence: true
 nodeDiagnostic:
   enabled: true
   destination: node

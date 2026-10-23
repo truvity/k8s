@@ -42,11 +42,13 @@ type Config struct {
 	Namespaces        []string // empty: all
 	ExcludeNamespaces []string
 
-	// Optional stronger signals, both off by default.
-	MaxNodeAge             time.Duration // 0: off
-	RequireTimeoutEvidence bool
-	TimeoutPatterns        []string
-	LogTailLines           int64
+	// MaxNodeAge is an optional extra signal, off by default.
+	MaxNodeAge time.Duration // 0: off
+	// The race's signature, required of every candidate together with a
+	// PolicyEndpoint that selects the pod: a pattern in the pod's last
+	// termination message or the tail of its log.
+	TimeoutPatterns []string
+	LogTailLines    int64
 
 	// An EKS Auto Mode NodeDiagnostic for the pod's node before a repair.
 	NodeDiagnostic            bool
@@ -100,8 +102,8 @@ func (c *Config) Validate() error {
 	if c.MaxNodeAge < 0 {
 		errs = append(errs, fmt.Errorf("max-node-age must not be negative, got %s", c.MaxNodeAge))
 	}
-	if c.RequireTimeoutEvidence && len(c.TimeoutPatterns) == 0 {
-		errs = append(errs, errors.New("require-timeout-evidence needs at least one timeout pattern"))
+	if len(c.TimeoutPatterns) == 0 {
+		errs = append(errs, errors.New("timeout-patterns needs at least one pattern: a candidate must show timeout evidence"))
 	}
 	if c.LogTailLines < 0 {
 		errs = append(errs, fmt.Errorf("log-tail-lines must not be negative, got %d", c.LogTailLines))
