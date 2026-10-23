@@ -22,7 +22,9 @@ package vpclayout
 
 import (
 	"fmt"
+	"maps"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -291,4 +293,25 @@ func sortedSubnetNames(subnets map[string]Subnet) []string {
 	sort.Slice(names, func(i, j int) bool { return subnets[names[i]].ThirdOctet < subnets[names[j]].ThirdOctet })
 
 	return names
+}
+
+// AZBlocks are the per-zone blocks of the subnets whose logical name starts
+// with prefix, in subnet order and, within a subnet, in zone-name order.
+// For a subnet that hosts pods (a prefix length of 16 to 23) these are the
+// ranges the pods take their addresses from; Calculated.CIDR names the first
+// zone's block only. A network with no such subnet has none.
+func AZBlocks(subnets []Calculated, prefix string) []string {
+	var out []string
+
+	for _, s := range subnets {
+		if !strings.HasPrefix(s.Name, prefix) {
+			continue
+		}
+
+		for _, az := range slices.Sorted(maps.Keys(s.AZSubnets)) {
+			out = append(out, s.AZSubnets[az])
+		}
+	}
+
+	return out
 }
