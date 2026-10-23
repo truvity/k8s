@@ -35,6 +35,33 @@
             "syncWave": { "type": ["integer", "null"] },
             "protect": { "type": ["boolean", "null"] }
           }
+        },
+        "cloudflared": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "name": { "$ref": "#/definitions/objectName" },
+            "namespace": { "$ref": "#/definitions/dnsLabel" },
+            "reason": { "type": "string", "minLength": 10 },
+            "podSelector": { "$ref": "#/definitions/labelSelector" },
+            "syncWave": { "type": ["integer", "null"] },
+            "protect": { "type": ["boolean", "null"] }
+          }
+        },
+        "tailscaled": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "name": { "$ref": "#/definitions/objectName" },
+            "namespaces": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/dnsLabel" } },
+            "reason": { "type": "string", "minLength": 10 },
+            "podSelector": { "$ref": "#/definitions/labelSelector" },
+            "tailnetCIDR": { "type": "string", "minLength": 1 },
+            "syncWave": { "type": ["integer", "null"] },
+            "protect": { "type": ["boolean", "null"] }
+          }
         }
       }
     }
