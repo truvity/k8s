@@ -31,7 +31,6 @@ capabilities.
 | `pkg/talos/machineconfig` — a self-hosted Talos cluster's machine configs rendered offline from a declared cluster and its secrets, validated as Talos does; the talosconfig; the contract | Go package |
 | `pkg/talos/cilium` — the upstream Cilium chart's values for a Talos cluster | Go package |
 | `cmd/identity-check` — proves a pod was admitted with its EKS Pod Identity or IRSA identity, see [identity-check](#identity-check) | Command and image, `ghcr.io/truvity/k8s/identity-check` |
-| `cmd/netpol-stuck-pod-repair` — **TEMPORARY workaround** for the EKS network policy agent race [aws/aws-network-policy-agent#676](https://github.com/aws/aws-network-policy-agent/issues/676) (fix [#705](https://github.com/aws/aws-network-policy-agent/pull/705), unreleased): deletes Deployment pods stranded with an empty egress map, within strict limits, report-only by default; see [netpol-stuck-pod-repair](#netpol-stuck-pod-repair) | Command and image, `ghcr.io/truvity/k8s/netpol-stuck-pod-repair` |
 | `charts/cilium-config` — LoadBalancer IP pools, L2 announcements (default) and optional BGP for Cilium, as data | Helm chart, `oci://ghcr.io/truvity/charts/cilium-config` |
 | `pkg/talos/oidc` — a ServiceAccount issuer's discovery document and JWKS, generated offline | Go package |
 | `pkg/aws/oidcissuer` — publishes them to an S3-compatible bucket and registers the IAM OIDC provider (IAM roles for service accounts off EKS), `truvity:k8s/aws:OidcIssuer` | Pulumi component |
@@ -42,7 +41,6 @@ capabilities.
 | `charts/eks-auto-node-pools` — Karpenter NodePools and NodeClasses for EKS Auto Mode, one disruption budget per pool, subnet tags and roles as values | Helm chart, `oci://ghcr.io/truvity/charts/eks-auto-node-pools` |
 | `charts/guardrails-projects` — the guardrails of every project namespace from a list of project rows: Namespace with labels and Pod Security, baseline NetworkPolicy (shared rules filtered by the row's kind), quota and LimitRange by profile, Roles and RoleBindings, an ACK IAMRoleSelector for the row's ceiling role, and an opt-in ValidatingAdmissionPolicy that holds a project's PodIdentityAssociations to its own namespace and roles; data-bearing objects carry `Prune=false,Delete=false` | Helm chart, `oci://ghcr.io/truvity/charts/guardrails-projects` |
 | `charts/local-volumes` — local PersistentVolumes on the nodes' user volumes, pinned to their node and claim, with no-provisioner StorageClasses | Helm chart, `oci://ghcr.io/truvity/charts/local-volumes` |
-| `charts/netpol-stuck-pod-repair` — **TEMPORARY**: the one Deployment, RBAC, PodMonitor and optional NetworkPolicy of `cmd/netpol-stuck-pod-repair`; uninstall when the node image ships aws-network-policy-agent with #705 | Helm chart, `oci://ghcr.io/truvity/charts/netpol-stuck-pod-repair` |
 | `charts/talos-etcd-backup` — scheduled, age-encrypted etcd snapshots of a Talos cluster to an S3-compatible bucket | Helm chart, `oci://ghcr.io/truvity/charts/talos-etcd-backup` |
 | `charts/tenancy` — DEPRECATED ([window](docs/decisions/0004-tenancy-deprecation.md)): per-tenant NetworkPolicy, quota, RBAC, NATS account and Pod Identity and the Namespace itself with its Pod Security labels, one profile per tier, every name a value | Helm chart, `oci://ghcr.io/truvity/charts/tenancy` |
 | `charts/volume-snapshot-crds` — the CSI external-snapshotter CustomResourceDefinitions, mirrored verbatim at the upstream version pinned in `crdctl.yaml` | Helm chart, `oci://ghcr.io/truvity/charts/volume-snapshot-crds` |
@@ -68,9 +66,7 @@ scheme; it chooses none of them.
 
 It deliberately does not pick your names, your address ranges, your
 permission boundaries or your accounts, does not install workloads into the
-cluster. The charts render cluster objects and never workloads (one
-exception, temporary: `netpol-stuck-pod-repair`, a cluster-wide repair
-controller that goes when the bug it works around is fixed upstream):
+cluster. The charts render cluster objects and never workloads:
 `cluster-baseline` labels namespaces someone else owns, `cluster-foundation`
 renders the foundation objects (namespaces, role bindings, storage classes),
 `eks-auto-node-pools` the Karpenter pools and `tenancy` what each tenant namespace
@@ -168,103 +164,6 @@ The image is `ghcr.io/truvity/k8s/identity-check:<version>` (the release
 version without the `v`), static, distroless and nonroot, for linux/amd64 and
 linux/arm64. Charts do not write the Job themselves: they include
 truvity/policy's `service-lib.identityCheck` template.
-
-## netpol-stuck-pod-repair
-
-**A TEMPORARY WORKAROUND.** The EKS network policy agent can lose a race
-between a pod's CNI ADD and the reconcile of its PolicyEndpoint
-([aws/aws-network-policy-agent#676](https://github.com/aws/aws-network-policy-agent/issues/676);
-the fix, [#705](https://github.com/aws/aws-network-policy-agent/pull/705), is
-not merged or released). The pod is Running and its PolicyEndpoints are
-correct, but the eBPF map its program reads is empty, so every egress
-connection times out (`dial tcp ...: i/o timeout`). It hits pods started in a
-burst on a fresh node and same-node replacements. Restarting the containers
-does not help; deleting the pod does (new pod, new IP, fresh maps). On EKS
-Auto Mode the agent is part of the node image, so there is nothing to upgrade.
-
-**Removal condition.** Uninstall it when the EKS Auto Mode node image ships
-an aws-network-policy-agent release that contains #705. Verify with a node
-drift roll followed by two weeks in which
-`netpol_repair_actions_total{mode="act"}` does not move. Then remove the
-command, the chart, and this section.
-
-**What it does.** One replica per cluster. Every `-interval` (1m) it lists
-the namespaces with at least one NetworkPolicy and their pods. A pod is a
-candidate when ALL of these hold (the `netpol_repair_candidates` gauge counts only pods that pass all of them):
-
-1. its namespace has a NetworkPolicy, is in `-namespaces` (empty: all) and
-   not in `-exclude-namespaces` (the chart excludes `kube-system`);
-2. its controller is a ReplicaSet (with or without a Deployment, which is
-   then the "owner"); never a StatefulSet, Job, DaemonSet or bare pod, never
-   a pod labelled `cnpg.io/cluster`, never a terminating pod, never itself;
-3. it is Running and EITHER its containers restarted `-restart-threshold`
-   (3) times within `-restart-window` (15m) (counted from samples taken each
-   tick; for a pod younger than the window, every restart since it started)
-   OR it has been NotReady for `-not-ready-after` (10m), measured from its
-   Ready condition's last transition;
-4. EITHER its owner has at least one other Ready pod, OR it is its owner's
-   only pod and has been stuck for `-single-replica-stuck-after` (10m). An
-   owner whose pods are all NotReady is left alone (nothing proves the owner
-   itself works), and so is the owner's last Ready pod;
-5. it is the race, not an ordinary crash loop. BOTH must hold:
-   a `PolicyEndpoint` (`networking.k8s.aws`) in its namespace lists the pod
-   (network policy is actually enforced on it), AND a `-timeout-patterns`
-   hit (`i/o timeout`, `connect: connection timed out`) is in a container's
-   last termination message or the tail of its log (the previous
-   container's, after a restart). This is the bug's signature: every egress
-   connection times out. Not switchable. A triggered pod that fails either
-   test is logged once as `skipped: not the race` (`skip` is
-   `no-policy-endpoint` or `no-timeout-evidence`), is not a candidate and is
-   never deleted. An application that fails its own probe, with no timeout
-   in its output, is left alone; so is one that logs no timeout at all, which
-   is the price of not deleting ordinary crash-loopers;
-6. optional, off by default: its node is younger than `-max-node-age` (the
-   race also hits same-node replacements on old nodes, hence off).
-
-Then the limits, in order: no second repair of an owner within
-`-owner-cooldown` (30m); at most one decision per tick and none within
-`-min-delete-interval` (1m) of the last, cluster-wide; and the self-stop:
-once `-max-repairs` (5) deletions fall within `-halt-window` (1h) and
-another candidate turns up, it stops deleting for good, keeps reporting, and
-sets `netpol_repair_halted` to 1. Only a restart of its pod clears that: a
-burst that size is not the race, so a person looks first. All of this state
-is in memory.
-
-Per decision it records evidence: a Warning Event on the owner
-(`NetpolStuckPodRepaired`, or `NetpolStuckPodCandidate` in report mode) and
-one JSON log line with the pod, node, node age, restarts, stuck time, the
-other Ready replicas, each container's last termination (reason, exit code,
-message), the PolicyEndpoints that list the pod and the timeout evidence.
-With `-node-diagnostic` (off by default) it also creates an EKS
-[`NodeDiagnostic`](https://docs.aws.amazon.com/eks/latest/userguide/auto-get-logs.html)
-named after the node (`-node-diagnostic-destination`: `node` keeps the
-bundle on the node; a presigned PUT URL uploads it, and is readable by
-anyone who can read the object), so the agent's logs survive for the
-upstream issue. An existing one is left alone; none is deleted. Then, in
-act mode, it deletes the pod (UID precondition).
-
-**Modes.** `-mode=report` (the default, and the chart's) deletes nothing: it
-logs `WOULD repair`, counts `mode="report"` and records the Event. Read a
-cluster's reports before switching it to `-mode=act`.
-
-**Metrics** (`:8080/metrics`; the chart's PodMonitor honours labels, since
-`namespace` is the target pod's): `netpol_repair_actions_total{namespace,
-owner_kind, owner, reason, mode}`, `netpol_repair_candidates{namespace,
-owner_kind, owner, reason}` (at the last examination, before the limits),
-`netpol_repair_halted` (0/1) and `netpol_repair_last_run_timestamp_seconds`.
-`/healthz` is the process; `/readyz` fails when no examination succeeded in
-three intervals. The alert rules are in truvity/observability
-(`charts/platform-alerts`, group `netpolRepair`).
-
-**RBAC** (one ClusterRole): pods `get, list, delete`; pods/log `get`; nodes
-`get`; events `create`; networkpolicies `list`; replicasets `list`;
-`networking.k8s.aws` policyendpoints `list`; and, only with
-`nodeDiagnostic.enabled`, `eks.amazonaws.com` nodediagnostics `create`.
-
-The image is `ghcr.io/truvity/k8s/netpol-stuck-pod-repair:<version>` (the
-release version without the `v`), static, distroless and nonroot, for
-linux/amd64 and linux/arm64; the chart's `image.tag` defaults to its own
-appVersion, the same release.
 
 ## Documentation
 

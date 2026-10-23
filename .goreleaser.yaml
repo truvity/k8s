@@ -1,9 +1,7 @@
 # Tag-triggered release through truvity/ci-workflows release-public.yaml.
 #
-# The tag is the Go module's version. Two commands are built, each shipped as
-# a static distroless image (ko, below) at the tag's version:
-# cmd/identity-check and cmd/netpol-stuck-pod-repair (a TEMPORARY workaround
-# for aws/aws-network-policy-agent#676; README.md says when it goes).
+# The tag is the Go module's version. One command is built, shipped as a
+# static distroless image (ko, below) at the tag's version: cmd/identity-check.
 version: 2
 
 project_name: k8s
@@ -12,15 +10,6 @@ builds:
   - id: identity-check
     main: ./cmd/identity-check
     binary: identity-check
-    env: [CGO_ENABLED=0]
-    goos: [linux]
-    goarch: [amd64, arm64]
-    flags: [-trimpath]
-    ldflags:
-      - -s -w
-  - id: netpol-stuck-pod-repair
-    main: ./cmd/netpol-stuck-pod-repair
-    binary: netpol-stuck-pod-repair
     env: [CGO_ENABLED=0]
     goos: [linux]
     goarch: [amd64, arm64]
@@ -46,22 +35,6 @@ kos:
       org.opencontainers.image.title: identity-check
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.source: https://github.com/truvity/k8s
-  - id: netpol-stuck-pod-repair
-    build: netpol-stuck-pod-repair
-    tags:
-      - "{{ .Version }}"
-      - "{{ if not .IsSnapshot }}latest{{ end }}"
-    platforms: [linux/amd64, linux/arm64]
-    bare: true
-    preserve_import_paths: false
-    base_import_paths: true
-    base_image: gcr.io/distroless/static:nonroot
-    sbom: none
-    labels:
-      org.opencontainers.image.title: netpol-stuck-pod-repair
-      org.opencontainers.image.description: "TEMPORARY workaround for aws/aws-network-policy-agent#676"
-      org.opencontainers.image.version: "{{ .Version }}"
-      org.opencontainers.image.source: https://github.com/truvity/k8s
 
 checksum:
   name_template: checksums.txt
@@ -81,13 +54,11 @@ release:
     ## k8s {{ .Tag }}
 
     Go module: `go get github.com/truvity/k8s@{{ .Tag }}`.
-    Images (linux/amd64, linux/arm64): `ghcr.io/truvity/k8s/identity-check:{{ .Version }}`
-    and `ghcr.io/truvity/k8s/netpol-stuck-pod-repair:{{ .Version }}` (a temporary
-    workaround for aws/aws-network-policy-agent#676).
+    Image (linux/amd64, linux/arm64): `ghcr.io/truvity/k8s/identity-check:{{ .Version }}`.
     Charts, version `{{ .Version }}`, at `oci://ghcr.io/truvity/charts/<chart>`:
     `cilium-config`, `cluster-baseline`, `cluster-foundation`,
     `cluster-network-policies`, `cluster-pki`, `eks-auto-node-pools`,
-    `guardrails-projects`, `local-volumes`, `netpol-stuck-pod-repair`,
+    `guardrails-projects`, `local-volumes`,
     `talos-etcd-backup` and `tenancy`.
     The mirrored CRD charts `volume-snapshot-crds` and `cilium-crds` are
     published at the upstream version they mirror, once, by the `crd-charts` job.
