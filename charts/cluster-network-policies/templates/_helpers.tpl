@@ -17,6 +17,13 @@ The enabled presets as policy entries (a YAML list), rendered after
 metricsServer: metrics-server scrapes every kubelet on 10250 and calls the API
 server on 443, both over the node and service ranges, and resolves names. Only
 egress is selected: the API server's calls into it stay unrestricted.
+
+cloudflared: the tunnel connector dials Cloudflare's edge and the origin, which
+have no fixed address. Egress is open and ingress is not selected.
+
+tailscaled: a tailnet router, one policy per namespace in `namespaces`. It
+accepts traffic from the tailnet range (CGNAT, shared by every tailnet) and may
+reach anywhere.
 */}}
 {{- define "cluster-network-policies.presets" -}}
 {{- $out := list -}}
@@ -39,6 +46,36 @@ egress is selected: the API server's calls into it stay unrestricted.
 {{- if not (kindIs "invalid" $ms.syncWave) }}{{ $_ := set $p "syncWave" $ms.syncWave }}{{ end -}}
 {{- if hasKey $ms "protect" }}{{ if not (kindIs "invalid" $ms.protect) }}{{ $_ := set $p "protect" $ms.protect }}{{ end }}{{ end -}}
 {{- $out = append $out $p -}}
+{{- end -}}
+{{- $cf := (.Values.presets | default dict).cloudflared | default dict -}}
+{{- if $cf.enabled -}}
+{{- $p := dict
+      "name" $cf.name
+      "namespace" $cf.namespace
+      "reason" $cf.reason
+      "podSelector" $cf.podSelector
+      "policyTypes" (list "Egress")
+      "egress" (list (dict)) -}}
+{{- if not (kindIs "invalid" $cf.syncWave) }}{{ $_ := set $p "syncWave" $cf.syncWave }}{{ end -}}
+{{- if hasKey $cf "protect" }}{{ if not (kindIs "invalid" $cf.protect) }}{{ $_ := set $p "protect" $cf.protect }}{{ end }}{{ end -}}
+{{- $out = append $out $p -}}
+{{- end -}}
+{{- $ts := (.Values.presets | default dict).tailscaled | default dict -}}
+{{- if $ts.enabled -}}
+{{- if not $ts.namespaces }}{{ fail "presets.tailscaled.namespaces: at least one router namespace is required" }}{{ end -}}
+{{- range $ns := $ts.namespaces -}}
+{{- $p := dict
+      "name" $ts.name
+      "namespace" $ns
+      "reason" $ts.reason
+      "podSelector" $ts.podSelector
+      "policyTypes" (list "Ingress" "Egress")
+      "ingress" (list (dict "from" (list (dict "ipBlock" (dict "cidr" $ts.tailnetCIDR)))))
+      "egress" (list (dict)) -}}
+{{- if not (kindIs "invalid" $ts.syncWave) }}{{ $_ := set $p "syncWave" $ts.syncWave }}{{ end -}}
+{{- if hasKey $ts "protect" }}{{ if not (kindIs "invalid" $ts.protect) }}{{ $_ := set $p "protect" $ts.protect }}{{ end }}{{ end -}}
+{{- $out = append $out $p -}}
+{{- end -}}
 {{- end -}}
 {{- toYaml $out -}}
 {{- end -}}

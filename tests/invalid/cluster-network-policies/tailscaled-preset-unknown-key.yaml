@@ -1,0 +1,6 @@
+# An unknown preset key is an error, not a silent no-op.
+presets:
+  tailscaled:
+    enabled: true
+    namespaces: [router-one]
+    tailnetCidr: 100.64.0.0/10
