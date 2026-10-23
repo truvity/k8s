@@ -128,3 +128,27 @@ func TestNames(t *testing.T) {
 		t.Fatal("AZSuffix")
 	}
 }
+
+func TestAZBlocks(t *testing.T) {
+	t.Parallel()
+
+	n := vpclayout.Network{Index: 1, Subnets: map[string]vpclayout.Subnet{
+		"public":  {ThirdOctet: 0, Type: "public"},
+		"private": {ThirdOctet: 4, Type: "private"},
+		"pods":    {ThirdOctet: 32, Type: "private", PrefixLen: 19},
+	}}
+
+	calc, err := plan.Calculate("net", n, vpclayout.FilterAZs(zones, "region", "aws"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"10.65.32.0/19", "10.65.64.0/19", "10.65.96.0/19"}
+	if got := vpclayout.AZBlocks(calc, "pods"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("pods blocks %v, want %v", got, want)
+	}
+
+	if got := vpclayout.AZBlocks(calc, "nothing"); len(got) != 0 {
+		t.Fatalf("a prefix no subnet has gives none: %v", got)
+	}
+}
