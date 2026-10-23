@@ -61,3 +61,32 @@ presets:
     syncWave: null
     # Overrides the chart's `protect`; null follows it.
     protect: null
+
+  # cloudflared's egress: the tunnel connector dials Cloudflare's edge and the
+  # origin, which have no fixed address, so egress is open. Ingress is not
+  # selected.
+  cloudflared:
+    enabled: false
+    name: cloudflared
+    namespace: cloudflare-system
+    reason: "The tunnel connector dials Cloudflare's edge and the origin, which have no fixed address: egress is open, ingress is not selected."
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: cloudflared
+    syncWave: null
+    protect: null
+
+  # A tailnet router: one policy per namespace in `namespaces`, ingress from the
+  # tailnet range only, egress open. All tailnets share the CGNAT range.
+  tailscaled:
+    enabled: false
+    name: tailscaled
+    # The router namespaces, one policy each. Required when enabled.
+    namespaces: []
+    reason: "The tailnet router accepts traffic from the tailnet range and may reach anywhere; all tailnets share the CGNAT range."
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: tailscaled
+    tailnetCIDR: 100.64.0.0/10
+    syncWave: null
+    protect: null

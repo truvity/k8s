@@ -1,0 +1,18 @@
+# The cloudflared and tailscaled presets: an open-egress connector, and one
+# tailnet-router policy per namespace. A listed policy renders before them.
+policies:
+  - name: static-page
+    namespace: page
+    reason: Serves two files and reaches nothing; the gateway reaches it.
+    syncWave: 15
+    podSelector:
+      matchLabels: {app.kubernetes.io/name: static-page}
+    policyTypes: [Egress]
+presets:
+  cloudflared:
+    enabled: true
+    syncWave: 15
+  tailscaled:
+    enabled: true
+    namespaces: [router-one, router-two]
+    syncWave: 15
