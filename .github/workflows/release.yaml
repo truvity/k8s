@@ -24,10 +24,9 @@ jobs:
       packages: write
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@51bc0eb7d5d89931d336219f87bde091deaf48ed # v5.4.0
     with:
-      # ko publishes cmd/identity-check and cmd/netpol-stuck-pod-repair to
-      # ghcr.io/truvity/k8s/identity-check and .../netpol-stuck-pod-repair.
+      # ko publishes cmd/identity-check to ghcr.io/truvity/k8s/identity-check.
       ko-docker-repo: ghcr.io/truvity/k8s
-      charts: '["cilium-config","cluster-baseline","cluster-foundation","cluster-network-policies","cluster-pki","eks-auto-node-pools","guardrails-projects","local-volumes","netpol-stuck-pod-repair","talos-etcd-backup","tenancy"]'
+      charts: '["cilium-config","cluster-baseline","cluster-foundation","cluster-network-policies","cluster-pki","eks-auto-node-pools","guardrails-projects","local-volumes","talos-etcd-backup","tenancy"]'
 
   # Signs the released images by digest: cosign keyless (GitHub OIDC) plus a
   # GitHub build-provenance attestation. Job-level permissions replace the
