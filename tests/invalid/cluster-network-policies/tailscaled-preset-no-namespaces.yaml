@@ -1,0 +1,4 @@
+# The tailscaled preset needs at least one router namespace.
+presets:
+  tailscaled:
+    enabled: true

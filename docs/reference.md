@@ -1216,6 +1216,7 @@ namespace.
 | `protect` | `false` | Every policy carries `argocd.argoproj.io/sync-options: Prune=false,Delete=false`. Off by default: a NetworkPolicy is cheap to put back and a stale one is the hazard. |
 | `helmKeep` | `false` | Also `helm.sh/resource-policy: keep` on protected policies. |
 | `presets.metricsServer` | off | metrics-server's egress (below), rendered after `policies[]` as one more entry. |
+| `presets.cloudflared`, `presets.tailscaled` | off | An open-egress tunnel connector, and a tailnet router per namespace (below), rendered after `policies[]` too. |
 
 An entry: `name`, `namespace`, `reason` (at least ten characters, not rendered),
 `podSelector` (a label selector; `{}` selects every pod of the namespace) and
@@ -1238,6 +1239,17 @@ the API server's calls into it stay open. `nodeCIDRs` and `serviceCIDR` are
 required; `name`, `namespace`, `podSelector`, `reason`, `syncWave` and
 `protect` override the defaults. The preset is an entry like any other: listing
 the same namespace and name in `policies[]` too is refused.
+
+`presets.cloudflared` (`enabled: true`) renders `cloudflare-system/cloudflared`
+for pods labelled `app.kubernetes.io/name: cloudflared`: egress open (the
+connector dials Cloudflare's edge and the origin, which have no fixed address),
+ingress not selected. `presets.tailscaled` (`enabled: true`) renders one
+`tailscaled` policy in each of `namespaces` (required, at least one) for pods
+labelled `app.kubernetes.io/name: tailscaled`: ingress only from `tailnetCIDR`
+(default `100.64.0.0/10`, the range every tailnet shares), egress open. For both,
+`name`, `namespace` (cloudflared), `podSelector`, `reason`, `syncWave` and
+`protect` override the defaults, and the policies are held to the same rules as
+the listed ones.
 
 ### The first policy denies
 

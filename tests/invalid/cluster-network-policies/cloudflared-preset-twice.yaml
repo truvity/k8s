@@ -1,0 +1,10 @@
+# A listed policy and the preset with the same namespace and name.
+policies:
+  - name: cloudflared
+    namespace: cloudflare-system
+    reason: "A hand-written copy of what the preset renders."
+    podSelector: {}
+    policyTypes: [Egress]
+presets:
+  cloudflared:
+    enabled: true
