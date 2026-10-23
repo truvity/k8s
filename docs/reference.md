@@ -44,6 +44,14 @@ endpoint := c.Contract.Endpoint()
 build, query and enumerate a set. A capability this version does not define
 is refused by `Validate`.
 
+### `cluster.DeriveCompute`
+
+`cluster.DeriveCompute(ComputeInputs{...})` builds a cluster's compute model for
+the `eks-auto-node-pools` chart: the preset's pools with the cluster's own on
+top (same name replaces), the defaults, the cluster's default class, and the
+shared NodeClasses (sorted, `PodSubnets` carried). A cluster with no pool gets
+the zero `Compute` and no error; whether that is acceptable is the caller's.
+
 ## `pkg/aws/pullthroughcache`
 
 `truvity:k8s/aws:PullThroughCache` deploys Amazon ECR pull-through cache
@@ -315,6 +323,16 @@ would delete or replace one fails instead. No other child is protected; they
 are rebuilt from the program. Point `Protect` at false only for a VPC that is
 meant to be torn down.
 
+### Discovery tags
+
+`vpc.DiscoveryTags(cluster, subnetType, internalELB)` returns the tags that let a
+cluster and its load balancer controller find a subnet, for `Subnet.Tags`:
+`kubernetes.io/cluster/<cluster>: shared` on every subnet,
+`kubernetes.io/role/elb` on a public one and `kubernetes.io/role/internal-elb`
+where `internalELB` is true. An empty cluster (a VPC that holds none) gets no
+tags. `vpclayout.AZBlocks(calculated, prefix)` lists the per-zone blocks of the
+subnets whose name starts with `prefix` (the ranges a pod subnet gives out).
+
 ### Outputs
 
 `VPCID`, `IPv6CIDR`, `InternetGatewayID`, `EgressOnlyGatewayID`,
@@ -566,6 +584,18 @@ preview that would delete or replace one fails instead. No other child is
 protected (access entries and the add-on included); they are rebuilt from the
 program. Point `Protect` at false only
 for a cluster that is meant to be torn down.
+
+### The state key policy
+
+`ekscluster.StateKeyPolicy(StateKeyPolicyParams{...})` returns the JSON key
+policy of the secrets key once the account's Pulumi state encrypts with it too:
+the account-root statement as AWS wrote it, the operators (an IAM role path
+pattern, `OperatorRolePath`) decrypting the state's objects through S3 for one
+bucket and using the `awskms` secrets provider (bound to the
+`purpose=pulumi-state` context), and the replication role decrypting at the
+source. Every statement is an Allow; the EKS service's grant keeps working. The
+component's key carries no policy of its own: attach the document with a
+`kms.KeyPolicy` on the key's id, which then owns it.
 
 ### Outputs
 
