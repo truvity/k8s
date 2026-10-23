@@ -51,14 +51,14 @@ namespaces: []
 excludeNamespaces:
   - kube-system
 
-# Optional stronger signals, both off by default.
 # maxNodeAge: only pods on nodes younger than this ("0s": off). Off because
 # the race also hits same-node replacements on old nodes.
 maxNodeAge: 0s
-# requireTimeoutEvidence: only pods whose last termination message or recent
-# log (the previous container's, after a restart) contains one of
-# `timeoutPatterns`. The match is recorded as evidence either way.
-requireTimeoutEvidence: false
+# The race's signature, REQUIRED of every candidate (not switchable) together
+# with a PolicyEndpoint that selects the pod: its last termination message or
+# recent log (the previous container's, after a restart) must contain one of
+# `timeoutPatterns`. A pod that fails either is logged as "skipped: not the
+# race" and never deleted. At least one pattern is needed.
 timeoutPatterns:
   - "i/o timeout"
   - "connect: connection timed out"

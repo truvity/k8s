@@ -190,7 +190,7 @@ command, the chart, and this section.
 
 **What it does.** One replica per cluster. Every `-interval` (1m) it lists
 the namespaces with at least one NetworkPolicy and their pods. A pod is a
-candidate when ALL of these hold:
+candidate when ALL of these hold (the `netpol_repair_candidates` gauge counts only pods that pass all of them):
 
 1. its namespace has a NetworkPolicy, is in `-namespaces` (empty: all) and
    not in `-exclude-namespaces` (the chart excludes `kube-system`);
@@ -206,12 +206,20 @@ candidate when ALL of these hold:
    only pod and has been stuck for `-single-replica-stuck-after` (10m). An
    owner whose pods are all NotReady is left alone (nothing proves the owner
    itself works), and so is the owner's last Ready pod;
-5. optional, both off by default: its node is younger than `-max-node-age`
-   (the race also hits same-node replacements on old nodes, hence off), and
-   `-require-timeout-evidence`: a `-timeout-patterns` hit (`i/o timeout`,
-   `connect: connection timed out`) in a container's last termination
-   message or the tail of its log (the previous container's, after a
-   restart). The match is recorded as evidence either way.
+5. it is the race, not an ordinary crash loop. BOTH must hold:
+   a `PolicyEndpoint` (`networking.k8s.aws`) in its namespace lists the pod
+   (network policy is actually enforced on it), AND a `-timeout-patterns`
+   hit (`i/o timeout`, `connect: connection timed out`) is in a container's
+   last termination message or the tail of its log (the previous
+   container's, after a restart). This is the bug's signature: every egress
+   connection times out. Not switchable. A triggered pod that fails either
+   test is logged once as `skipped: not the race` (`skip` is
+   `no-policy-endpoint` or `no-timeout-evidence`), is not a candidate and is
+   never deleted. An application that fails its own probe, with no timeout
+   in its output, is left alone; so is one that logs no timeout at all, which
+   is the price of not deleting ordinary crash-loopers;
+6. optional, off by default: its node is younger than `-max-node-age` (the
+   race also hits same-node replacements on old nodes, hence off).
 
 Then the limits, in order: no second repair of an owner within
 `-owner-cooldown` (30m); at most one decision per tick and none within

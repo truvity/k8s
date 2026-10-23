@@ -53,7 +53,7 @@ func (e *evidence) attrs() []any {
 		slog.String("timeoutEvidence", e.timeoutMatch))}
 }
 
-func (r *Repairer) evidence(ctx context.Context, now time.Time, c *candidate) evidence {
+func (r *Repairer) evidence(now time.Time, c *candidate) evidence {
 	e := evidence{
 		node:             c.pod.Spec.NodeName,
 		restartsTotal:    containerRestarts(c.pod),
@@ -61,8 +61,8 @@ func (r *Repairer) evidence(ctx context.Context, now time.Time, c *candidate) ev
 		stuckFor:         c.stuckFor,
 		otherReady:       c.otherReady,
 		terminations:     terminations(c.pod),
-		policyEndpoints:  r.policyEndpoints(ctx, c.pod),
-		timeoutMatch:     r.timeoutEvidence(ctx, c.pod),
+		policyEndpoints:  c.policyEndpoints,
+		timeoutMatch:     c.timeoutMatch,
 	}
 	if c.node != nil {
 		e.nodeAge = now.Sub(c.node.CreationTimestamp.Time)

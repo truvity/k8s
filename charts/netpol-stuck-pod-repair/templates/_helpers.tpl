@@ -25,7 +25,7 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 holds the shapes; these are the rules across fields. */}}
 {{- define "netpol-stuck-pod-repair.check" -}}
 {{- $v := .Values -}}
-{{- if and $v.requireTimeoutEvidence (not $v.timeoutPatterns) }}{{ fail "requireTimeoutEvidence needs at least one timeoutPatterns entry" }}{{ end -}}
+{{- if not $v.timeoutPatterns }}{{ fail "timeoutPatterns needs at least one entry: a candidate must show timeout evidence" }}{{ end -}}
 {{- if and $v.networkPolicy.enabled (not $v.networkPolicy.apiServer.peers) }}{{ fail "networkPolicy.enabled needs networkPolicy.apiServer.peers: without egress to the API the controller sees nothing" }}{{ end -}}
 {{- range $v.namespaces }}{{ if has . $v.excludeNamespaces }}{{ fail (printf "namespace %q is both in namespaces and excludeNamespaces" .) }}{{ end }}{{ end -}}
 {{- end -}}
