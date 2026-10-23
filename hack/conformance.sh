@@ -21,6 +21,7 @@ CLUSTER="${CLUSTER:-talos-conformance}"
 CILIUM_VERSION="${CILIUM_VERSION:-$(sed -n 's/^pinned_version: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' charts/cilium-crds/crdctl.yaml)}"
 CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.21.2}"
 AGNHOST="${AGNHOST:-registry.k8s.io/e2e-test-images/agnhost:2.66.1}"
+BUSYBOX="${BUSYBOX:-docker.io/library/busybox:1.37}"
 work="$(mktemp -d)"
 
 step() { printf '\n=== %s\n' "$*"; }
