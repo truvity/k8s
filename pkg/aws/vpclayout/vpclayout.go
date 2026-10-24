@@ -315,3 +315,23 @@ func AZBlocks(subnets []Calculated, prefix string) []string {
 
 	return out
 }
+
+// LogicalCIDRs are the logical blocks (Calculated.CIDR) of the subnets whose
+// name starts with any of the prefixes, in subnet order: where, for example,
+// a network's nodes live. It is empty when no subnet matches; whether that is
+// an error is the caller's decision.
+func LogicalCIDRs(subnets []Calculated, prefixes ...string) []string {
+	var out []string
+
+	for _, s := range subnets {
+		for _, p := range prefixes {
+			if strings.HasPrefix(s.Name, p) {
+				out = append(out, s.CIDR)
+
+				break
+			}
+		}
+	}
+
+	return out
+}
