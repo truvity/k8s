@@ -74,6 +74,10 @@ type (
 		// "90s"; empty keeps the chart's poolDefaults.consolidateAfter.
 		ConsolidateAfter string
 		FastEmptyReclaim bool
+		// MaintenanceWindow, when set, confines the pool's voluntary node
+		// replacement (drift, consolidation) to the window. nil: no window,
+		// Karpenter replaces whenever its budget allows.
+		MaintenanceWindow *MaintenanceWindow
 		// Zones pins the pool to these AZs; empty is all.
 		Zones []string
 		// EphemeralStorage, when set, gives the pool a NodeClass of its own
@@ -125,7 +129,10 @@ type (
 		ConsolidationPolicy    string   `yaml:"consolidationPolicy,omitempty"`
 		ConsolidateAfter       string   `yaml:"consolidateAfter,omitempty"`
 		FastEmptyReclaim       bool     `yaml:"fastEmptyReclaim,omitempty"`
-		Zones                  []string `yaml:"zones,omitempty"`
+		// Budgets are disruption budgets beside the chart's own (one node at
+		// a time): derived from the pool's MaintenanceWindow.
+		Budgets []Budget `yaml:"budgets,omitempty"`
+		Zones   []string `yaml:"zones,omitempty"`
 		// NodeClass is the pool's OWN NodeClass; nil keeps the pool on a
 		// shared one or on Auto Mode's built-in `default`.
 		NodeClass *NodeClass `yaml:"nodeClass,omitempty"`
@@ -207,6 +214,15 @@ func DeriveNodePools(pools map[string]NodePoolSpec, defaults PoolDefaults, nodeR
 			FastEmptyReclaim:       np.FastEmptyReclaim,
 			Zones:                  np.Zones,
 			NodeClassName:          np.NodeClass,
+		}
+
+		if np.MaintenanceWindow != nil {
+			budgets, err := windowBudgets(np.MaintenanceWindow)
+			if err != nil {
+				return nil, fmt.Errorf("node pool %q: maintenance window: %w", name, err)
+			}
+
+			pool.Budgets = budgets
 		}
 
 		if np.EphemeralStorage != nil {
@@ -353,6 +369,10 @@ func ValidateNodePool(scope, poolName string, np *NodePoolSpec, classes map[stri
 
 	if np.ConsolidateAfter != "" && !durationPattern.MatchString(np.ConsolidateAfter) {
 		return fmt.Errorf("%s: node_pools.%s.consolidate_after %q is not a duration like 90s or 2m", scope, poolName, np.ConsolidateAfter)
+	}
+
+	if err := validateMaintenanceWindow(scope, poolName, np.MaintenanceWindow); err != nil {
+		return err
 	}
 
 	if err := ValidateEphemeralStorage(scope, poolName, np.EphemeralStorage); err != nil {

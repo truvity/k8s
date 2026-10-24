@@ -1,0 +1,7 @@
+nodePools:
+  - name: general
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [m]
+    budgets:
+      - {nodes: zero}

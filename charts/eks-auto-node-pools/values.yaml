@@ -57,6 +57,11 @@ protect: true
 #       expireAfter / terminationGracePeriod / consolidationPolicy
 #                                          # optional: replace poolDefaults
 #       fastEmptyReclaim: false            # optional: reclaim ALL empty nodes at once
+#       budgets:                           # optional: more budgets, after the default one
+#         - nodes: "0"                     # nodes: a count or a percentage, as a string
+#           reasons: [Drifted, Underutilized]   # optional: Underutilized, Empty, Drifted
+#           schedule: "0 3 * * 2"          # cron, UTC; with duration, when the budget is active
+#           duration: 22h                  # hours and minutes
 #       nodeClassName: standard            # a class from nodeClasses; or
 #       nodeClass: {...}                   # a class of this pool's own (below);
 #                                          # neither: Auto Mode's built-in `default`

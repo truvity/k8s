@@ -36,6 +36,21 @@ nodePools:
     taints:
       - {key: durable, value: "true", effect: NoSchedule}
     nodeClassName: standard
+  # A pool that voluntary replacement may touch only inside a window: the
+  # budgets are the complement of Tue, Wed, Thu 01:00-03:00 UTC.
+  - name: windowed
+    archs: [arm64]
+    capacityTypes: [on-demand]
+    categories: [t, m]
+    consolidationPolicy: WhenEmpty
+    taints:
+      - {key: windowed, value: "true", effect: NoSchedule}
+    nodeClassName: standard
+    budgets:
+      - {nodes: "0", reasons: [Drifted, Underutilized], schedule: "0 3 * * 2", duration: 22h}
+      - {nodes: "0", reasons: [Drifted, Underutilized], schedule: "0 3 * * 3", duration: 22h}
+      - {nodes: "0", reasons: [Drifted, Underutilized], schedule: "0 3 * * 4", duration: 118h}
+      - {nodes: "20%"}
   - name: general
     weight: 10
     archs: [arm64, amd64]

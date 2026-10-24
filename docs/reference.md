@@ -1276,13 +1276,26 @@ them with pruning off.
 | `poolDefaults` | `336h`, `24h0m0s`, `WhenEmptyOrUnderutilized`, `5m` | `expireAfter`, `terminationGracePeriod`, `consolidationPolicy`, `consolidateAfter`; a pool may override the first three. |
 | `classDefaults` | `DefaultAllow`, `Disabled`, `Random` | `networkPolicy`, `networkPolicyEventLogs`, `snatPolicy`. |
 | `protect` | `true` | `argocd.argoproj.io/sync-options: Prune=false,Delete=false` on every object. |
-| `nodePools[]` | none | `name`, `archs`, `capacityTypes`, `categories` required; `weight`, `taints`, `cpuLimit`, `maxInstanceCpu`, `instanceTypes`, `consolidateAfter`, `zones`, `fastEmptyReclaim`, `nodeClassName` or `nodeClass`. |
+| `nodePools[]` | none | `name`, `archs`, `capacityTypes`, `categories` required; `weight`, `taints`, `cpuLimit`, `maxInstanceCpu`, `instanceTypes`, `consolidateAfter`, `zones`, `fastEmptyReclaim`, `budgets`, `nodeClassName` or `nodeClass`. |
 | `nodeClasses[]` | none | `name`, `role`, `ephemeralStorage` required; `podSubnets`. Shared by pools through `nodeClassName`. |
 
 A pool with neither `nodeClass` nor `nodeClassName` uses Auto Mode's built-in
 `default` class, which this chart never renders. Each pool has one disruption
 budget of one node, so consolidation cannot move more than one node at a time;
 `fastEmptyReclaim` adds a budget that lets every empty node go at once.
+
+`budgets` adds more, after the default one: each has `nodes` (a count or a
+percentage, as a string) and optionally `reasons` (`Underutilized`, `Empty`,
+`Drifted`) and a `schedule` (cron, UTC) with a `duration` (hours and minutes).
+Karpenter applies the smallest budget active at a moment, so an extra budget
+only tightens. A maintenance window, the hours when drift and consolidation may
+replace a pool's nodes, is the complement: zero-node budgets for `Drifted` and
+`Underutilized` on the stretches between windows. `pkg/cluster`
+(`NodePoolSpec.MaintenanceWindow`: `Days`, `Start` as `HH:MM` UTC, `Duration`)
+derives those budgets, so a caller states the window, not its complement.
+Expiry (`expireAfter`), spot interruption and node repair are forceful and
+ignore every budget. A node is replaced at the weekday and clock time it was
+born, so a node created inside the window also expires inside it.
 
 
 ## `charts/local-volumes`
