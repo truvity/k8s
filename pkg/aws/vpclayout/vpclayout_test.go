@@ -152,3 +152,22 @@ func TestAZBlocks(t *testing.T) {
 		t.Fatalf("a prefix no subnet has gives none: %v", got)
 	}
 }
+
+func TestLogicalCIDRs(t *testing.T) {
+	t.Parallel()
+
+	subnets := []vpclayout.Calculated{
+		{Name: "cp", CIDR: "10.64.0.0/22"},
+		{Name: "pods", CIDR: "10.64.32.0/19"},
+		{Name: "worker", CIDR: "10.64.4.0/22"},
+	}
+
+	got := vpclayout.LogicalCIDRs(subnets, "cp", "worker")
+	if want := []string{"10.64.0.0/22", "10.64.4.0/22"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+
+	if got := vpclayout.LogicalCIDRs(subnets, "nope"); len(got) != 0 {
+		t.Fatalf("got %v, want none", got)
+	}
+}
