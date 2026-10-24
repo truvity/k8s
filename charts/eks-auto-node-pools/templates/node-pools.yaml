@@ -12,10 +12,19 @@ pool whose capacity arithmetic is for one shape.
 
 One disruption budget keeps consolidation from moving more than one node at a
 time per pool, so a consolidation storm cannot drain a pool at once.
+
+A pool MAY carry more budgets (`budgets`), after that one. Karpenter applies
+the smallest of the budgets active at a moment, so an extra budget can only
+tighten: a zero-node budget on a schedule closes a stretch of the week to
+drift and consolidation. A maintenance window is the complement of such
+stretches (the caller derives them, truvity/k8s pkg/cluster
+MaintenanceWindow). Expiry, spot interruption and node repair are forceful
+and ignore every budget.
 */ -}}
 {{- $d := .Values.poolDefaults }}
 {{- $seen := dict }}
 {{- range .Values.nodePools }}
+{{- $pool := . }}
 {{- if hasKey $seen .name }}{{ fail (printf "NodePool %s is defined twice" .name) }}{{ end }}
 {{- $_ := set $seen .name true }}
 {{- if and .nodeClass .nodeClassName }}{{ fail (printf "NodePool %s sets both nodeClass and nodeClassName" .name) }}{{ end }}
@@ -98,4 +107,14 @@ spec:
         nodes: "100%"
       {{- end }}
       - nodes: "1"
+      {{- range .budgets }}
+      - nodes: {{ .nodes | quote }}
+        {{- with .reasons }}
+        reasons: {{ toJson . }}
+        {{- end }}
+        {{- if .schedule }}
+        schedule: {{ .schedule | quote }}
+        duration: {{ required (printf "NodePool %s: a budget with a schedule needs a duration" $pool.name) .duration }}
+        {{- end }}
+      {{- end }}
 {{- end }}

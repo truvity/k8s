@@ -90,8 +90,33 @@
         "terminationGracePeriod": { "$ref": "#/definitions/duration" },
         "consolidationPolicy": { "enum": ["WhenEmpty", "WhenEmptyOrUnderutilized"] },
         "fastEmptyReclaim": { "type": "boolean" },
+        "budgets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/budget" }
+        },
         "nodeClassName": { "$ref": "#/definitions/name" },
         "nodeClass": { "$ref": "#/definitions/nodeClass" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodes"],
+      "properties": {
+        "nodes": { "type": "string", "pattern": "^([0-9]+|[0-9]{1,3}%)$" },
+        "reasons": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["Underutilized", "Empty", "Drifted"] }
+        },
+        "schedule": {
+          "type": "string",
+          "pattern": "^(@(yearly|annually|monthly|weekly|daily|midnight|hourly)|([^ ]+ ){4}[^ ]+)$"
+        },
+        "duration": { "type": "string", "pattern": "^(([0-9]+h)?([0-9]+m)?)$", "minLength": 2 }
+      },
+      "dependencies": {
+        "schedule": ["duration"],
+        "duration": ["schedule"]
       }
     },
     "nodeClass": {
