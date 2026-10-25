@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.38.1
 
 - `pkg/aws/vpclayout`: the default-network-ACL sources of a peered fleet, as pure functions over the `Plan` and `Peering` a consumer already holds. `Plan.HTTPSIngressCIDRs` (the supernet, plus for the hub the spokes the supernet does not cover; none for a network with no private subnet), `Plan.HubEgressCIDRs` (the hub's uncovered spokes, for the extra egress ports the caller picks) and `Plan.RouterlessSpokeIngress` (for a routerless spoke, the hub's public-subnet block and node-subnet blocks, as `HubSources`). Nothing existing changes.
 
