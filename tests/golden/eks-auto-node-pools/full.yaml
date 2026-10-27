@@ -117,6 +117,41 @@ spec:
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
+  name: volatile
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: standard
+      expireAfter: 336h
+      terminationGracePeriod: 24h0m0s
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64","amd64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot"]
+        - key: eks.amazonaws.com/instance-category
+          operator: In
+          values: ["m"]
+  disruption:
+    # WhenEmpty reclaims empty nodes and never moves a live workload for
+    # packing (recycling happens via expireAfter).
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+    budgets:
+      - nodes: "20%"
+
+---
+# Source: eks-auto-node-pools/templates/node-pools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
   name: durable
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false

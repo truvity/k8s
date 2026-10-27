@@ -33,6 +33,8 @@ var (
 	instanceTypePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*\.[a-z0-9]+$`)
 	// durationPattern is the chart's duration: whole hours, minutes, seconds.
 	durationPattern = regexp.MustCompile(`^([0-9]+(h|m|s))+$`)
+	// disruptionNodesPattern is the chart's budget size: a count or a percentage.
+	disruptionNodesPattern = regexp.MustCompile(`^([0-9]+|[0-9]{1,3}%)$`)
 )
 
 type (
@@ -74,6 +76,10 @@ type (
 		// "90s"; empty keeps the chart's poolDefaults.consolidateAfter.
 		ConsolidateAfter string
 		FastEmptyReclaim bool
+		// DisruptionNodes replaces the chart's default budget of one node: a
+		// count ("3") or a percentage ("20%"), for a large pool that one node
+		// at a time could never pack. Empty keeps one node.
+		DisruptionNodes string
 		// MaintenanceWindow, when set, confines the pool's voluntary node
 		// replacement (drift, consolidation) to the window. nil: no window,
 		// Karpenter replaces whenever its budget allows.
@@ -129,6 +135,7 @@ type (
 		ConsolidationPolicy    string   `yaml:"consolidationPolicy,omitempty"`
 		ConsolidateAfter       string   `yaml:"consolidateAfter,omitempty"`
 		FastEmptyReclaim       bool     `yaml:"fastEmptyReclaim,omitempty"`
+		DisruptionNodes        string   `yaml:"disruptionNodes,omitempty"`
 		// Budgets are disruption budgets beside the chart's own (one node at
 		// a time): derived from the pool's MaintenanceWindow.
 		Budgets []Budget `yaml:"budgets,omitempty"`
@@ -212,6 +219,7 @@ func DeriveNodePools(pools map[string]NodePoolSpec, defaults PoolDefaults, nodeR
 			ConsolidationPolicy:    np.ConsolidationPolicy,
 			ConsolidateAfter:       np.ConsolidateAfter,
 			FastEmptyReclaim:       np.FastEmptyReclaim,
+			DisruptionNodes:        np.DisruptionNodes,
 			Zones:                  np.Zones,
 			NodeClassName:          np.NodeClass,
 		}
@@ -369,6 +377,10 @@ func ValidateNodePool(scope, poolName string, np *NodePoolSpec, classes map[stri
 
 	if np.ConsolidateAfter != "" && !durationPattern.MatchString(np.ConsolidateAfter) {
 		return fmt.Errorf("%s: node_pools.%s.consolidate_after %q is not a duration like 90s or 2m", scope, poolName, np.ConsolidateAfter)
+	}
+
+	if np.DisruptionNodes != "" && !disruptionNodesPattern.MatchString(np.DisruptionNodes) {
+		return fmt.Errorf("%s: node_pools.%s.disruption_nodes %q is not a count like 3 or a percentage like 20%%", scope, poolName, np.DisruptionNodes)
 	}
 
 	if err := validateMaintenanceWindow(scope, poolName, np.MaintenanceWindow); err != nil {

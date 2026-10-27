@@ -27,6 +27,13 @@ nodePools:
       role: example-node-role
       podSubnets: true
       ephemeralStorage: {size: 200Gi, iops: 3000, throughput: 125}
+  # A large stateless pool: the default budget is a share of the nodes.
+  - name: volatile
+    archs: [arm64, amd64]
+    capacityTypes: [spot]
+    categories: [m]
+    disruptionNodes: "20%"
+    nodeClassName: standard
   # Pools on a shared class.
   - name: durable
     archs: [arm64]

@@ -90,6 +90,7 @@
         "terminationGracePeriod": { "$ref": "#/definitions/duration" },
         "consolidationPolicy": { "enum": ["WhenEmpty", "WhenEmptyOrUnderutilized"] },
         "fastEmptyReclaim": { "type": "boolean" },
+        "disruptionNodes": { "type": "string", "pattern": "^([0-9]+|[0-9]{1,3}%)$" },
         "budgets": {
           "type": "array",
           "items": { "$ref": "#/definitions/budget" }
