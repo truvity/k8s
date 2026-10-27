@@ -1276,12 +1276,13 @@ them with pruning off.
 | `poolDefaults` | `336h`, `24h0m0s`, `WhenEmptyOrUnderutilized`, `5m` | `expireAfter`, `terminationGracePeriod`, `consolidationPolicy`, `consolidateAfter`; a pool may override the first three. |
 | `classDefaults` | `DefaultAllow`, `Disabled`, `Random` | `networkPolicy`, `networkPolicyEventLogs`, `snatPolicy`. |
 | `protect` | `true` | `argocd.argoproj.io/sync-options: Prune=false,Delete=false` on every object. |
-| `nodePools[]` | none | `name`, `archs`, `capacityTypes`, `categories` required; `weight`, `taints`, `cpuLimit`, `maxInstanceCpu`, `instanceTypes`, `consolidateAfter`, `zones`, `fastEmptyReclaim`, `budgets`, `nodeClassName` or `nodeClass`. |
+| `nodePools[]` | none | `name`, `archs`, `capacityTypes`, `categories` required; `weight`, `taints`, `cpuLimit`, `maxInstanceCpu`, `instanceTypes`, `consolidateAfter`, `zones`, `fastEmptyReclaim`, `disruptionNodes`, `budgets`, `nodeClassName` or `nodeClass`. |
 | `nodeClasses[]` | none | `name`, `role`, `ephemeralStorage` required; `podSubnets`. Shared by pools through `nodeClassName`. |
 
 A pool with neither `nodeClass` nor `nodeClassName` uses Auto Mode's built-in
 `default` class, which this chart never renders. Each pool has one disruption
-budget of one node, so consolidation cannot move more than one node at a time;
+budget of one node (`disruptionNodes` sets another count or percentage), so
+consolidation cannot move more than one node at a time;
 `fastEmptyReclaim` adds a budget that lets every empty node go at once.
 
 `budgets` adds more, after the default one: each has `nodes` (a count or a

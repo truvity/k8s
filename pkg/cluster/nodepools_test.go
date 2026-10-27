@@ -164,6 +164,9 @@ func TestValidateNodePool(t *testing.T) {
 		{name: "instance type", pool: "p", np: cluster.NodePoolSpec{InstanceTypes: []string{"r6g.2xlarge"}, ConsolidateAfter: "90s"}},
 		{name: "bad instance type", pool: "p", np: cluster.NodePoolSpec{InstanceTypes: []string{"2xlarge"}}, want: "instance_types"},
 		{name: "bad consolidate after", pool: "p", np: cluster.NodePoolSpec{ConsolidateAfter: "soon"}, want: "consolidate_after"},
+		{name: "disruption percentage", pool: "p", np: cluster.NodePoolSpec{DisruptionNodes: "20%"}},
+		{name: "disruption count", pool: "p", np: cluster.NodePoolSpec{DisruptionNodes: "3"}},
+		{name: "bad disruption nodes", pool: "p", np: cluster.NodePoolSpec{DisruptionNodes: "many"}, want: "disruption_nodes"},
 		{name: "blank zone", pool: "p", np: cluster.NodePoolSpec{Zones: []string{""}}, want: "empty entry"},
 		{name: "duplicate zone", pool: "p", np: cluster.NodePoolSpec{Zones: []string{"a", "a"}}, want: "twice"},
 	} {

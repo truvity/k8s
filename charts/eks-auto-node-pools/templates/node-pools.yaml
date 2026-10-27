@@ -11,7 +11,10 @@ the exact types the pool may buy (node.kubernetes.io/instance-type), for a
 pool whose capacity arithmetic is for one shape.
 
 One disruption budget keeps consolidation from moving more than one node at a
-time per pool, so a consolidation storm cannot drain a pool at once.
+time per pool, so a consolidation storm cannot drain a pool at once. A pool
+whose size makes one node at a time too slow to ever pack (a large stateless
+spot pool) raises it with `disruptionNodes` (a count or a percentage); the
+`budgets` below still only tighten it.
 
 A pool MAY carry more budgets (`budgets`), after that one. Karpenter applies
 the smallest of the budgets active at a moment, so an extra budget can only
@@ -106,7 +109,7 @@ spec:
       - reasons: [Empty]
         nodes: "100%"
       {{- end }}
-      - nodes: "1"
+      - nodes: {{ .disruptionNodes | default "1" | quote }}
       {{- range .budgets }}
       - nodes: {{ .nodes | quote }}
         {{- with .reasons }}

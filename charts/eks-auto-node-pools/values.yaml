@@ -57,6 +57,7 @@ protect: true
 #       expireAfter / terminationGracePeriod / consolidationPolicy
 #                                          # optional: replace poolDefaults
 #       fastEmptyReclaim: false            # optional: reclaim ALL empty nodes at once
+#       disruptionNodes: "1"               # optional: the default budget, a count or a percentage, as a string
 #       budgets:                           # optional: more budgets, after the default one
 #         - nodes: "0"                     # nodes: a count or a percentage, as a string
 #           reasons: [Drifted, Underutilized]   # optional: Underutilized, Empty, Drifted
