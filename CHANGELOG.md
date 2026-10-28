@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.40.0
 
 - `pkg/aws/vpcpeering`: `RouteTables` (new) builds one side's route table map from the VPC outputs: the public route table under `PublicRouteTableKey` and each private one under its zone name. `pkg/aws/vpclayout`: `SubnetsByZone` (new) lists a logical subnet's IDs, and its zone names, in zone-name order. Both replace copies consumers kept.
 
