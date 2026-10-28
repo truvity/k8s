@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write
       packages: write
-    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@51bc0eb7d5d89931d336219f87bde091deaf48ed # v5.4.0
+    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@690acf2363bb57e0af99d62bfe88c894a8f68f0a # v5.9.0
     with:
       # ko publishes cmd/identity-check to ghcr.io/truvity/k8s/identity-check.
       ko-docker-repo: ghcr.io/truvity/k8s
@@ -38,7 +38,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: truvity/ci-workflows/.github/workflows/sign-images.yaml@51bc0eb7d5d89931d336219f87bde091deaf48ed # v5.4.0
+    uses: truvity/ci-workflows/.github/workflows/sign-images.yaml@690acf2363bb57e0af99d62bfe88c894a8f68f0a # v5.9.0
     with:
       images: ${{ needs.release.outputs.images }}
 
@@ -57,7 +57,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: truvity/ci-actions/setup-devbox@70af68e36bd7061fb866e0660c4c945eb91f35dd # v3.0.1
+      - uses: truvity/ci-actions/setup-devbox@1cb80aafbf111e79a09c202651c3865e09c964d9 # v3.7.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish the CRD charts that are not yet published
