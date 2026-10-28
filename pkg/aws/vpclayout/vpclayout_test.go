@@ -171,3 +171,17 @@ func TestLogicalCIDRs(t *testing.T) {
 		t.Fatalf("got %v, want none", got)
 	}
 }
+
+func TestSubnetsByZone(t *testing.T) {
+	t.Parallel()
+
+	zones, ids := vpclayout.SubnetsByZone(map[string]string{"zone-c": "s-c", "zone-a": "s-a", "zone-b": "s-b"})
+
+	if !reflect.DeepEqual(zones, []string{"zone-a", "zone-b", "zone-c"}) || !reflect.DeepEqual(ids, []string{"s-a", "s-b", "s-c"}) {
+		t.Fatalf("got %v %v", zones, ids)
+	}
+
+	if z, i := vpclayout.SubnetsByZone(nil); len(z) != 0 || len(i) != 0 {
+		t.Fatalf("nil map: %v %v", z, i)
+	}
+}
