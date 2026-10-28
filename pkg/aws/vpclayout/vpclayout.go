@@ -335,3 +335,23 @@ func LogicalCIDRs(subnets []Calculated, prefixes ...string) []string {
 
 	return out
 }
+
+// SubnetsByZone lists the subnet IDs of one logical subnet, given as zone name
+// to ID, in zone-name order, with the zone names in the same order. A caller
+// that hands the IDs to a resource (a load balancer, an autoscaling group)
+// gets the same order on every run, whatever the map's iteration order.
+func SubnetsByZone(byZone map[string]string) (zones, ids []string) {
+	zones = make([]string, 0, len(byZone))
+	for z := range byZone {
+		zones = append(zones, z)
+	}
+
+	sort.Strings(zones)
+
+	ids = make([]string, len(zones))
+	for i, z := range zones {
+		ids[i] = byZone[z]
+	}
+
+	return zones, ids
+}

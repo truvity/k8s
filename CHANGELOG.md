@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/vpcpeering`: `RouteTables` (new) builds one side's route table map from the VPC outputs: the public route table under `PublicRouteTableKey` and each private one under its zone name. `pkg/aws/vpclayout`: `SubnetsByZone` (new) lists a logical subnet's IDs, and its zone names, in zone-name order. Both replace copies consumers kept.
+
 ## v0.39.0
 
 - `eks-auto-node-pools` chart and `pkg/cluster`: `disruptionNodes` on a pool (`NodePoolSpec.DisruptionNodes`, a count or a percentage as a string) replaces the default budget of one node. For a large stateless spot pool that one node at a time could never pack. Unset keeps `nodes: "1"`, so nothing renders differently until a consumer sets it; `budgets` still only tighten it.
