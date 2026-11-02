@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write
       packages: write
-    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@690acf2363bb57e0af99d62bfe88c894a8f68f0a # v5.9.0
+    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@92b77363d8fb3a422562287a71107c122dc9637a # v5.12.0
     with:
       # ko publishes cmd/identity-check to ghcr.io/truvity/k8s/identity-check.
       ko-docker-repo: ghcr.io/truvity/k8s
@@ -38,7 +38,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: truvity/ci-workflows/.github/workflows/sign-images.yaml@690acf2363bb57e0af99d62bfe88c894a8f68f0a # v5.9.0
+    uses: truvity/ci-workflows/.github/workflows/sign-images.yaml@92b77363d8fb3a422562287a71107c122dc9637a # v5.12.0
     with:
       images: ${{ needs.release.outputs.images }}
 
