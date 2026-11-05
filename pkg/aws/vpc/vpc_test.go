@@ -1,6 +1,7 @@
 package vpc_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -58,6 +59,11 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 		// What AWS fills in: an IPv6 /56 from the documentation range.
 		state["ipv6CidrBlock"] = resource.NewStringProperty("2001:db8:abcd:ab00::/56")
 		state["defaultNetworkAclId"] = resource.NewStringProperty("acl-default")
+	}
+
+	if args.TypeToken == "aws:s3/bucketV2:BucketV2" {
+		// What AWS fills in, so a policy built from the ARN is known.
+		state["arn"] = resource.NewStringProperty("arn:aws:s3:::" + args.Inputs["bucket"].StringValue())
 	}
 
 	return args.Name + "-id", state, nil
@@ -1274,7 +1280,10 @@ func TestFlowLogsToS3(t *testing.T) {
 
 	find(t, res.regs, "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock", "net-flow-log-bucket-public-access")
 	find(t, res.regs, "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2", "net-flow-log-bucket-encryption")
-	find(t, res.regs, "aws:s3/bucketPolicy:BucketPolicy", "net-flow-log-bucket-policy")
+	p := find(t, res.regs, "aws:s3/bucketPolicy:BucketPolicy", "net-flow-log-bucket-policy")
+	if got := putObjectResource(t, p); got != "arn:aws:s3:::flow-bucket/AWSLogs/acct-1/*" {
+		t.Errorf("log delivery PutObject resource: %q", got)
+	}
 
 	l := find(t, res.regs, "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2", "net-flow-log-bucket-lifecycle")
 	rules := l.inputs["rules"].ArrayValue()
@@ -1311,6 +1320,13 @@ func TestFlowLogsFieldsAndParquet(t *testing.T) {
 	f := find(t, res.regs, "aws:ec2/flowLog:FlowLog", "net-flow-log")
 	if str(f, "logFormat") != format {
 		t.Errorf("log format: %v", f.inputs["logFormat"])
+	}
+
+	// With Hive-compatible prefixes AWS writes under
+	// AWSLogs/aws-account-id=<account>/, not AWSLogs/<account>/.
+	p := find(t, res.regs, "aws:s3/bucketPolicy:BucketPolicy", "net-flow-log-bucket-policy")
+	if got := putObjectResource(t, p); got != "arn:aws:s3:::flow-bucket/AWSLogs/aws-account-id=acct-1/*" {
+		t.Errorf("log delivery PutObject resource with Hive prefixes: %q", got)
 	}
 
 	opts := f.inputs["destinationOptions"].ObjectValue()
@@ -1350,6 +1366,34 @@ func TestFlowLogsFieldsAndParquet(t *testing.T) {
 	if _, ok := f.inputs["destinationOptions"]; ok {
 		t.Error("destination options with the CloudWatch destination")
 	}
+}
+
+// putObjectResource is the Resource of the bucket policy's log delivery
+// write statement.
+func putObjectResource(t *testing.T, r registration) string {
+	t.Helper()
+
+	var doc struct {
+		Statement []struct {
+			Sid      string
+			Resource any
+		}
+	}
+
+	if err := json.Unmarshal([]byte(str(r, "policy")), &doc); err != nil {
+		t.Fatalf("bucket policy: %v (%v)", err, r.inputs["policy"])
+	}
+
+	for _, st := range doc.Statement {
+		if st.Sid == "AWSLogDeliveryWrite" {
+			s, _ := st.Resource.(string)
+			return s
+		}
+	}
+
+	t.Fatalf("no AWSLogDeliveryWrite statement: %s", str(r, "policy"))
+
+	return ""
 }
 
 func TestFlowLogsS3Validation(t *testing.T) {

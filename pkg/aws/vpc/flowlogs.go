@@ -214,6 +214,14 @@ func (b *builder) createS3FlowLogs() error {
 		return fmt.Errorf("create flow logs bucket encryption: %w", err)
 	}
 
+	// Log delivery writes under AWSLogs/<account>/, or under
+	// AWSLogs/aws-account-id=<account>/ with Hive-compatible prefixes; the
+	// grant covers only the prefix this flow log writes to.
+	prefix := s.AccountID
+	if s.HiveCompatiblePartitions {
+		prefix = "aws-account-id=" + s.AccountID
+	}
+
 	policy := pulumi.Sprintf(`{
   "Version": "2012-10-17",
   "Statement": [
@@ -222,7 +230,7 @@ func (b *builder) createS3FlowLogs() error {
       "Effect": "Allow",
       "Principal": {"Service": "delivery.logs.amazonaws.com"},
       "Action": "s3:PutObject",
-      "Resource": "%[1]s/AWSLogs/%[2]s/*",
+      "Resource": "%[1]s/AWSLogs/%[4]s/*",
       "Condition": {
         "StringEquals": {"aws:SourceAccount": "%[2]s", "s3:x-amz-acl": "bucket-owner-full-control"},
         "ArnLike": {"aws:SourceArn": "arn:%[3]s:logs:*:%[2]s:*"}
@@ -248,7 +256,7 @@ func (b *builder) createS3FlowLogs() error {
       "Condition": {"Bool": {"aws:SecureTransport": "false"}}
     }
   ]
-}`, bucket.Arn, s.AccountID, partition)
+}`, bucket.Arn, s.AccountID, partition, prefix)
 
 	pol, err := s3.NewBucketPolicy(b.ctx, b.child(Child{Kind: KindFlowLogBucketPolicy}), &s3.BucketPolicyArgs{
 		Bucket: bucket.ID(),
