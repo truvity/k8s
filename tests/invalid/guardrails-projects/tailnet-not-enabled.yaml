@@ -1,0 +1,3 @@
+# A row listing tailnets while tailnetIngress is off would admit nothing silently.
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}

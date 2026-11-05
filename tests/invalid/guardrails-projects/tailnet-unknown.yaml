@@ -1,0 +1,9 @@
+# A row may list only a tailnet declared under tailnetIngress.tailnets.
+networkPolicy:
+  tailnetIngress:
+    enabled: true
+    routerLabel: example.com/tailnet
+    tailnets:
+      corp: {allPorts: true}
+projects:
+  - {name: shop, kind: product, tailnets: [partner]}

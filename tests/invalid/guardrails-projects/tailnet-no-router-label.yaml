@@ -1,0 +1,8 @@
+# Without the router label no tailnet can be told apart.
+networkPolicy:
+  tailnetIngress:
+    enabled: true
+    tailnets:
+      corp: {allPorts: true}
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}

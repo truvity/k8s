@@ -57,6 +57,47 @@ networkPolicy:
     serviceCIDR: ""
     # Further NetworkPolicy peers that answer DNS, listed first.
     dnsPeers: []
+  # Ingress from tailnets, per tailnet: a row admits only the tailnets it
+  # lists in `tailnets`, each by its own identity, appended after `ingress`.
+  # A tailnet's identity is a namespace label: every subnet router namespace
+  # carries `routerLabel` with the name of its tailnet as the value, and a
+  # row listing tailnet `a` admits the router pods (`routerPodSelector`) of
+  # the namespaces labelled `<routerLabel>: a` only, plus that tailnet's own
+  # `peers` (sources no other tailnet uses, such as the address of its
+  # subnet router outside the cluster). A tailnet declares the ports its
+  # traffic may reach, or says `allPorts: true`; exactly one of the two.
+  #
+  #   tailnetIngress:
+  #     enabled: true
+  #     routerLabel: example.com/tailnet
+  #     routerPodSelector: {matchLabels: {app.kubernetes.io/name: tailscaled}}
+  #     tailnets:
+  #       corp: {allPorts: true, peers: [{ipBlock: {cidr: 10.0.4.10/32}}]}
+  #       partner: {ports: [{port: 443, protocol: TCP}]}
+  #   projects:
+  #     - {name: shop, kind: product, tailnets: [corp]}
+  #
+  # A row that lists no tailnet admits none. A label that every router
+  # namespace carries, or a source range several tailnets share, cannot
+  # tell the tailnets apart; `shared` admits such peers, on every port,
+  # into every row that lists any tailnet. That is the behaviour before
+  # tailnets had an identity, kept for compatibility: it crosses tailnets,
+  # so it is off unless enabled, and needs a `reason`.
+  tailnetIngress:
+    enabled: false
+    # The namespace label whose value names a router namespace's tailnet.
+    # Required when enabled.
+    routerLabel: ""
+    # The router's pods in its namespace; empty selects every pod there.
+    routerPodSelector: {}
+    # By tailnet name (a label value): `ports` (NetworkPolicy ports) or
+    # `allPorts: true`, and optional further `peers`.
+    tailnets: {}
+    shared:
+      enabled: false
+      reason: ""
+      # NetworkPolicy peers, verbatim.
+      peers: []
 
 # --- Quotas -------------------------------------------------------------------
 # By profile name; a row names one in `quota`. A ResourceQuota (`hard`) and,
@@ -155,4 +196,5 @@ podIdentityAdmission:
 #       podIdentityRolePrefixes:           # with podIdentityAdmission: the roles the namespace's associations may bind
 #         - "arn:<partition>:iam::<account>:role/<cluster>-<project>."
 #       podIdentities: [test-s3]           # names under podIdentities.associations
+#       tailnets: [corp]                   # names under networkPolicy.tailnetIngress.tailnets
 projects: []

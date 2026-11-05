@@ -1,0 +1,9 @@
+# A tailnet declares its ports or says allPorts: true.
+networkPolicy:
+  tailnetIngress:
+    enabled: true
+    routerLabel: example.com/tailnet
+    tailnets:
+      corp: {}
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}

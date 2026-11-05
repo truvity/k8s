@@ -35,3 +35,44 @@ and the node ranges.
 {{- end -}}
 {{- toYaml $out -}}
 {{- end -}}
+
+{{/*
+networkPolicy.tailnetIngress: the ingress rules of one row's tailnets (a YAML
+list of rules with a description), appended after networkPolicy.ingress. One
+rule per tailnet the row lists, in name order: the router pods of the
+namespaces whose `routerLabel` names that tailnet, plus the tailnet's own
+`peers`, on its `ports` (or every port, with `allPorts`). Then, with `shared`
+on and for a row that lists any tailnet, the compatibility rule: `shared.peers`
+on every port, which no tailnet owns.
+Called as: include "guardrails-projects.tailnetIngress" (dict "root" $ "row" $p)
+*/}}
+{{- define "guardrails-projects.tailnetIngress" -}}
+{{- $t := .root.Values.networkPolicy.tailnetIngress | default dict -}}
+{{- $row := .row -}}
+{{- $out := list -}}
+{{- if and $row.tailnets (not $t.enabled) -}}
+{{- fail (printf "projects %s: lists tailnets, but networkPolicy.tailnetIngress is not enabled" $row.name) -}}
+{{- end -}}
+{{- if $t.enabled -}}
+{{- if not $t.routerLabel }}{{ fail "networkPolicy.tailnetIngress.routerLabel: the namespace label naming a router's tailnet is required" }}{{ end -}}
+{{- range $name := sortAlpha ($row.tailnets | default list) -}}
+{{- if not (hasKey ($t.tailnets | default dict) $name) }}{{ fail (printf "projects %s: tailnet %s is not under networkPolicy.tailnetIngress.tailnets" $row.name $name) }}{{ end -}}
+{{- $tn := index $t.tailnets $name | default dict -}}
+{{- if eq (not $tn.allPorts) (not $tn.ports) -}}
+{{- fail (printf "networkPolicy.tailnetIngress.tailnets.%s: declare its ports, or set allPorts: true for every port (exactly one of the two)" $name) -}}
+{{- end -}}
+{{- $router := dict "namespaceSelector" (dict "matchLabels" (dict $t.routerLabel $name)) -}}
+{{- with $t.routerPodSelector }}{{ $_ := set $router "podSelector" . }}{{ end -}}
+{{- $rule := dict "description" (printf "tailnet %s" $name) "from" (concat (list $router) ($tn.peers | default list)) -}}
+{{- with $tn.ports }}{{ $_ := set $rule "ports" . }}{{ end -}}
+{{- $out = append $out $rule -}}
+{{- end -}}
+{{- $s := $t.shared | default dict -}}
+{{- if and $s.enabled $row.tailnets -}}
+{{- if not $s.reason }}{{ fail "networkPolicy.tailnetIngress.shared: a reason is required (the peers cross tailnets)" }}{{ end -}}
+{{- if not $s.peers }}{{ fail "networkPolicy.tailnetIngress.shared.peers: at least one peer is required when enabled" }}{{ end -}}
+{{- $out = append $out (dict "description" (printf "tailnets, shared (compatibility): %s" $s.reason) "from" $s.peers) -}}
+{{- end -}}
+{{- end -}}
+{{- toYaml $out -}}
+{{- end -}}
