@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"regexp"
 	"slices"
 	"sort"
 
@@ -295,6 +296,12 @@ type FlowLogs struct {
 	// AggregationSeconds is the maximum aggregation interval: 60 or 600.
 	// Default 60.
 	AggregationSeconds int
+	// Fields are the record's fields, in order, by their AWS names
+	// ("srcaddr", "pkt-dstaddr", "interface-id", ...): the flow log's custom
+	// format. Empty keeps the AWS default format (version 2 fields). The
+	// format cannot change in place: setting, changing or clearing it
+	// replaces an existing flow log.
+	Fields []string
 	// PermissionsBoundaryARN, when set, is the role's permissions boundary.
 	PermissionsBoundaryARN pulumi.StringInput
 }
@@ -312,7 +319,25 @@ type FlowLogsS3Bucket struct {
 	Partition string
 	// ExpireDays expires objects after this many days. Default 90.
 	ExpireDays int
+	// FileFormat is FlowLogsPlainText (default) or FlowLogsParquet, the
+	// format of the delivered objects. Parquet is columnar and compressed,
+	// so a query engine such as Athena scans less of it; AWS charges a
+	// conversion fee on top of delivery. Changing it replaces the flow log.
+	FileFormat string
+	// HiveCompatiblePartitions writes the objects under Hive-style
+	// key=value prefixes (aws-account-id=/aws-service=/aws-region=/year=/
+	// month=/day=), so a query engine can project the partitions without
+	// a crawler. Changing it replaces the flow log.
+	HiveCompatiblePartitions bool
 }
+
+// File formats for FlowLogsS3Bucket.FileFormat.
+const (
+	// FlowLogsPlainText delivers gzip-compressed text objects (the default).
+	FlowLogsPlainText = "plain-text"
+	// FlowLogsParquet delivers Apache Parquet objects.
+	FlowLogsParquet = "parquet"
+)
 
 // Args configures the component.
 type Args struct {
@@ -753,6 +778,12 @@ func (a *Args) checkMisc() []error {
 		if f.S3.ExpireDays < 0 {
 			errs = append(errs, fmt.Errorf("args: FlowLogs.S3.ExpireDays %d is negative", f.S3.ExpireDays))
 		}
+
+		switch f.S3.FileFormat {
+		case "", FlowLogsPlainText, FlowLogsParquet:
+		default:
+			errs = append(errs, fmt.Errorf("args: FlowLogs.S3.FileFormat %q is not plain-text or parquet", f.S3.FileFormat))
+		}
 	default:
 		errs = append(errs, fmt.Errorf("args: FlowLogs.Destination %q is not cloud-watch-logs or s3", f.Destination))
 	}
@@ -773,8 +804,23 @@ func (a *Args) checkMisc() []error {
 		errs = append(errs, fmt.Errorf("args: FlowLogs.AggregationSeconds %d is neither 60 nor 600", f.AggregationSeconds))
 	}
 
+	for i, field := range f.Fields {
+		if !flowLogField.MatchString(field) {
+			errs = append(errs, fmt.Errorf("args: FlowLogs.Fields[%d] %q is not a flow log field name", i, field))
+		}
+
+		if slices.Contains(f.Fields[:i], field) {
+			errs = append(errs, fmt.Errorf("args: FlowLogs.Fields[%d] %q is listed twice", i, field))
+		}
+	}
+
 	return errs
 }
+
+// flowLogField is the shape of an AWS flow log field name: lower case words
+// joined by hyphens (srcaddr, pkt-dstaddr, ecs-cluster-arn). AWS refuses a
+// name it does not know when the flow log is created.
+var flowLogField = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // Validate reports every problem with args at once, or returns nil. It does
 // not check the naming hook, which needs the component name (New does).
