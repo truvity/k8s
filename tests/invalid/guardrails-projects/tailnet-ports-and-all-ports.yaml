@@ -1,0 +1,9 @@
+# Ports and allPorts together say two different things.
+networkPolicy:
+  tailnetIngress:
+    enabled: true
+    routerLabel: example.com/tailnet
+    tailnets:
+      corp: {allPorts: true, ports: [{port: 443, protocol: TCP}]}
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}

@@ -1,11 +1,13 @@
 {{- /*
 One baseline NetworkPolicy per row: default deny both ways, the namespace's own
-pods, and the shared rules (a rule with `kinds` only for rows of those kinds).
+pods, the shared rules (a rule with `kinds` only for rows of those kinds) and,
+with networkPolicy.tailnetIngress, one rule per tailnet the row lists.
 Prunable: the Namespace carries the protection.
 */ -}}
 {{- $np := deepCopy .Values.networkPolicy -}}
 {{- $_ := set $np "egress" (concat ($np.egress | default list) (include "guardrails-projects.eksEgress" . | fromYamlArray)) -}}
 {{- range $p := .Values.projects }}
+{{- $rules := dict "ingress" (concat ($np.ingress | default list) (include "guardrails-projects.tailnetIngress" (dict "root" $ "row" $p) | fromYamlArray)) "egress" $np.egress }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -19,7 +21,7 @@ spec:
     - Egress
   {{- range $dir := list "ingress" "egress" }}
   {{- $any := $np.intraNamespace }}
-  {{- range $r := index $np $dir | default list }}{{ if or (not $r.kinds) (has $p.kind $r.kinds) }}{{ $any = true }}{{ end }}{{ end }}
+  {{- range $r := index $rules $dir | default list }}{{ if or (not $r.kinds) (has $p.kind $r.kinds) }}{{ $any = true }}{{ end }}{{ end }}
   {{- if not $any }}
   {{ $dir }}: []
   {{- else }}
@@ -29,7 +31,7 @@ spec:
     - {{ ternary "from" "to" (eq $dir "ingress") }}:
         - podSelector: {}
     {{- end }}
-    {{- range $r := index $np $dir | default list }}
+    {{- range $r := index $rules $dir | default list }}
     {{- if or (not $r.kinds) (has $p.kind $r.kinds) }}
     # {{ required (printf "networkPolicy.%s: every rule needs a description" $dir) $r.description }}
     - {{ toYaml (omit $r "description" "kinds") | indent 6 | trim }}

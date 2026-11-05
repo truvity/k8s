@@ -1,0 +1,209 @@
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: partner-app
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox-alice
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: batch
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+    # tailnet corp
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/tailnet: corp
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: tailscaled
+      - ipBlock:
+          cidr: 10.0.4.10/32
+    # tailnets, shared (compatibility): the subnet routers share one masquerade range
+    - from:
+      - ipBlock:
+          cidr: 10.0.4.0/22
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: partner-app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+    # tailnet partner
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/tailnet: partner
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: tailscaled
+      ports:
+      - port: 443
+        protocol: TCP
+      - port: 8080
+        protocol: TCP
+    # tailnets, shared (compatibility): the subnet routers share one masquerade range
+    - from:
+      - ipBlock:
+          cidr: 10.0.4.0/22
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: sandbox-alice
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+    # tailnet corp
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/tailnet: corp
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: tailscaled
+      - ipBlock:
+          cidr: 10.0.4.10/32
+    # tailnet partner
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            example.com/tailnet: partner
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: tailscaled
+      ports:
+      - port: 443
+        protocol: TCP
+      - port: 8080
+        protocol: TCP
+    # tailnets, shared (compatibility): the subnet routers share one masquerade range
+    - from:
+      - ipBlock:
+          cidr: 10.0.4.0/22
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-baseline
+  namespace: batch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+    # the shared gateway
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}

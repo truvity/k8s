@@ -1,0 +1,12 @@
+# The shared compatibility peers cross tailnets: they need a reason.
+networkPolicy:
+  tailnetIngress:
+    enabled: true
+    routerLabel: example.com/tailnet
+    tailnets:
+      corp: {allPorts: true}
+    shared:
+      enabled: true
+      peers: [{ipBlock: {cidr: 10.0.4.0/22}}]
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}

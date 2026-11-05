@@ -144,6 +144,10 @@
           "enforce"
         ]
       }
+    },
+    "tailnetName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
     }
   },
   "properties": {
@@ -220,6 +224,68 @@
               "type": "array",
               "items": {
                 "type": "object"
+              }
+            }
+          }
+        },
+        "tailnetIngress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "routerLabel": {
+              "type": "string",
+              "pattern": "^(([a-z0-9]([-a-z0-9.]*[a-z0-9])?)/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$|^$"
+            },
+            "routerPodSelector": {
+              "type": "object"
+            },
+            "tailnets": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/tailnetName"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "ports": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "allPorts": {
+                    "type": "boolean"
+                  },
+                  "peers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
+            "shared": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "peers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
               }
             }
           }
@@ -419,6 +485,13 @@
             "items": {
               "type": "string",
               "pattern": "^arn:[a-z-]+:iam::[^:]*:role/[^/]+$"
+            }
+          },
+          "tailnets": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/definitions/tailnetName"
             }
           }
         }

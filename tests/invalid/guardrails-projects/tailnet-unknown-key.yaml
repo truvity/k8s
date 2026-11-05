@@ -1,0 +1,9 @@
+# An unknown key under a tailnet is refused, not ignored.
+networkPolicy:
+  tailnetIngress:
+    enabled: true
+    routerLabel: example.com/tailnet
+    tailnets:
+      corp: {allPorts: true, cidrs: [10.0.4.10/32]}
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}

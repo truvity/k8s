@@ -1450,7 +1450,7 @@ renders, per row:
 | Object | From | Protected |
 |---|---|---|
 | Namespace | `name`, `labels`, Pod Security (`podSecurity` defaults, or the row's `level`/`modes` with a required `reason`) | yes, unless the row is `deletable` |
-| NetworkPolicy `networkPolicy.name` | default deny both ways, `intraNamespace`, the shared `ingress`/`egress` rules (verbatim, each with `description`; a rule with `kinds` only for rows of those kinds) | no |
+| NetworkPolicy `networkPolicy.name` | default deny both ways, `intraNamespace`, the shared `ingress`/`egress` rules (verbatim, each with `description`; a rule with `kinds` only for rows of those kinds), and one ingress rule per tailnet the row lists in `tailnets` (`networkPolicy.tailnetIngress`) | no |
 | ResourceQuota `quotaName`, LimitRange `limitRangeName` | the `quotas` profile the row names in `quota` | no |
 | Roles, RoleBindings | the row's `roles` and `roleBindings` (to a `clusterRole` or a `role` of the row) | no |
 | IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
@@ -1471,6 +1471,24 @@ instance metadata service (`169.254.169.254/32`), the EKS Pod Identity Agent
 (`169.254.170.23/32`, 80) and DNS (53 UDP and TCP to `dnsPeers`, verbatim, then
 the service range and the node ranges). `nodeCIDRs` and `serviceCIDR` are
 required when it is on.
+
+`networkPolicy.tailnetIngress` (`enabled: true`, off by default) admits tailnets
+per tailnet, after the shared `ingress` rules. A tailnet is told apart by a
+namespace label: every subnet router namespace carries `routerLabel` with its
+tailnet's name as the value. A row lists the tailnets it admits in `tailnets`
+and gets one rule per tailnet, in name order: the router pods
+(`routerPodSelector`; empty selects every pod) of the namespaces labelled
+`<routerLabel>: <tailnet>`, then the tailnet's own `peers` (sources no other
+tailnet uses, such as the address of its subnet router outside the cluster), on
+the tailnet's `ports`, or on every port with `allPorts: true`. A tailnet sets
+exactly one of the two. A row that lists no tailnet admits none. A label every
+router namespace carries, or a source range several tailnets share, cannot tell
+tailnets apart: `shared` (`enabled`, a required `reason`, `peers`) admits such
+peers on every port into every row that lists any tailnet. That is the
+behaviour from before tailnets had an identity, kept for compatibility, and it
+crosses tailnets. A row that lists a tailnet not under
+`tailnetIngress.tailnets`, or lists any while `tailnetIngress` is off, is
+refused.
 
 `podIdentityAdmission` (`enabled: true`, off by default) renders a
 ValidatingAdmissionPolicy and its binding (`podIdentityAdmission.name`, default

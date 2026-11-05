@@ -1,0 +1,31 @@
+# Ingress per tailnet: two tailnets, each identified by its router
+# namespace's label value; a row admits only the tailnets it lists (one, two,
+# none), on the ports each declares, and the shared compatibility peers only
+# where it lists any tailnet.
+networkPolicy:
+  name: tenant-baseline
+  ingress:
+    - description: the shared gateway
+      from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gateway}}
+  tailnetIngress:
+    enabled: true
+    routerLabel: example.com/tailnet
+    routerPodSelector: {matchLabels: {app.kubernetes.io/name: tailscaled}}
+    tailnets:
+      corp:
+        allPorts: true
+        peers:
+          - ipBlock: {cidr: 10.0.4.10/32}
+      partner:
+        ports: [{port: 443, protocol: TCP}, {port: 8080, protocol: TCP}]
+    shared:
+      enabled: true
+      reason: the subnet routers share one masquerade range
+      peers:
+        - ipBlock: {cidr: 10.0.4.0/22}
+projects:
+  - {name: shop, kind: product, tailnets: [corp]}
+  - {name: partner-app, kind: product, tailnets: [partner]}
+  - {name: sandbox-alice, kind: employee, tailnets: [partner, corp]}
+  - {name: batch, kind: product}
