@@ -2,6 +2,7 @@ package vpc
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/ec2"
@@ -118,6 +119,7 @@ func (b *builder) createFlowLogs() error {
 		LogDestination:         group.Arn,
 		IamRoleArn:             role.Arn,
 		MaxAggregationInterval: pulumi.Int(orDefault(f.AggregationSeconds, defaultAggregationSeconds)),
+		LogFormat:              logFormat(f.Fields),
 		Tags:                   b.tags(flowChild, nil, nil),
 	}, b.childOpts()...)
 	if err != nil {
@@ -129,6 +131,36 @@ func (b *builder) createFlowLogs() error {
 	return nil
 }
 
+// logFormat is the custom format of fields ("${srcaddr} ${dstaddr}"), or
+// nil for the AWS default format, so a flow log without fields registers no
+// format at all.
+func logFormat(fields []string) pulumi.StringPtrInput {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	vars := make([]string, len(fields))
+	for i, f := range fields {
+		vars[i] = "${" + f + "}"
+	}
+
+	return pulumi.String(strings.Join(vars, " "))
+}
+
+// destinationOptions are the S3 delivery options, or nil when the bucket
+// asks for none of them, so a flow log on the defaults registers none.
+func destinationOptions(s FlowLogsS3Bucket) ec2.FlowLogDestinationOptionsPtrInput {
+	if s.FileFormat == "" && !s.HiveCompatiblePartitions {
+		return nil
+	}
+
+	return &ec2.FlowLogDestinationOptionsArgs{
+		FileFormat:               pulumi.String(orDefault(s.FileFormat, FlowLogsPlainText)),
+		HiveCompatiblePartitions: pulumi.Bool(s.HiveCompatiblePartitions),
+		PerHourPartition:         pulumi.Bool(false),
+	}
+}
+
 func groupOpts(f FlowLogs) []pulumi.ResourceOption {
 	if f.RetainLogGroup {
 		return []pulumi.ResourceOption{pulumi.RetainOnDelete(true)}
@@ -138,7 +170,8 @@ func groupOpts(f FlowLogs) []pulumi.ResourceOption {
 }
 
 // createS3FlowLogs registers the bucket (private, SSE-S3, TLS only, expiring)
-// and the flow log that delivers to it. The default log format is used.
+// and the flow log that delivers to it, in FlowLogs.Fields' format (the AWS
+// default without them) and FileFormat.
 func (b *builder) createS3FlowLogs() error {
 	a := b.args
 	f := a.FlowLogs
@@ -252,6 +285,8 @@ func (b *builder) createS3FlowLogs() error {
 		LogDestinationType:     pulumi.String("s3"),
 		LogDestination:         bucket.Arn,
 		MaxAggregationInterval: pulumi.Int(orDefault(f.AggregationSeconds, defaultAggregationSeconds)),
+		LogFormat:              logFormat(f.Fields),
+		DestinationOptions:     destinationOptions(s),
 		Tags:                   b.tags(flowChild, nil, nil),
 	}, b.childOpts(pulumi.DependsOn([]pulumi.Resource{pol}))...)
 	if err != nil {

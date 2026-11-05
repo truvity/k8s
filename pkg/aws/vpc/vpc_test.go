@@ -1177,8 +1177,14 @@ func TestRefusals(t *testing.T) {
 		"retention negative":     {func(a *vpc.Args) { a.FlowLogs.RetentionDays = -1 }, "negative"},
 		"traffic type":           {func(a *vpc.Args) { a.FlowLogs.TrafficType = "SOME" }, "TrafficType"},
 		"aggregation":            {func(a *vpc.Args) { a.FlowLogs.AggregationSeconds = 30 }, "AggregationSeconds"},
+		"field not a name":       {func(a *vpc.Args) { a.FlowLogs.Fields = []string{"${srcaddr}"} }, "not a flow log field name"},
+		"field twice":            {func(a *vpc.Args) { a.FlowLogs.Fields = []string{"srcaddr", "srcaddr"} }, "listed twice"},
 		"empty name":             {func(a *vpc.Args) { a.Names = func(vpc.Child) string { return "" } }, "empty name"},
 		"repeated name":          {func(a *vpc.Args) { a.Names = func(vpc.Child) string { return "same" } }, "for both"},
+		"file format": {func(a *vpc.Args) {
+			a.FlowLogs.Destination = vpc.FlowLogsS3
+			a.FlowLogs.S3 = vpc.FlowLogsS3Bucket{BucketName: "b", AccountID: "a", FileFormat: "orc"}
+		}, "FileFormat"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			res, err := run(t, base(), tc.mut)
@@ -1283,6 +1289,66 @@ func TestFlowLogsToS3(t *testing.T) {
 
 	if _, ok := f.inputs["iamRoleArn"]; ok {
 		t.Error("a role with the S3 destination")
+	}
+}
+
+func TestFlowLogsFieldsAndParquet(t *testing.T) {
+	fields := []string{"interface-id", "srcaddr", "dstaddr", "dstport", "protocol", "action", "pkt-srcaddr", "pkt-dstaddr"}
+	format := "${interface-id} ${srcaddr} ${dstaddr} ${dstport} ${protocol} ${action} ${pkt-srcaddr} ${pkt-dstaddr}"
+
+	res, err := run(t, base(), func(a *vpc.Args) {
+		a.FlowLogs.Destination = vpc.FlowLogsS3
+		a.FlowLogs.Fields = fields
+		a.FlowLogs.S3 = vpc.FlowLogsS3Bucket{
+			BucketName: "flow-bucket", AccountID: "acct-1",
+			FileFormat: vpc.FlowLogsParquet, HiveCompatiblePartitions: true,
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := find(t, res.regs, "aws:ec2/flowLog:FlowLog", "net-flow-log")
+	if str(f, "logFormat") != format {
+		t.Errorf("log format: %v", f.inputs["logFormat"])
+	}
+
+	opts := f.inputs["destinationOptions"].ObjectValue()
+	if opts["fileFormat"].StringValue() != "parquet" || !opts["hiveCompatiblePartitions"].BoolValue() ||
+		opts["perHourPartition"].BoolValue() {
+		t.Errorf("destination options: %v", opts)
+	}
+
+	// The defaults register neither input, so an existing flow log on them
+	// sees no diff (a change to either replaces it).
+	res, err = run(t, base(), func(a *vpc.Args) {
+		a.FlowLogs.Destination = vpc.FlowLogsS3
+		a.FlowLogs.S3 = vpc.FlowLogsS3Bucket{BucketName: "flow-bucket", AccountID: "acct-1"}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f = find(t, res.regs, "aws:ec2/flowLog:FlowLog", "net-flow-log")
+	for _, k := range []resource.PropertyKey{"logFormat", "destinationOptions"} {
+		if _, ok := f.inputs[k]; ok {
+			t.Errorf("%s registered on the defaults: %v", k, f.inputs[k])
+		}
+	}
+
+	// Fields apply to the CloudWatch destination too.
+	res, err = run(t, base(), func(a *vpc.Args) { a.FlowLogs.Fields = []string{"srcaddr", "dstaddr"} })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f = find(t, res.regs, "aws:ec2/flowLog:FlowLog", "net-flow-log")
+	if str(f, "logFormat") != "${srcaddr} ${dstaddr}" {
+		t.Errorf("CloudWatch log format: %v", f.inputs["logFormat"])
+	}
+
+	if _, ok := f.inputs["destinationOptions"]; ok {
+		t.Error("destination options with the CloudWatch destination")
 	}
 }
 

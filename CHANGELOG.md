@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `pkg/aws/vpc`: **custom flow log fields and Parquet delivery.** `FlowLogs.Fields` (new) lists the record's fields by their AWS names (`srcaddr`, `pkt-dstaddr`, `interface-id`, ...) and becomes the flow log's custom format, for either destination. With the S3 destination, `FlowLogsS3Bucket.FileFormat` (new, `FlowLogsPlainText` or `FlowLogsParquet`) picks the object format and `HiveCompatiblePartitions` (new) writes `key=value` prefixes that a query engine can project without a crawler. `Validate` refuses a field that is not a field name, a field listed twice and an unknown file format. Unset, none of them registers an input, so a flow log on the defaults sees no diff. AWS cannot change any of them in place: setting, changing or clearing one on an existing flow log replaces it.
+
 ## v0.41.0
 
 - `charts/guardrails-projects`: **ingress per tailnet.** `networkPolicy.tailnetIngress` (off by default) tells tailnets apart by a namespace label on each subnet router namespace (`routerLabel`, valued with the tailnet's name). A row lists the tailnets it admits in the new `tailnets`, and its baseline NetworkPolicy gets one ingress rule per listed tailnet: that tailnet's router pods (`routerPodSelector`) and its own `peers`, on the ports the tailnet declares (`ports`, or `allPorts: true`; exactly one). A row that lists no tailnet admits none. `shared` (off by default, a `reason` required) admits peers no tailnet owns, such as one label on every router or a masquerade range the routers share, on every port, into every row that lists any tailnet. That is the old behaviour of a single shared rule, kept for compatibility while a cluster still needs it. Nothing renders differently until a cluster enables `tailnetIngress`; to move, label each router namespace, list each row's tailnets, and drop the shared tailnet rule from `networkPolicy.ingress`.
