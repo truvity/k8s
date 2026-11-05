@@ -62,8 +62,10 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 	}
 
 	if args.TypeToken == "aws:s3/bucketV2:BucketV2" {
-		// What AWS fills in, so a policy built from the ARN is known.
-		state["arn"] = resource.NewStringProperty("arn:aws:s3:::" + args.Inputs["bucket"].StringValue())
+		// A stand-in for the ARN AWS fills in (not ARN-shaped: this
+		// repository publishes no literal ARN), so a policy built from it is
+		// known.
+		state["arn"] = resource.NewStringProperty(args.Inputs["bucket"].StringValue() + "-arn")
 	}
 
 	return args.Name + "-id", state, nil
@@ -1281,7 +1283,7 @@ func TestFlowLogsToS3(t *testing.T) {
 	find(t, res.regs, "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock", "net-flow-log-bucket-public-access")
 	find(t, res.regs, "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2", "net-flow-log-bucket-encryption")
 	p := find(t, res.regs, "aws:s3/bucketPolicy:BucketPolicy", "net-flow-log-bucket-policy")
-	if got := putObjectResource(t, p); got != "arn:aws:s3:::flow-bucket/AWSLogs/acct-1/*" {
+	if got := putObjectResource(t, p); got != "flow-bucket-arn/AWSLogs/acct-1/*" {
 		t.Errorf("log delivery PutObject resource: %q", got)
 	}
 
@@ -1325,7 +1327,7 @@ func TestFlowLogsFieldsAndParquet(t *testing.T) {
 	// With Hive-compatible prefixes AWS writes under
 	// AWSLogs/aws-account-id=<account>/, not AWSLogs/<account>/.
 	p := find(t, res.regs, "aws:s3/bucketPolicy:BucketPolicy", "net-flow-log-bucket-policy")
-	if got := putObjectResource(t, p); got != "arn:aws:s3:::flow-bucket/AWSLogs/aws-account-id=acct-1/*" {
+	if got := putObjectResource(t, p); got != "flow-bucket-arn/AWSLogs/aws-account-id=acct-1/*" {
 		t.Errorf("log delivery PutObject resource with Hive prefixes: %q", got)
 	}
 
