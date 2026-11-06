@@ -1,0 +1,8 @@
+# expect: is not used in irsa mode
+# An IRSA entry has no association to place.
+podIdentities:
+  mode: irsa
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3", associationNamespace: identity-system}
+projects:
+  - {name: shop, kind: product, podIdentities: [test-s3]}

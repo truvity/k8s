@@ -1,0 +1,16 @@
+# Both modes in one cluster: the default (Pod Identity) for test-s3 and wide,
+# IRSA for legacy, with its own annotation key. Only the Pod Identity entries
+# bring an association namespace, so only they are exempt from the association
+# guard.
+podIdentities:
+  clusterName: example
+  roleARNAnnotation: example.com/role-arn
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3", associationNamespace: identity-system}
+    wide: {mode: pod-identity, roleARN: "arn:example:iam::placeholder:role/example-wide", associationNamespace: wide-system}
+    legacy: {mode: irsa, roleARN: "arn:example:iam::placeholder:role/example-legacy"}
+podIdentityAdmission:
+  enabled: true
+projects:
+  - {name: shop, kind: product, podIdentities: [test-s3, legacy], podIdentityRolePrefixes: ["arn:example:iam::placeholder:role/example-shop."]}
+  - {name: docs, kind: product, podIdentities: [wide, legacy]}

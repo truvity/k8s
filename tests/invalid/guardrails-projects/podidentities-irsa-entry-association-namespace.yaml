@@ -1,0 +1,8 @@
+# expect: is not used in irsa mode
+# The same, when only the entry says irsa and the cluster default is Pod Identity.
+podIdentities:
+  clusterName: example
+  associations:
+    test-s3: {mode: irsa, roleARN: "arn:example:iam::placeholder:role/example-test-s3", associationNamespace: identity-system}
+projects:
+  - {name: shop, kind: product, podIdentities: [test-s3]}

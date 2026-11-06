@@ -1,0 +1,5 @@
+# expect: value must be one of
+# The same, on one entry.
+podIdentities:
+  associations:
+    test-s3: {mode: sts, roleARN: "arn:example:iam::placeholder:role/example-test-s3"}
