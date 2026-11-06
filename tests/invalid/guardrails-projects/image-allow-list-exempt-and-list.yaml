@@ -1,0 +1,5 @@
+# expect: images.exempt and a list
+# An exempt row is not checked, so a list beside it would be dead text.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {exempt: "moving registries", sets: [acme]}}

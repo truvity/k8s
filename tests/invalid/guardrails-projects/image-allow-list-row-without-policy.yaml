@@ -1,0 +1,4 @@
+# expect: imageAllowList is not enabled
+# A list on a row while the policy is off would be ignored silently.
+projects:
+  - {name: shop, kind: product, images: {allow: [registry.example/acme/]}}

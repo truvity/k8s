@@ -1,0 +1,3 @@
+# expect: at '/imageAllowList/validationActions/0': value must be one of
+# validationActions are Deny, Warn and Audit.
+imageAllowList: {enabled: true, validationActions: [Block]}

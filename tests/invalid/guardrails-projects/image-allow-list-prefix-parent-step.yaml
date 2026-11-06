@@ -1,0 +1,5 @@
+# expect: must not contain //, /. or ..
+# A parent step in an entry is a path trick, not a repository.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["registry.example/acme/../evil/"]}}

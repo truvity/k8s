@@ -1,0 +1,5 @@
+# expect: 'Registry.example/acme/' does not match pattern
+# Entries are lower case, as the image references they are matched against.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["Registry.example/acme/"]}}

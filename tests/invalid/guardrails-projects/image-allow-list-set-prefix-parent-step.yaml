@@ -1,0 +1,5 @@
+# expect: imageAllowList.sets.acme: "registry.example/acme/../evil/" must not contain
+# The same refusal where the set is written.
+imageAllowList: {enabled: true, sets: {acme: ["registry.example/acme/../evil/"]}}
+projects:
+  - {name: shop, kind: product, images: {sets: [acme]}}

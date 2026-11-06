@@ -1,0 +1,5 @@
+# expect: 'registry.example/acme/api@sha256:0123' does not match pattern
+# An entry names a repository or a prefix, never a digest.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["registry.example/acme/api@sha256:0123"]}}

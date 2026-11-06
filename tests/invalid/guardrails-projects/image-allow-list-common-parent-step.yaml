@@ -1,0 +1,5 @@
+# expect: imageAllowList.common
+# The same refusal for the entries every namespace gets.
+imageAllowList: {enabled: true, common: ["registry.example/../evil/"]}
+projects:
+  - {name: shop, kind: product, images: {allow: [registry.example/acme/]}}

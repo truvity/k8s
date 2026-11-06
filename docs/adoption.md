@@ -131,6 +131,35 @@ identity policy of the project's builder role, not here. A `roleRef` is judged
 by the referenced `Role`'s name, because the policy cannot read the `Role` to
 learn its ARN. See the [reference](reference.md#guardrails-projects).
 
+## guardrails-projects: image allow-list
+
+`imageAllowList` (off by default) holds the registries a namespace's pods may
+pull from. Turning it on is a values change; the render of a cluster that leaves
+it off does not move. Roll it out per cluster, the least important first.
+
+1. **Write the lists.** Put each registry owner's prefixes in a `sets` entry, name
+   the sets in each row's `images.sets` (and add its own `images.allow`), and put
+   what every namespace needs (an injected sidecar, the team's debug image,
+   because `kubectl debug` is checked too) in `common`. A row that is not ready
+   gets `images.exempt` with the reason; it is a debt, and the reason says when it
+   ends. Write every image with its registry host: `nginx` never matches.
+2. **Close the hole.** Set `kinds` to the kinds of row that must be checked. From
+   then on a new row of such a kind without a list or an exemption fails the
+   render instead of passing unchecked.
+3. **Observe.** Keep `validationActions: [Warn, Audit]`. Nothing is refused. A pod
+   a controller creates warns nobody, so read the audit annotation
+   `offending-images` under the policy's name (`pod-image-allow-list`, unless you
+   renamed it): every offender of a request is listed there.
+4. **Enforce.** Switch to `[Deny, Audit]`. `Deny` with `Warn` is refused by the
+   chart. Rolling back is the previous values. A pod that is already running is
+   never evicted: the policy judges a create, and an update that changes an image.
+
+Know what it does not check. A namespace with no row is not checked, and neither
+is a row without a list; `kinds` and `exempt` are what keep that visible. The
+policy judges the image string, not what a registry serves under it, so the
+registry side still has to keep tags immutable. See the
+[reference](reference.md#guardrails-projects).
+
 ## Upgrading
 
 Breaking changes are `Breaking:` bullets in the [CHANGELOG](../CHANGELOG.md)

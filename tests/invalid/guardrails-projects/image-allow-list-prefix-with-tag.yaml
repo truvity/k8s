@@ -1,0 +1,5 @@
+# expect: 'registry.example/acme/api:1' does not match pattern
+# An entry names a repository or a prefix, never a tag.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["registry.example/acme/api:1"]}}
