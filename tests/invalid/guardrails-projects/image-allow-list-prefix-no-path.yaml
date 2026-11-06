@@ -1,0 +1,5 @@
+# expect: 'registry.example' does not match pattern
+# A host alone is not an entry: write host/ for a whole registry.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["registry.example"]}}

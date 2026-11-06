@@ -1,0 +1,5 @@
+# expect: 'registry.example/acme/*' does not match pattern
+# No wildcard: a trailing slash is the prefix.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["registry.example/acme/*"]}}

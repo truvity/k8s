@@ -1455,6 +1455,7 @@ renders, per row:
 | Roles, RoleBindings | the row's `roles` and `roleBindings` (to a `clusterRole` or a `role` of the row) | no |
 | IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
 | ValidatingAdmissionPolicy and binding `podIdentityAdmission.name` | the rows' `podIdentityRolePrefixes`, with `podIdentityAdmission.enabled` | no |
+| ValidatingAdmissionPolicy and binding `imageAllowList.name` | the rows' `images` (`sets`, `allow`, `exempt`), with `imageAllowList.enabled`, `common` and `sets` | no |
 | ServiceAccount, PodIdentityAssociation `<name>-<identity>` | the row's `podIdentities` (names under `podIdentities.associations`: `roleARN`, `associationNamespace`); the association lives in its own namespace | no |
 
 plus the shared `clusterRoles` (`aggregateTo`: admin, edit, view). Protected
@@ -1522,4 +1523,47 @@ refused: the API server warns and the audit log records the verdict); set it to
 `[Deny, Audit]` to enforce. `Deny` cannot be combined with `Warn` and the chart
 refuses it. `failurePolicy` is `Fail` (`Ignore` is the other value). Roll out in
 the default mode, read the audit log for the policy's name, then enforce.
+
+`imageAllowList` (`enabled: true`, off by default) renders a
+ValidatingAdmissionPolicy and its binding (`imageAllowList.name`, default
+`pod-image-allow-list`) over pods. One node role per cluster pulls every image,
+so what a namespace may run cannot come from where a registry sits; it comes from
+a list of registry prefixes per namespace, built from the rows. A pod is refused
+unless every image it names is on its namespace's list: `spec.containers`,
+`spec.initContainers`, `spec.ephemeralContainers` (the `pods/ephemeralcontainers`
+subresource, what `kubectl debug` adds) and image volumes
+(`spec.volumes[].image.reference`, pulled by the same node role). It needs a
+cluster that serves image volumes (Kubernetes 1.31 or later).
+
+An entry is `host[:port]/path`, lower case, with no `*`, tag or digest. One that
+ends in `/` is a path prefix: `registry.example/shop/` admits everything below
+`shop/`, and not `shop-evil/`. One that does not is exactly that repository, with
+or without a tag or a digest: `registry.example/shop/api` admits `api`, `api:1` and
+`api@sha256:...`, and not `api2`. A host alone is not an entry; `host/` is a whole
+registry. An image with no registry host (`nginx`) never matches: write the
+registry. An image containing `..`, `//` or `/.` never matches either, whatever
+its prefix says; entries containing them are refused at render. A row's list is
+`imageAllowList.common` (admitted in every checked namespace: an injected sidecar,
+a debug image) plus the `imageAllowList.sets` the row names in `images.sets` plus
+its own `images.allow`. A set holds one registry owner's prefixes; an unknown or
+empty set is refused.
+
+A namespace is checked when its row has a list. A namespace with no row, a row
+with no list, and a row with `images.exempt` (a required reason) are not: pods
+exist in every namespace, so refusing the unlisted would stop the platform, unlike
+the PodIdentityAssociation policy, which can default to deny. That hole is closed
+by `imageAllowList.kinds` instead: a row of a listed kind (`product`, say) with
+neither a list nor `images.exempt` fails the render, and so does `exempt` beside a
+list. `kinds` is empty by default, so no row is forced to carry one until a
+cluster sets it. A row with `images` while the policy is off is refused, since
+the list would be ignored.
+
+An update that leaves every image alone is skipped, so a label edit or a
+finalizer removal on a pod that predates the list cannot deadlock. The refusal
+names the first offending image and the namespace; the audit annotation
+`offending-images` on the request lists all of them, which is the signal to read
+when a controller creates the pod and no human sees the warning. The same
+`validationActions` and `failurePolicy` apply as for `podIdentityAdmission`:
+`[Warn, Audit]` by default, `[Deny, Audit]` to enforce, `Deny` with `Warn`
+refused.
 

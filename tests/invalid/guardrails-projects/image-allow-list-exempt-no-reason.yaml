@@ -1,0 +1,5 @@
+# expect: at '/projects/0/images/exempt': minLength
+# An exemption is a reasoned debt: the reason is required.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {exempt: ""}}

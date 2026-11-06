@@ -1,0 +1,5 @@
+# expect: which is not under imageAllowList.sets
+# A row names a set that is not defined: it would be checked against nothing.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {sets: [globex]}}

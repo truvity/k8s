@@ -1,0 +1,5 @@
+# expect: the set is empty
+# A set with no entry admits nothing.
+imageAllowList: {enabled: true, sets: {acme: []}}
+projects:
+  - {name: shop, kind: product, images: {sets: [acme]}}

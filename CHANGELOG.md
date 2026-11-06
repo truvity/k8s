@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `charts/guardrails-projects`: **image allow-list.** `imageAllowList.enabled` (off by default) renders a ValidatingAdmissionPolicy and binding that refuse a pod unless every image it names is on its namespace's list: containers, init containers, ephemeral containers (`kubectl debug`) and image volumes. A list is `imageAllowList.common` plus the `sets` and `allow` of the row's new `images` key, as `host[:port]/path` entries (a trailing `/` is a path prefix, otherwise exactly that repository, with any tag or digest). A row may carry `images.exempt` with its reason instead. `imageAllowList.kinds` (empty by default) names the row kinds that must carry a list or an exemption: such a row without either fails the render. It starts as `[Warn, Audit]` like `podIdentityAdmission`; `[Deny, Audit]` enforces, and the audit annotation `offending-images` lists every offender. A namespace with no list is not checked. Nothing renders differently until a cluster enables it, and no existing golden changes. `just lint` now also checks a negative fixture's `# expect: <text>` first line against helm's error.
+
 ## v0.43.0
 
 - `charts/cilium-crds`: **Cilium CRDs 1.20.4.** The chart moves from `1.20.1` to `1.20.4`, the upstream version it mirrors, and the release publishes it as `oci://ghcr.io/truvity/charts/cilium-crds:1.20.4`; `1.20.1` stays in the registry. Two CRDs change: `CiliumNodeConfig` now also serves the deprecated `cilium.io/v2alpha1` version (not the storage version), and `CiliumLocalRedirectPolicy` requires at least one entry in `spec.redirectBackend.toPorts` (`minItems: 1`). Install `cilium-crds` and the `cilium` chart at the same version: bump both to `1.20.4` together.

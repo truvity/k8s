@@ -1,0 +1,5 @@
+# expect: must not contain //, /. or ..
+# A double slash in an entry would admit a path no registry serves.
+imageAllowList: {enabled: true, sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {allow: ["registry.example/acme//x/"]}}

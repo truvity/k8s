@@ -1,0 +1,3 @@
+# expect: Deny and Warn cannot be combined
+# Deny and Warn cannot be combined in one binding.
+imageAllowList: {enabled: true, validationActions: [Deny, Warn]}

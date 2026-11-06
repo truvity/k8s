@@ -118,8 +118,10 @@ spec:
     - name: images
       expression: {{ include "guardrails-projects.podImages" "object" | replace "\n" " " | toJson }}
     - name: offenders
-      # STUB: admits everything; the real expression lands in the next commit.
-      expression: "variables.images.filter(i, false)"
+      expression: >-
+        variables.images.filter(i, i.contains('//') || i.contains('/.') || i.contains('..') || !(
+          variables.allow[request.namespace].prefixes.exists(p, i.startsWith(p)) ||
+          variables.allow[request.namespace].repositories.exists(r, i == r || i.startsWith(r + ':') || i.startsWith(r + '@'))))
   validations:
     - expression: "size(variables.offenders) == 0"
       messageExpression: >-

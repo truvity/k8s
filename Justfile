@@ -22,7 +22,8 @@ test:
 # Run linters. `config verify` first: `run` accepts unknown top-level
 # keys silently. Then every chart: `helm lint`, an unknown key must fail the
 # render, and every negative fixture under tests/invalid/<chart>/ must fail
-# too (one per refusal, so a loosened schema or a dropped `fail` is caught).
+# too (one per refusal, so a loosened schema or a dropped `fail` is caught),
+# with the text its first line `# expect:` names, when it names one.
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -40,8 +41,18 @@ lint:
         exit 1
       fi
       for values in tests/invalid/"$chart"/*.yaml; do
-        if helm template invalid "charts/$chart" -f "$values" >/dev/null 2>&1; then
+        if out="$(helm template invalid "charts/$chart" -f "$values" 2>&1)"; then
           echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+          exit 1
+        fi
+        # A fixture may name its reason on its first line, `# expect: <text>`:
+        # it must fail with that text in helm's error. Without it a fixture
+        # that fails for another reason (a key the schema does not know yet,
+        # a typo) passes the loop and guards nothing.
+        expect="$(sed -n '1s/^# expect: *//p' "$values")"
+        if [ -n "$expect" ] && ! grep -qF -- "$expect" <<<"$out"; then
+          echo "FAILED FOR ANOTHER REASON: $values expects: $expect" >&2
+          echo "$out" >&2
           exit 1
         fi
       done

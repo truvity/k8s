@@ -1,0 +1,3 @@
+# expect: at '/imageAllowList': additional properties 'enforce' not allowed
+# An unknown key under imageAllowList is an error, not a no-op.
+imageAllowList: {enabled: true, enforce: true}

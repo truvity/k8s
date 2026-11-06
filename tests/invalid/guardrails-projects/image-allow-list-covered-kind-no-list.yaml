@@ -1,0 +1,6 @@
+# expect: must carry an image allow-list
+# A row of a kind the policy covers has a list or an exemption, never neither.
+imageAllowList: {enabled: true, kinds: [product], sets: {acme: [registry.example/acme/]}}
+projects:
+  - {name: shop, kind: product, images: {sets: [acme]}}
+  - {name: docs, kind: product}

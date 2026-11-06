@@ -1,0 +1,5 @@
+# expect: must carry an image allow-list
+# The common entries are not a row's own list.
+imageAllowList: {enabled: true, kinds: [product], common: [registry.example/mesh/]}
+projects:
+  - {name: docs, kind: product}
