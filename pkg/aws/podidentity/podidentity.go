@@ -4,15 +4,40 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/eks"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+
+	"github.com/truvity/k8s/pkg/aws/oidcissuer"
 )
 
 // TypeToken is the Pulumi type of the component.
 const TypeToken = "truvity:k8s/aws:PodIdentity"
+
+// Mode says how pods prove the role: EKS Pod Identity (the default) or IRSA,
+// a federated web identity from an OIDC issuer.
+type Mode string
+
+const (
+	// ModePodIdentity is the default: the role trusts the EKS Pod Identity
+	// service and one association per service account binds it.
+	ModePodIdentity Mode = ""
+	// ModeIRSA trusts the cluster's OIDC provider through
+	// sts:AssumeRoleWithWebIdentity and registers no association: the pod's
+	// ServiceAccount carries RoleARNAnnotation instead.
+	ModeIRSA Mode = "irsa"
+)
+
+// RoleARNAnnotation is the ServiceAccount annotation that the pod identity
+// webhook reads to inject a role's credentials in ModeIRSA.
+const RoleARNAnnotation = "eks.amazonaws.com/role-arn"
+
+// DefaultPartition is Args.Partition when it is empty.
+const DefaultPartition = "aws"
 
 // Kind names which child a logical name is for.
 type Kind string
@@ -109,14 +134,16 @@ type Args struct {
 
 	// ClusterName is the EKS cluster the associations are in. Pass the
 	// cluster's Name output to order the associations after the cluster.
-	// Required.
+	// Required in the Pod Identity mode; ModeIRSA registers no association,
+	// so it refuses one.
 	ClusterName pulumi.StringInput
 	// Region is set on each association when it is not empty; empty leaves
-	// the provider's region in force.
+	// the provider's region in force. Pod Identity mode only.
 	Region string
 
 	// Namespace and ServiceAccounts say which pods may assume the role: one
-	// association per service account. Required, no repeats.
+	// association per service account in the Pod Identity mode, one entry of
+	// the trust policy's subject in ModeIRSA. Required, no repeats.
 	Namespace       string
 	ServiceAccounts []string
 
@@ -128,7 +155,9 @@ type Args struct {
 
 	// AccountID and ClusterARN pin the default trust policy to the cluster:
 	// the source account and the source ARN EKS stamps on every assume.
-	// Required unless TrustPolicy is set.
+	// Required unless TrustPolicy is set. In ModeIRSA only AccountID is read
+	// (it names the account of the OIDC provider, unless ProviderARN is
+	// given) and ClusterARN is refused.
 	AccountID  string
 	ClusterARN string
 	// TrustPolicy replaces the default trust policy and is used verbatim.
@@ -143,10 +172,29 @@ type Args struct {
 	ManagedPolicy *ManagedPolicy
 
 	// IgnoreAssociationTags ignores changes to the associations' tags and
-	// tagsAll: for associations adopted with tags another tool set.
+	// tagsAll: for associations adopted with tags another tool set. Pod
+	// Identity mode only.
 	IgnoreAssociationTags bool
-	// Imports adopts existing resources.
+	// Imports adopts existing resources. Imports.Associations is Pod Identity
+	// mode only.
 	Imports Imports
+
+	// Mode picks Pod Identity (empty, the default) or ModeIRSA.
+	Mode Mode
+	// Issuer, Partition and ProviderARN are for ModeIRSA and refused in the
+	// Pod Identity mode.
+	//
+	// Issuer is the cluster's service account issuer URL: https, without a
+	// trailing slash. It is the OIDC provider's URL, and its host and path
+	// key the trust policy's conditions. Required unless TrustPolicy is set.
+	Issuer string
+	// Partition is the ARN partition of the derived provider ARN. Empty
+	// means DefaultPartition.
+	Partition string
+	// ProviderARN is the ARN of the IAM OIDC provider for Issuer. Empty
+	// derives it from the partition, AccountID and Issuer, which is the ARN
+	// of the provider that oidcissuer registers.
+	ProviderARN string
 
 	// Names overrides the logical names of the children. Nil uses
 	// DefaultName.
@@ -184,6 +232,10 @@ func (a *Args) plan(component string) []Child {
 		out = append(out, Child{Component: component, Kind: KindAttachment})
 	}
 
+	if a.Mode == ModeIRSA {
+		return out
+	}
+
 	for _, sa := range a.ServiceAccounts {
 		out = append(out, Child{Component: component, Kind: KindAssociation, Key: sa})
 	}
@@ -199,7 +251,9 @@ func (a *Args) Validate() error {
 		errs = append(errs, errors.New("args: Provider is nil"))
 	}
 
-	if a.ClusterName == nil {
+	errs = append(errs, a.checkMode()...)
+
+	if a.Mode == ModePodIdentity && a.ClusterName == nil {
 		errs = append(errs, errors.New("args: ClusterName is nil"))
 	}
 
@@ -228,7 +282,7 @@ func (a *Args) Validate() error {
 		seen[sa] = true
 	}
 
-	if a.TrustPolicy == nil {
+	if a.TrustPolicy == nil && a.Mode == ModePodIdentity {
 		if a.AccountID == "" {
 			errs = append(errs, errors.New("args: AccountID is empty and no TrustPolicy is given"))
 		}
@@ -236,6 +290,10 @@ func (a *Args) Validate() error {
 		if a.ClusterARN == "" {
 			errs = append(errs, errors.New("args: ClusterARN is empty and no TrustPolicy is given"))
 		}
+	}
+
+	if a.TrustPolicy == nil && a.Mode == ModeIRSA {
+		errs = append(errs, a.checkIRSATrust()...)
 	}
 
 	if p := a.InlinePolicy; p != nil {
@@ -259,7 +317,7 @@ func (a *Args) Validate() error {
 	}
 
 	for sa := range a.Imports.Associations {
-		if !seen[sa] {
+		if a.Mode == ModePodIdentity && !seen[sa] {
 			errs = append(errs, fmt.Errorf("args: Imports.Associations names %q, which is not in ServiceAccounts", sa))
 		}
 	}
@@ -267,6 +325,89 @@ func (a *Args) Validate() error {
 	errs = append(errs, a.checkNames("")...)
 
 	return errors.Join(errs...)
+}
+
+// checkMode refuses an unknown Mode, and every field the mode would ignore
+// silently: a field that does nothing is a mistake the caller cannot see.
+func (a *Args) checkMode() []error {
+	var errs []error
+
+	switch a.Mode {
+	case ModePodIdentity:
+		for _, f := range []struct {
+			name string
+			set  bool
+		}{
+			{"Issuer", a.Issuer != ""},
+			{"ProviderARN", a.ProviderARN != ""},
+			{"Partition", a.Partition != ""},
+		} {
+			if f.set {
+				errs = append(errs, fmt.Errorf("args: %s is set, but only Mode %q reads it", f.name, ModeIRSA))
+			}
+		}
+	case ModeIRSA:
+		for _, f := range []struct {
+			name string
+			set  bool
+		}{
+			{"ClusterName", a.ClusterName != nil},
+			{"ClusterARN", a.ClusterARN != ""},
+			{"Region", a.Region != ""},
+			{"IgnoreAssociationTags", a.IgnoreAssociationTags},
+			{"Imports.Associations", len(a.Imports.Associations) > 0},
+		} {
+			if f.set {
+				errs = append(errs, fmt.Errorf("args: %s is set, but Mode %q registers no association", f.name, ModeIRSA))
+			}
+		}
+	default:
+		errs = append(errs, fmt.Errorf("args: unknown Mode %q: it is empty (Pod Identity) or %q", a.Mode, ModeIRSA))
+	}
+
+	return errs
+}
+
+// checkIRSATrust refuses what the IRSA trust policy cannot be rendered from:
+// the issuer, the account or provider ARN, and a wildcard service account.
+func (a *Args) checkIRSATrust() []error {
+	var errs []error
+
+	if a.Issuer == "" {
+		errs = append(errs, errors.New("args: Issuer is empty and no TrustPolicy is given"))
+	} else if err := checkIssuer(a.Issuer); err != nil {
+		errs = append(errs, err)
+	}
+
+	if a.ProviderARN == "" && a.AccountID == "" {
+		errs = append(errs, errors.New("args: AccountID is empty and no ProviderARN or TrustPolicy is given"))
+	}
+
+	for i, sa := range a.ServiceAccounts {
+		if strings.ContainsAny(sa, "*?") {
+			errs = append(errs, fmt.Errorf("args: ServiceAccounts[%d]: %q is a wildcard; write the trust policy and pass it as TrustPolicy", i, sa))
+		}
+	}
+
+	return errs
+}
+
+// checkIssuer accepts an https URL with a host, without a query, a fragment
+// or a trailing slash: the provider's URL and the token's issuer claim carry
+// none, and the trust policy's condition keys are built from its host and path.
+func checkIssuer(issuer string) error {
+	u, err := url.Parse(issuer)
+
+	switch {
+	case err != nil || u.Scheme != "https" || u.Host == "":
+		return fmt.Errorf("args: Issuer %q is not an https URL", issuer)
+	case u.RawQuery != "" || u.Fragment != "" || u.User != nil || strings.Contains(issuer, "?") || strings.Contains(issuer, "#"):
+		return fmt.Errorf("args: Issuer %q has a query, a fragment or a user", issuer)
+	case strings.HasSuffix(issuer, "/"):
+		return fmt.Errorf("args: Issuer %q has a trailing slash; the issuer is the URL without it", issuer)
+	}
+
+	return nil
 }
 
 func (a *Args) nameFunc() NameFunc {
@@ -345,6 +486,34 @@ func (a *Args) trustPolicy() (string, error) {
 	return string(raw), nil
 }
 
+// irsaTrustPolicy renders the trust policy of ModeIRSA: the cluster's OIDC
+// provider may assume the role through sts:AssumeRoleWithWebIdentity, for the
+// issuer's audience and only for the namespace's service accounts.
+func (a *Args) irsaTrustPolicy() (string, error) {
+	providerARN := a.ProviderARN
+
+	if providerARN == "" {
+		u, err := url.Parse(a.Issuer)
+		if err != nil {
+			return "", fmt.Errorf("render trust policy: %w", err)
+		}
+
+		partition := a.Partition
+		if partition == "" {
+			partition = DefaultPartition
+		}
+
+		providerARN = "arn:" + partition + ":iam::" + a.AccountID + ":oidc-provider/" + u.Host + u.Path
+	}
+
+	subjects := make([]string, len(a.ServiceAccounts))
+	for i, sa := range a.ServiceAccounts {
+		subjects[i] = a.Namespace + "/" + sa
+	}
+
+	return oidcissuer.TrustPolicy(providerARN, a.Issuer, "", subjects...)
+}
+
 // New registers the component and its children. It returns an error,
 // registering nothing, when args.Validate does or when Names returns an empty
 // or repeated name.
@@ -365,7 +534,12 @@ func New(ctx *pulumi.Context, name string, args *Args, opts ...pulumi.ResourceOp
 
 	trust := args.TrustPolicy
 	if trust == nil {
-		doc, err := args.trustPolicy()
+		render := args.trustPolicy
+		if args.Mode == ModeIRSA {
+			render = args.irsaTrustPolicy
+		}
+
+		doc, err := render()
 		if err != nil {
 			return nil, fmt.Errorf("podidentity %s: %w", name, err)
 		}
@@ -478,6 +652,10 @@ func (b *builder) build(trust pulumi.StringInput) error {
 		}, b.childOpts(false, importOpt(a.Imports.Attachment)...)...); err != nil {
 			return fmt.Errorf("attach policy: %w", err)
 		}
+	}
+
+	if a.Mode == ModeIRSA {
+		return nil
 	}
 
 	for _, sa := range a.ServiceAccounts {

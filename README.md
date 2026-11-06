@@ -19,7 +19,7 @@ capabilities.
 | `pkg/aws/pullthroughcache` — ECR pull-through cache rules and their credential secrets, `truvity:k8s/aws:PullThroughCache` | Pulumi component |
 | `pkg/aws/vpcpeering` — a cross-account, cross-region VPC peering with its routes, DNS-resolution options and private-zone associations, `truvity:k8s/aws:VpcPeering` | Pulumi component |
 | `pkg/aws/vpc` — a VPC with its subnets, route tables, gateways, NAT, IPv6, hardened defaults, gateway endpoints and flow logs, `truvity:k8s/aws:Vpc` | Pulumi component |
-| `pkg/aws/podidentity` — an EKS Pod Identity role with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component |
+| `pkg/aws/podidentity` — an EKS Pod Identity role (or, in IRSA mode, a web-identity role) with its trust policy, permissions and one association per service account, `truvity:k8s/aws:PodIdentity` | Pulumi component |
 | `pkg/aws/ekscluster` — an EKS Auto Mode cluster with its secrets key, cluster and node roles and control-plane log group, `truvity:k8s/aws:EksCluster` | Pulumi component |
 | `pkg/aws/eksoidc` — the external OIDC issuer association of an EKS cluster, `truvity:k8s/aws:EksOidc` | Pulumi component |
 | `pkg/aws/ackfactory` — the AWS identity of the ACK controllers: the IAM and EKS controller roles (the EKS one optionally for the IAMRoleSelector feature gate), the service controllers' roles (adopting what is live, each with its own boundary), the per-project builder roles with opt-in tightenings and a builder per employee sandbox; plain functions, names are API | Go package |

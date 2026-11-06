@@ -162,6 +162,43 @@ The component creates no network ACL rules and no security group rules. A
 caller that owns a VPC's default network ACL owns its whole rule list; admit
 cross-VPC traffic where the ACL and the groups are defined.
 
+### IRSA mode
+
+`Mode: podidentity.ModeIRSA` is for a cluster that runs the pod identity
+webhook against its own OIDC issuer instead of EKS Pod Identity (see
+[Talos](talos.md) and `pkg/aws/oidcissuer`). The role trusts the cluster's IAM
+OIDC provider through `sts:AssumeRoleWithWebIdentity`, scoped by the issuer's
+audience (`sts.amazonaws.com`) and by `system:serviceaccount:<namespace>:<sa>`
+for each service account, a list in the order given (rendered by
+`oidcissuer.TrustPolicy`). No association is registered: the pod's
+`ServiceAccount` carries the annotation `podidentity.RoleARNAnnotation`
+(`eks.amazonaws.com/role-arn`) with `RoleARN`. The children, their names and
+the role's inputs are the default mode's, minus the associations.
+
+```go
+id, err := podidentity.New(ctx, "reports", &podidentity.Args{
+	Provider:        provider,
+	Mode:            podidentity.ModeIRSA,
+	Issuer:          "https://issuer.example/cluster", // the cluster's service account issuer
+	AccountID:       accountID,                       // of the OIDC provider (or set ProviderARN)
+	Namespace:       "reports",
+	ServiceAccounts: []string{"reports-api"},
+	RoleName:        "reports",
+}, pulumi.DependsOn([]pulumi.Resource{issuer})) // the provider must exist before the role is used
+```
+
+The provider ARN is `ProviderARN`, or `arn:<Partition>:iam::<AccountID>:oidc-provider/<issuer host and path>`,
+which is the ARN `oidcissuer` registers. In this mode the component refuses,
+all at once with the other problems: an `Issuer` that is not an `https` URL,
+or has a query, a fragment or a trailing slash; no `AccountID` and no
+`ProviderARN`; a wildcard service account (write the trust policy and pass it
+as `TrustPolicy`, which is used verbatim in both modes); and the fields that
+would be ignored, `ClusterName`, `ClusterARN`, `Region`, `IgnoreAssociationTags`
+and `Imports.Associations`. In the Pod Identity mode `Issuer`, `ProviderARN`
+and `Partition` are refused for the same reason, and an unknown `Mode` is
+refused. The zero value of every new field leaves the default mode exactly as
+it was.
+
 ### Children
 
 `Names` receives a `Child` (`Component`, `Kind`, `Side`, `Family`, `Key`) and
@@ -384,6 +421,8 @@ id, err := podidentity.New(ctx, "reports", &podidentity.Args{
 | `ManagedPolicy` | `Name`, `Description`, `Document`: a customer-managed policy the component creates and attaches. |
 | `IgnoreAssociationTags` | Ignore changes to the associations' `tags` and `tagsAll`. |
 | `Imports` | IDs of existing `Role`, `Policy`, `Attachment` and per-service-account `Associations` to adopt. Empty creates the child. |
+| `Mode` | `""` (`ModePodIdentity`, the default) or `ModeIRSA`; see below. |
+| `Issuer`, `Partition`, `ProviderARN` | `ModeIRSA` only: the cluster's service account issuer URL, the ARN partition (empty: `aws`) and the IAM OIDC provider's ARN (empty: derived). Refused in the Pod Identity mode. |
 | `Names` | Naming hook, `func(Child) string`. Nil: `DefaultName`. |
 | `Protect` | `bool`; false (the default) protects nothing. |
 
@@ -413,7 +452,7 @@ logical name; the defaults below use the component name `<c>`. Names are API.
 | role | `aws:iam/role:Role` | `<c>-role` | always |
 | inline policy | `aws:iam/rolePolicy:RolePolicy` | `<c>-role-policy` | `InlinePolicy` is set |
 | attachment | `aws:iam/rolePolicyAttachment:RolePolicyAttachment` | `<c>-attachment` | `ManagedPolicy` is set |
-| association | `aws:eks/podIdentityAssociation:PodIdentityAssociation` | `<c>-pia-<sa>` | one per service account (`Key` is the service account) |
+| association | `aws:eks/podIdentityAssociation:PodIdentityAssociation` | `<c>-pia-<sa>` | one per service account (`Key` is the service account), in the Pod Identity mode only |
 
 ### Adopting existing resources
 
