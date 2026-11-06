@@ -218,7 +218,8 @@ func TestImageAllowListEnforcesPerRow(t *testing.T) {
 	// row names the image, exactly as in an observed one.
 	for _, ns := range []string{"shop", "ci-shop"} {
 		p := pod{ns: ns, containers: []string{"evil.test/x"}}
-		if got := admitPod(t, pol, "CREATE", "", p.object(), map[string]any{}); !strings.Contains(got, "image evil.test/x is not on the allow-list of namespace "+ns) {
+		got := admitPod(t, pol, "CREATE", "", p.object(), map[string]any{})
+		if !strings.Contains(got, "image evil.test/x is not on the allow-list of namespace "+ns) {
 			t.Errorf("%s: got %q", ns, got)
 		}
 	}
