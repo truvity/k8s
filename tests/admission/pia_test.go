@@ -28,7 +28,16 @@ type policy struct {
 		ValidationActions []string                            `yaml:"validationActions"`
 		MatchConditions   []struct{ Name, Expression string } `yaml:"matchConditions"`
 		Variables         []struct{ Name, Expression string }
-		Validations       []struct{ Expression, Message, Reason string }
+		Validations       []struct {
+			Expression        string
+			Message           string
+			MessageExpression string `yaml:"messageExpression"`
+			Reason            string
+		}
+		AuditAnnotations []struct {
+			Key             string
+			ValueExpression string `yaml:"valueExpression"`
+		} `yaml:"auditAnnotations"`
 	}
 }
 

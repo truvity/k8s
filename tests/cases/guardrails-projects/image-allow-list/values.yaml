@@ -1,0 +1,28 @@
+# The image allow-list: a list per namespace from a shared set, the row's own
+# entries and the common ones; a path prefix and an exact repository; a row of
+# a covered kind that is exempt with its reason; rows that are not checked (a
+# kind outside `kinds` with no list). Observe mode: [Warn, Audit].
+imageAllowList:
+  enabled: true
+  kinds: [product, ci]
+  common:
+    - registry.example/mesh/
+    - registry.example:5000/debug/toolbox
+  sets:
+    acme: [registry.example/acme/, mirror.test/acme/ci/runner]
+    globex: [registry.example/globex/]
+projects:
+  - name: shop
+    kind: product
+    images: {sets: [acme], allow: [registry.example/shared/base]}
+  - name: docs
+    kind: product
+    images: {sets: [globex, acme]}
+  - name: ci-shop
+    kind: ci
+    images: {allow: [mirror.test/acme/ci/]}
+  - name: legacy
+    kind: product
+    images: {exempt: "images move to the company registry by the end of the quarter"}
+  - name: sandbox
+    kind: employee

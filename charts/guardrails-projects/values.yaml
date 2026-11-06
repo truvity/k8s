@@ -177,6 +177,49 @@ podIdentityAdmission:
   #   exemptNamespaces: [cnpg-system]
   exemptNamespaces: []
 
+# --- Image allow-list ---------------------------------------------------------
+# A ValidatingAdmissionPolicy and its binding for the images of a namespace's
+# pods: containers, init containers, ephemeral containers (`kubectl debug`) and
+# image volumes. One node role per cluster pulls every image, so what a
+# namespace may run comes from a list of registry prefixes per namespace.
+#
+# An entry is `host[:port]/path`, lower case, no `*`, no tag, no digest.
+#   registry.example/shop/      a path prefix: everything below shop/, not shop-evil/
+#   registry.example/shop/api   exactly that repository, any tag or digest
+# An image with no registry host (`nginx`) never matches: write the registry.
+#
+#   imageAllowList:
+#     enabled: true
+#     kinds: [product, ci]                 # a row of these kinds MUST carry a list or `exempt`
+#     common: [registry.example/mesh/]     # admitted in every checked namespace
+#     sets:
+#       shop: [registry.example/shop/]
+#   projects:
+#     - {name: shop, kind: product, images: {sets: [shop], allow: [registry.example/tools/debug]}}
+#     - {name: legacy, kind: product, images: {exempt: "images move to the shop registry by Q3"}}
+#
+# A row's list is `common` plus its `sets` plus its `allow`. A row with none
+# (and not of a kind in `kinds`) is not checked, as is a namespace with no row:
+# pods exist in every namespace, so the platform's must not be refused by
+# default. The hole is closed by `kinds`, and by `exempt`, a reasoned debt.
+#
+# Off by default: the render is unchanged until a cluster turns it on. Roll
+# out in observe mode, read the audit annotation, then enforce:
+#   validationActions: [Warn, Audit]   # default: admitted, warned, audited
+#   validationActions: [Deny, Audit]   # enforce (Deny cannot be combined with Warn)
+imageAllowList:
+  enabled: false
+  name: pod-image-allow-list
+  validationActions: [Warn, Audit]
+  failurePolicy: Fail
+  # Row kinds that must carry an allow-list or an `exempt` reason. Empty: no
+  # row is forced to have one.
+  kinds: []
+  # Prefixes admitted in every checked namespace (an injected sidecar, a debug image).
+  common: []
+  # By name: the prefixes of one registry owner.
+  sets: {}
+
 # --- The rows -----------------------------------------------------------------
 # One per project namespace:
 #
@@ -197,4 +240,8 @@ podIdentityAdmission:
 #         - "arn:<partition>:iam::<account>:role/<cluster>-<project>."
 #       podIdentities: [test-s3]           # names under podIdentities.associations
 #       tailnets: [corp]                   # names under networkPolicy.tailnetIngress.tailnets
+#       images:                            # with imageAllowList: the registries its pods may pull from
+#         sets: [shop]                     # names under imageAllowList.sets
+#         allow: [registry.example/tools/debug]
+#         exempt: "<why the row is not checked>"   # instead of a list
 projects: []
