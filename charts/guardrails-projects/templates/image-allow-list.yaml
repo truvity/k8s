@@ -123,7 +123,7 @@ spec:
           variables.allow[request.namespace].prefixes.exists(p, i.startsWith(p)) ||
           variables.allow[request.namespace].repositories.exists(r, i == r || i.startsWith(r + ':') || i.startsWith(r + '@'))))
   validations:
-    - expression: "size(variables.offenders) == 0"
+    - expression: "variables.images.all(a, variables.images.all(b, variables.images.all(c, a != '' || b != '' || c != ''))) && size(variables.offenders) == 0"
       messageExpression: >-
         'image ' + variables.offenders[0] + ' is not on the allow-list of namespace ' + request.namespace +
         (size(variables.offenders) > 1 ? ' (and ' + string(size(variables.offenders) - 1) + ' more)' : '')
