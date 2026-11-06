@@ -1,0 +1,8 @@
+# expect: images.enforce needs an allow-list
+# A row that enforces must have a list to enforce: with none, it is not checked.
+imageAllowList:
+  enabled: true
+  sets:
+    acme: [registry.example/acme/]
+projects:
+  - {name: shop, kind: product, images: {enforce: true}}

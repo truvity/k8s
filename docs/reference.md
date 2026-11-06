@@ -1494,7 +1494,7 @@ renders, per row:
 | Roles, RoleBindings | the row's `roles` and `roleBindings` (to a `clusterRole` or a `role` of the row) | no |
 | IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
 | ValidatingAdmissionPolicy and binding `podIdentityAdmission.name` | the rows' `podIdentityRolePrefixes`, with `podIdentityAdmission.enabled` | no |
-| ValidatingAdmissionPolicy and binding `imageAllowList.name` | the rows' `images` (`sets`, `allow`, `exempt`), with `imageAllowList.enabled`, `common` and `sets` | no |
+| ValidatingAdmissionPolicy and binding `imageAllowList.name`, and a second binding `<name>-enforce` when a row enforces | the rows' `images` (`sets`, `allow`, `exempt`, `enforce`), with `imageAllowList.enabled`, `common` and `sets` | no |
 | ServiceAccount, PodIdentityAssociation `<name>-<identity>` | the row's `podIdentities` (names under `podIdentities.associations`: `roleARN`, `associationNamespace`); the association lives in its own namespace | no |
 
 plus the shared `clusterRoles` (`aggregateTo`: admin, edit, view). Protected
@@ -1605,4 +1605,19 @@ when a controller creates the pod and no human sees the warning. The same
 `validationActions` and `failurePolicy` apply as for `podIdentityAdmission`:
 `[Warn, Audit]` by default, `[Deny, Audit]` to enforce, `Deny` with `Warn`
 refused.
+
+`images.enforce: true` on a row (default `false`) enforces that namespace alone,
+whatever `validationActions` says. The chart then renders a second binding of
+the same policy, `<name>-enforce`, with `[Deny, Audit]`, that selects the
+enforcing rows' namespaces (`kubernetes.io/metadata.name` In the list), and the
+main binding selects every other namespace (NotIn the same list). The two
+partition the namespaces, so a namespace is judged by exactly one of them, and
+the policy, its messages and the audit annotation are the same in both. With no
+enforcing row the render is the single binding of before, byte for byte; with
+`validationActions` already holding `Deny` there is still one binding and
+`enforce` changes nothing. A row that enforces must have a list: `enforce` with
+`exempt`, or with no `sets` and no `allow`, fails the render, since a namespace
+with no list is not checked and there would be nothing to enforce. The enforcing
+namespaces are written in both bindings' selectors, so moving a row to enforce
+is a one-line values change that the diff of the rendered bindings shows.
 

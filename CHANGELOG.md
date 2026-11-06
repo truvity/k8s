@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `charts/guardrails-projects`: **enforce the image allow-list one namespace at a time.** A row's `images.enforce: true` (new, default `false`) makes that namespace refuse what is off its list, whatever `imageAllowList.validationActions` says. The chart renders a second binding of the same policy, `<name>-enforce` with `[Deny, Audit]`, that selects the enforcing rows' namespaces by `kubernetes.io/metadata.name`; the main binding gets the matching `NotIn` selector, so a namespace is judged by exactly one of the two. A row that enforces needs a list: `enforce` with `exempt`, or with neither `sets` nor `allow`, fails the render. Nothing renders differently until a row sets `enforce`: with no enforcing row, or with `validationActions` already holding `Deny`, there is still one binding, unchanged.
+
 ## v0.44.0
 
 - `charts/guardrails-projects`: **image allow-list.** `imageAllowList.enabled` (off by default) renders a ValidatingAdmissionPolicy and binding that refuse a pod unless every image it names is on its namespace's list: containers, init containers, ephemeral containers (`kubectl debug`) and image volumes. A list is `imageAllowList.common` plus the `sets` and `allow` of the row's new `images` key, as `host[:port]/path` entries (a trailing `/` is a path prefix, otherwise exactly that repository, with any tag or digest). A row may carry `images.exempt` with its reason instead. `imageAllowList.kinds` (empty by default) names the row kinds that must carry a list or an exemption: such a row without either fails the render. It starts as `[Warn, Audit]` like `podIdentityAdmission`; `[Deny, Audit]` enforces, and the audit annotation `offending-images` lists every offender. A namespace with no list is not checked. Nothing renders differently until a cluster enables it, and no existing golden changes. `just lint` now also checks a negative fixture's `# expect: <text>` first line against helm's error.

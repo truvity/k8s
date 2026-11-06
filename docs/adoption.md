@@ -150,9 +150,13 @@ it off does not move. Roll it out per cluster, the least important first.
    a controller creates warns nobody, so read the audit annotation
    `offending-images` under the policy's name (`pod-image-allow-list`, unless you
    renamed it): every offender of a request is listed there.
-4. **Enforce.** Switch to `[Deny, Audit]`. `Deny` with `Warn` is refused by the
-   chart. Rolling back is the previous values. A pod that is already running is
-   never evicted: the policy judges a create, and an update that changes an image.
+4. **Enforce, one namespace at a time.** Give the row whose audit annotation has
+   been quiet `images.enforce: true`. That namespace now refuses what is off its
+   list, while the others keep warning, and each next row is its own reviewed
+   change. When every row enforces, switch `validationActions` to `[Deny, Audit]`
+   and drop the per-row flags. `Deny` with `Warn` is refused by the chart.
+   Rolling back is the previous values. A pod that is already running is never
+   evicted: the policy judges a create, and an update that changes an image.
 
 Know what it does not check. A namespace with no row is not checked, and neither
 is a row without a list; `kinds` and `exempt` are what keep that visible. The
