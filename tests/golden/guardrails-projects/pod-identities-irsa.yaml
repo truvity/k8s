@@ -1,0 +1,128 @@
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: docs
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: docs
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: sandbox
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/pod-identities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-s3
+  namespace: shop
+  annotations:
+    "eks.amazonaws.com/role-arn": "arn:example:iam::placeholder:role/example-test-s3"
+
+---
+# Source: guardrails-projects/templates/pod-identities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-s3
+  namespace: docs
+  annotations:
+    "eks.amazonaws.com/role-arn": "arn:example:iam::placeholder:role/example-test-s3"
+
+---
+# Source: guardrails-projects/templates/pod-identities.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reader
+  namespace: docs
+  annotations:
+    "eks.amazonaws.com/role-arn": "arn:example:iam::placeholder:role/example-reader"

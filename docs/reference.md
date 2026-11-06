@@ -1495,7 +1495,7 @@ renders, per row:
 | IAMRoleSelector `<ackRoleSelectors.namePrefix><name>` | the row's `ackRoleARN`, bound to the namespace by name | yes |
 | ValidatingAdmissionPolicy and binding `podIdentityAdmission.name` | the rows' `podIdentityRolePrefixes`, with `podIdentityAdmission.enabled` | no |
 | ValidatingAdmissionPolicy and binding `imageAllowList.name` | the rows' `images` (`sets`, `allow`, `exempt`), with `imageAllowList.enabled`, `common` and `sets` | no |
-| ServiceAccount, PodIdentityAssociation `<name>-<identity>` | the row's `podIdentities` (names under `podIdentities.associations`: `roleARN`, `associationNamespace`); the association lives in its own namespace | no |
+| ServiceAccount, and PodIdentityAssociation `<name>-<identity>` unless the entry is `irsa` | the row's `podIdentities` (names under `podIdentities.associations`: `roleARN`, `associationNamespace`, `mode`); the association lives in its own namespace; an `irsa` entry's ServiceAccount carries the role in an annotation | no |
 
 plus the shared `clusterRoles` (`aggregateTo`: admin, edit, view). Protected
 objects carry `argocd.argoproj.io/sync-options: Prune=false,Delete=false`
@@ -1562,6 +1562,25 @@ refused: the API server warns and the audit log records the verdict); set it to
 `[Deny, Audit]` to enforce. `Deny` cannot be combined with `Warn` and the chart
 refuses it. `failurePolicy` is `Fail` (`Ignore` is the other value). Roll out in
 the default mode, read the audit log for the policy's name, then enforce.
+
+`podIdentities.mode` (`pod-identity`, the default, or `irsa`) says how a row's
+identity reaches its pods, and an entry under `podIdentities.associations` may
+set its own `mode`, so a cluster can hold both. In `pod-identity` mode the chart
+renders the `ServiceAccount` and the ACK `PodIdentityAssociation`, in the
+entry's `associationNamespace`, and needs `podIdentities.clusterName`. In `irsa`
+mode, for a cluster that runs the pod identity webhook against its own OIDC
+issuer (the Go side is [IRSA mode](#irsa-mode) of `podidentity`), it renders the
+`ServiceAccount` alone, annotated `podIdentities.roleARNAnnotation` (default
+`eks.amazonaws.com/role-arn`) with the entry's `roleARN`: no association exists,
+so neither `clusterName` nor `associationNamespace` is needed, and an
+`associationNamespace` on an `irsa` entry is refused, as is one missing on a
+`pod-identity` entry. An `irsa` entry brings no namespace to the association
+guard's exemptions. **The annotation is not a ceiling.** A tenant that can edit
+its namespace can write any role ARN on its own ServiceAccount; what stops a
+role from being assumed is its trust policy, which names the namespace and
+service account (`oidcissuer.TrustPolicy`, `podidentity.ModeIRSA`). The
+association guard (`podIdentityAdmission`) has no counterpart for the annotation
+yet. The default mode renders exactly what it did before the field existed.
 
 `imageAllowList` (`enabled: true`, off by default) renders a
 ValidatingAdmissionPolicy and its binding (`imageAllowList.name`, default
