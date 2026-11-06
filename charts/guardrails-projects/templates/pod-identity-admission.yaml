@@ -34,7 +34,7 @@ deletion.
 {{- end }}
 {{- $exempt := $pa.exemptNamespaces | default list -}}
 {{- range $a := (.Values.podIdentities.associations | default dict) }}
-{{- $exempt = append $exempt $a.associationNamespace }}
+{{- if $a.associationNamespace }}{{ $exempt = append $exempt $a.associationNamespace }}{{ end }}
 {{- end }}
 {{- $name := $pa.name | default "ack-pod-identity-association-guard" }}
 ---

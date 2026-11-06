@@ -1,0 +1,7 @@
+# expect: does not match pattern
+# The annotation is a Kubernetes annotation key.
+podIdentities:
+  mode: irsa
+  roleARNAnnotation: "not a key"
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3"}

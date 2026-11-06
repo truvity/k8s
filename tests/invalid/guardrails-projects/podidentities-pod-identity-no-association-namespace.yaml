@@ -1,0 +1,8 @@
+# expect: associationNamespace is required
+# A Pod Identity entry places its association: without a namespace there is nowhere to put it.
+podIdentities:
+  clusterName: example
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3"}
+projects:
+  - {name: shop, kind: product, podIdentities: [test-s3]}

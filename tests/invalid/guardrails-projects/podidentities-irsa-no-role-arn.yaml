@@ -1,0 +1,6 @@
+# expect: missing property 'roleARN'
+# An IRSA entry names its role; the annotation would be empty otherwise.
+podIdentities:
+  mode: irsa
+  associations:
+    test-s3: {}

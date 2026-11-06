@@ -1,0 +1,8 @@
+# expect: podIdentities.clusterName is required
+# A cluster whose default is IRSA still needs clusterName for an entry that is Pod Identity.
+podIdentities:
+  mode: irsa
+  associations:
+    test-s3: {mode: pod-identity, roleARN: "arn:example:iam::placeholder:role/example-test-s3", associationNamespace: identity-system}
+projects:
+  - {name: shop, kind: product, podIdentities: [test-s3]}
