@@ -7,6 +7,7 @@ them, and for anything breaking, what to do.
 ## Unreleased
 
 - `charts/cilium-crds`: **Cilium CRDs 1.20.4.** The chart moves from `1.20.1` to `1.20.4`, the upstream version it mirrors, and the release publishes it as `oci://ghcr.io/truvity/charts/cilium-crds:1.20.4`; `1.20.1` stays in the registry. Two CRDs change: `CiliumNodeConfig` now also serves the deprecated `cilium.io/v2alpha1` version (not the storage version), and `CiliumLocalRedirectPolicy` requires at least one entry in `spec.redirectBackend.toPorts` (`minItems: 1`). Install `cilium-crds` and the `cilium` chart at the same version: bump both to `1.20.4` together.
+- `github.com/klauspost/compress` v1.20.3, which fixes GO-2026-6865 (a panic decoding two-block frames).
 
 ## v0.42.0
 
