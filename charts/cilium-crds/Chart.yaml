@@ -9,10 +9,10 @@ type: application
 # the annotation, version and appVersion equal to crdctl.yaml's repo and
 # pinned_version (checked by crd-charts-lint), and the release publishes the
 # chart at that version only if it is not already in the registry.
-version: 1.20.1
-appVersion: "1.20.1"
+version: 1.20.4
+appVersion: "1.20.4"
 annotations:
-  truvity.io/mirror: "cilium/cilium@1.20.1"
+  truvity.io/mirror: "cilium/cilium@1.20.4"
 home: https://github.com/truvity/k8s
 sources:
   - https://github.com/truvity/k8s
