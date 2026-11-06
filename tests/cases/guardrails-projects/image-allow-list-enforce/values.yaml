@@ -1,0 +1,30 @@
+# Per-row enforcement: the policy observes ([Warn, Audit]) in every checked
+# namespace except the rows that say `images.enforce: true`, which a second
+# binding denies. shop and docs enforce; ci-shop and tools stay in observe mode
+# (tools says so with `enforce: false`); legacy is exempt; sandbox is unchecked.
+imageAllowList:
+  enabled: true
+  kinds: [product]
+  common:
+    - registry.example/mesh/
+  sets:
+    acme: [registry.example/acme/]
+    globex: [registry.example/globex/, mirror.test/globex/ci/runner]
+projects:
+  - name: shop
+    kind: product
+    images: {sets: [acme], enforce: true}
+  - name: docs
+    kind: product
+    images: {sets: [globex], allow: [registry.example/shared/base], enforce: true}
+  - name: ci-shop
+    kind: ci
+    images: {allow: [mirror.test/acme/ci/]}
+  - name: tools
+    kind: product
+    images: {sets: [acme], enforce: false}
+  - name: legacy
+    kind: product
+    images: {exempt: "images move to the company registry by the end of the quarter"}
+  - name: sandbox
+    kind: employee

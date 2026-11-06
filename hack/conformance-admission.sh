@@ -13,7 +13,9 @@
 #      admitted, for containers, init containers, image volumes and ephemeral
 #      containers, and the worst-case pod (100 + 100 containers) is judged by
 #      the list, never by the cost budget;
-#   3. with [Warn, Audit] the same off-list pod is admitted with a warning.
+#   3. with [Warn, Audit] the same off-list pod is admitted with a warning;
+#   4. with a row that says images.enforce, that namespace denies while a
+#      namespace of another row, under the same policy, still only warns.
 set -euo pipefail
 
 AGNHOST="${AGNHOST:-registry.k8s.io/e2e-test-images/agnhost:2.66.1}"
@@ -25,9 +27,9 @@ step() { printf '\n--- %s\n' "$*"; }
 fail() { echo "CONFORMANCE FAILURE: $*" >&2; exit 1; }
 
 cleanup() {
-  kubectl delete validatingadmissionpolicybinding,validatingadmissionpolicy "$name" conformance-over-budget \
+  kubectl delete validatingadmissionpolicybinding,validatingadmissionpolicy "$name" "$name-enforce" conformance-over-budget \
     --ignore-not-found >/dev/null 2>&1 || true
-  kubectl delete namespace iap-control iap-3 iap-free --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  kubectl delete namespace iap-control iap-3 iap-4 iap-free --ignore-not-found --wait=false >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -87,7 +89,11 @@ until_ok "a 100-container pod to exceed the control policy's budget" 90 control_
 echo "an over-budget policy fails with: actual cost limit exceeded"
 
 step "1. a 20-row, 8-prefix image allow-list is accepted by the API server"
-python3 - > "$work/iap-values.yaml" <<'PY'
+# values [row to enforce]: the rows' values; the named row says images.enforce.
+values() {
+  python3 - "${1:-}" <<'PY'
+import sys
+enforce = sys.argv[1]
 print("imageAllowList:\n  enabled: true\n  kinds: [product]\n  common:")
 for i in range(4):
     print(f"    - mesh{i}.example.test/common/")
@@ -97,10 +103,13 @@ for i in range(7):
 print("      - registry.k8s.io/e2e-test-images/")
 print("projects:")
 for i in range(20):
-    print(f"  - {{name: iap-{i}, kind: product, images: {{sets: [registry], allow: [\"row{i}.example.test/app/api\", \"row{i}.example.test/app/worker\"]}}}}")
+    flag = ", enforce: true" if f"iap-{i}" == enforce else ""
+    print(f"  - {{name: iap-{i}, kind: product, images: {{sets: [registry], allow: [\"row{i}.example.test/app/api\", \"row{i}.example.test/app/worker\"]{flag}}}}}")
 PY
-render() { # <actions json>
-  helm template iap "$root/charts/guardrails-projects" -f "$work/iap-values.yaml" \
+}
+values > "$work/iap-values.yaml"
+render() { # <actions json> [values file]
+  helm template iap "$root/charts/guardrails-projects" -f "${2:-$work/iap-values.yaml}" \
     --set-json "imageAllowList.validationActions=$1" -s templates/image-allow-list.yaml
 }
 render '["Deny","Audit"]' > "$work/iap-deny.yaml"
@@ -170,5 +179,30 @@ grep -q "created (server dry run)" <<<"$out" || fail "Warn refused a pod: $out"
 grep -q "^Warning:.*image row4.example.test/app/api:1 is not on the allow-list of namespace iap-3" <<<"$out" \
   || fail "Warn did not warn about the image: $out"
 echo "admitted with a warning naming the image"
+
+step "4. a row that enforces denies while another row, under the same policy, only warns"
+# iap-3 enforces; iap-4 is another checked row on the same [Warn, Audit] policy.
+# The main binding now selects every namespace but iap-3, a second binding
+# (<name>-enforce, [Deny, Audit]) selects iap-3.
+values iap-3 > "$work/iap-enforce-values.yaml"
+render '["Warn","Audit"]' "$work/iap-enforce-values.yaml" > "$work/iap-enforce.yaml"
+[ "$(grep -c '^kind: ValidatingAdmissionPolicyBinding' "$work/iap-enforce.yaml")" = 2 ] || fail "the render does not hold two bindings"
+kubectl create namespace iap-4 >/dev/null
+until_ok "the default service account of iap-4" 60 kubectl -n iap-4 get serviceaccount default
+kubectl apply -f "$work/iap-enforce.yaml" >/dev/null || fail "the API server refuses the two bindings"
+enforced_denies() { grep -q "denied request: .* is not on the allow-list of namespace iap-3" <<<"$(dry iap-3 probe probe.example.test/x)"; }
+until_ok "the enforced row to deny" 90 enforced_denies
+out="$(dry iap-3 p row4.example.test/app/api:1)"
+grep -q "denied request: image row4.example.test/app/api:1 is not on the allow-list of namespace iap-3" <<<"$out" \
+  || fail "the enforced row did not deny: $out"
+echo "refused: the enforced row (iap-3)"
+# An image on nobody's list, asked of the row that only observes.
+out="$(dry iap-4 p probe.example.test/x)"
+grep -q "created (server dry run)" <<<"$out" && ! grep -qi "denied" <<<"$out" \
+  || fail "the observing row was denied: $out"
+grep -q "^Warning:.*image probe.example.test/x is not on the allow-list of namespace iap-4" <<<"$out" \
+  || fail "the observing row did not warn: $out"
+echo "admitted with a warning: the other row (iap-4)"
+expect_admitted "an on-list image in the enforced row" "$(dry iap-3 p registry2.example.test/team/api:1)"
 
 printf '\nimage allow-list: conformance passed\n'

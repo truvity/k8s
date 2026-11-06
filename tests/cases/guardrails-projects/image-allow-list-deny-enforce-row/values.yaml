@@ -1,0 +1,14 @@
+# The whole policy already denies: a row's `enforce: true` adds nothing, so
+# there is still a single binding and it selects every namespace.
+imageAllowList:
+  enabled: true
+  validationActions: [Deny, Audit]
+  sets:
+    acme: [registry.example/acme/]
+projects:
+  - name: shop
+    kind: product
+    images: {sets: [acme], enforce: true}
+  - name: docs
+    kind: product
+    images: {sets: [acme]}

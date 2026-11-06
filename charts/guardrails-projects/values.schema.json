@@ -521,6 +521,10 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "why the row is not checked"
+              },
+              "enforce": {
+                "type": "boolean",
+                "description": "deny what is off this row's list, whatever imageAllowList.validationActions says"
               }
             }
           }
