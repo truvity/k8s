@@ -12,6 +12,9 @@
 #      - the internal CA (charts/cluster-pki) issues a certificate;
 #      - the etcd backup objects (charts/talos-etcd-backup) pass the API
 #        server and Pod Security restricted;
+#      - the guardrails-projects image allow-list is accepted by the API
+#        server within the CEL cost budget, and refuses, admits and warns as
+#        its binding says (hack/conformance-admission.sh);
 #
 # Needs: docker, kind, kubectl, helm, go, talosctl, curl, python3. CI runs it
 # (.github/workflows/conformance.yaml); it creates and deletes a kind cluster.
@@ -203,5 +206,8 @@ print("\n---\n".join(docs))' > "$work/backup.yaml"
 kubectl apply --dry-run=server -n etcd-backup -f "$work/backup.yaml" 2> "$work/backup.err" || { cat "$work/backup.err"; fail "the API server refuses the backup objects"; }
 if grep -q "would violate PodSecurity" "$work/backup.err"; then cat "$work/backup.err"; fail "the backup job violates Pod Security restricted"; fi
 echo "accepted, no Pod Security warning"
+
+step "9. the guardrails-projects image allow-list on the API server (hack/conformance-admission.sh)"
+work="$work" AGNHOST="$AGNHOST" bash hack/conformance-admission.sh
 
 printf '\nconformance: all checks passed\n'
