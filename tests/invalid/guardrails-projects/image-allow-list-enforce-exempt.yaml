@@ -1,0 +1,6 @@
+# expect: images.enforce needs an allow-list
+# An exempt row is not checked, so there is nothing to enforce.
+imageAllowList:
+  enabled: true
+projects:
+  - {name: shop, kind: product, images: {exempt: "moves to the company registry", enforce: true}}

@@ -1,0 +1,8 @@
+# expect: want boolean
+# enforce is a switch, not a word: "yes" is a string.
+imageAllowList:
+  enabled: true
+  sets:
+    acme: [registry.example/acme/]
+projects:
+  - {name: shop, kind: product, images: {sets: [acme], enforce: "yes"}}
