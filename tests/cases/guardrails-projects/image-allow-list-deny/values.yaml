@@ -1,0 +1,13 @@
+# Enforcing: [Deny, Audit], a named policy, failurePolicy Ignore, the default
+# kinds (none forced), no common entries. The name and the actions are values.
+imageAllowList:
+  enabled: true
+  name: image-guard
+  validationActions: [Deny, Audit]
+  failurePolicy: Ignore
+  sets:
+    acme: [registry.example/acme/]
+projects:
+  - name: shop
+    kind: product
+    images: {sets: [acme]}

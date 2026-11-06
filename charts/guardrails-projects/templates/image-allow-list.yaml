@@ -1,0 +1,141 @@
+{{- /*
+`imageAllowList.enabled`: a ValidatingAdmissionPolicy and its binding for the
+images of a project's pods. One node role per cluster pulls every image, so
+what a namespace may run cannot come from where the registry sits; it comes
+from a list of registry prefixes per namespace, built here from the project
+rows.
+
+A pod is refused unless every image it names is on its namespace's list:
+spec.containers, spec.initContainers, spec.ephemeralContainers (the
+pods/ephemeralcontainers subresource, `kubectl debug`) and image volumes
+(spec.volumes[].image.reference, pulled by the same node role). An image with
+no registry host (`nginx`) never matches: write the registry. An image with
+`..`, `//` or `/.` in it never matches either, whatever its prefix says.
+
+An entry is `host[:port]/path`. One that ends in `/` is a path prefix
+(`registry.example/shop/` admits everything below it, not `shop-evil/`). One
+that does not is exactly that repository, with or without a tag or a digest
+(`registry.example/shop/api` admits `api`, `api:1` and `api@sha256:...`, not
+`api2`). A namespace's list is `common` plus the `sets` and `allow` of its row.
+
+A namespace with no list is not checked: unlike a PodIdentityAssociation, a
+pod exists in every namespace, so refusing the unlisted would stop the
+platform. Two things close that hole instead: `kinds` (a row of such a kind
+must carry a list, or `exempt` with the reason, or the render fails), and the
+explicit `exempt`, which is a reasoned debt. A namespace is named by
+kubernetes.io/metadata.name, never by a label a tenant could set. An UPDATE
+that does not change an image is skipped, so a label edit or a finalizer
+removal on a pod that predates the list cannot deadlock.
+
+Roll out as the podIdentityAdmission does: [Warn, Audit] first, then [Deny,
+Audit]. A Warn on a pod a controller creates is seen by nobody; the audit
+annotation (all the offending images) is the signal to read.
+*/ -}}
+{{- /*
+The image list of a Pod as a CEL expression, `o` being object or oldObject.
+Called as: include "guardrails-projects.podImages" "object"
+*/ -}}
+{{- define "guardrails-projects.podImages" -}}
+{{ . }}.spec.containers.map(c, c.image) +
+(has({{ . }}.spec.initContainers) ? {{ . }}.spec.initContainers.map(c, c.image) : []) +
+(has({{ . }}.spec.ephemeralContainers) ? {{ . }}.spec.ephemeralContainers.map(c, c.image) : []) +
+(has({{ . }}.spec.volumes) ? {{ . }}.spec.volumes.filter(v, has(v.image) && has(v.image.reference)).map(v, v.image.reference) : [])
+{{- end -}}
+{{- $ial := .Values.imageAllowList | default dict -}}
+{{- range $p := .Values.projects }}
+{{- if and $p.images (not $ial.enabled) }}
+{{- fail (printf "projects %s: has images, but imageAllowList is not enabled (the list would be ignored)" $p.name) }}
+{{- end }}
+{{- end }}
+{{- if $ial.enabled }}
+{{- $actions := $ial.validationActions | default (list "Warn" "Audit") -}}
+{{- if and (has "Deny" $actions) (has "Warn" $actions) }}
+{{- fail "imageAllowList.validationActions: Deny and Warn cannot be combined (the API server refuses the binding); use [Deny, Audit] to enforce or [Warn, Audit] to observe" }}
+{{- end }}
+{{- $sets := $ial.sets | default dict -}}
+{{- $common := $ial.common | default list -}}
+{{- $kinds := $ial.kinds | default list -}}
+{{- /* Entries are checked where they are written, so the message names the place. */ -}}
+{{- range $e := $common }}
+{{- if or (contains "//" $e) (contains "/." $e) (contains ".." $e) }}{{ fail (printf "imageAllowList.common: %q must not contain //, /. or .." $e) }}{{ end }}
+{{- end }}
+{{- range $name, $list := $sets }}
+{{- if not $list }}{{ fail (printf "imageAllowList.sets.%s: the set is empty (a set that admits nothing is a mistake; remove it)" $name) }}{{ end }}
+{{- range $e := $list }}
+{{- if or (contains "//" $e) (contains "/." $e) (contains ".." $e) }}{{ fail (printf "imageAllowList.sets.%s: %q must not contain //, /. or .." $name $e) }}{{ end }}
+{{- end }}
+{{- end }}
+{{- $allow := dict -}}
+{{- range $p := .Values.projects }}
+{{- $img := $p.images | default dict -}}
+{{- if and $img.exempt (or $img.sets $img.allow) }}
+{{- fail (printf "projects %s: images.exempt and a list (sets, allow) are exclusive: an exempt row is not checked" $p.name) }}
+{{- end }}
+{{- $entries := list -}}
+{{- range $s := ($img.sets | default list) }}
+{{- if not (hasKey $sets $s) }}{{ fail (printf "projects %s: images.sets names %s, which is not under imageAllowList.sets" $p.name $s) }}{{ end }}
+{{- $entries = concat $entries (index $sets $s) }}
+{{- end }}
+{{- range $e := ($img.allow | default list) }}
+{{- if or (contains "//" $e) (contains "/." $e) (contains ".." $e) }}{{ fail (printf "projects %s: images.allow %q must not contain //, /. or .." $p.name $e) }}{{ end }}
+{{- $entries = append $entries $e }}
+{{- end }}
+{{- if and (not $img.exempt) (not $entries) (has $p.kind $kinds) }}
+{{- fail (printf "projects %s: kind %s must carry an image allow-list (images.sets or images.allow) or images.exempt with its reason" $p.name $p.kind) }}
+{{- end }}
+{{- if and (not $img.exempt) $entries }}
+{{- $all := uniq (sortAlpha (concat $common $entries)) -}}
+{{- $prefixes := list -}}
+{{- $repos := list -}}
+{{- range $e := $all }}
+{{- if hasSuffix "/" $e }}{{ $prefixes = append $prefixes $e }}{{ else }}{{ $repos = append $repos $e }}{{ end }}
+{{- end }}
+{{- $_ := set $allow $p.name (dict "prefixes" $prefixes "repositories" $repos) }}
+{{- end }}
+{{- end }}
+{{- $name := $ial.name | default "pod-image-allow-list" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: {{ $ial.failurePolicy | default "Fail" }}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods", "pods/ephemeralcontainers"]
+  matchConditions:
+    - name: namespace-has-an-allow-list
+      expression: {{ printf "request.namespace in %s" (keys $allow | sortAlpha | toJson) | toJson }}
+    - name: only-image-changes
+      expression: {{ printf "request.operation == 'CREATE' || (%s) != (%s)" (include "guardrails-projects.podImages" "object" | replace "\n" " ") (include "guardrails-projects.podImages" "oldObject" | replace "\n" " ") | toJson }}
+  variables:
+    - name: allow
+      expression: {{ $allow | toJson | toJson }}
+    - name: images
+      expression: {{ include "guardrails-projects.podImages" "object" | replace "\n" " " | toJson }}
+    - name: offenders
+      # STUB: admits everything; the real expression lands in the next commit.
+      expression: "variables.images.filter(i, false)"
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        'image ' + variables.offenders[0] + ' is not on the allow-list of namespace ' + request.namespace +
+        (size(variables.offenders) > 1 ? ' (and ' + string(size(variables.offenders) - 1) + ' more)' : '')
+      message: "an image is not on the allow-list of this namespace"
+      reason: Forbidden
+  auditAnnotations:
+    - key: offending-images
+      valueExpression: "variables.offenders.join(', ')"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: {{ $actions | toJson }}
+{{- end }}

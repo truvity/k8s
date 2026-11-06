@@ -1,0 +1,80 @@
+---
+# Source: guardrails-projects/templates/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+
+---
+# Source: guardrails-projects/templates/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: project-baseline
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # the namespace's own pods
+    - from:
+        - podSelector: {}
+  egress:
+    # the namespace's own pods
+    - to:
+        - podSelector: {}
+
+---
+# Source: guardrails-projects/templates/image-allow-list.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: image-guard
+spec:
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods", "pods/ephemeralcontainers"]
+  matchConditions:
+    - name: namespace-has-an-allow-list
+      expression: "request.namespace in [\"shop\"]"
+    - name: only-image-changes
+      expression: "request.operation == 'CREATE' || (object.spec.containers.map(c, c.image) + (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : []) + (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : []) + (has(object.spec.volumes) ? object.spec.volumes.filter(v, has(v.image) \u0026\u0026 has(v.image.reference)).map(v, v.image.reference) : [])) != (oldObject.spec.containers.map(c, c.image) + (has(oldObject.spec.initContainers) ? oldObject.spec.initContainers.map(c, c.image) : []) + (has(oldObject.spec.ephemeralContainers) ? oldObject.spec.ephemeralContainers.map(c, c.image) : []) + (has(oldObject.spec.volumes) ? oldObject.spec.volumes.filter(v, has(v.image) \u0026\u0026 has(v.image.reference)).map(v, v.image.reference) : []))"
+  variables:
+    - name: allow
+      expression: "{\"shop\":{\"prefixes\":[\"registry.example/acme/\"],\"repositories\":[]}}"
+    - name: images
+      expression: "object.spec.containers.map(c, c.image) + (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : []) + (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : []) + (has(object.spec.volumes) ? object.spec.volumes.filter(v, has(v.image) \u0026\u0026 has(v.image.reference)).map(v, v.image.reference) : [])"
+    - name: offenders
+      # STUB: admits everything; the real expression lands in the next commit.
+      expression: "variables.images.filter(i, false)"
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        'image ' + variables.offenders[0] + ' is not on the allow-list of namespace ' + request.namespace +
+        (size(variables.offenders) > 1 ? ' (and ' + string(size(variables.offenders) - 1) + ' more)' : '')
+      message: "an image is not on the allow-list of this namespace"
+      reason: Forbidden
+  auditAnnotations:
+    - key: offending-images
+      valueExpression: "variables.offenders.join(', ')"
+
+---
+# Source: guardrails-projects/templates/image-allow-list.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: image-guard
+spec:
+  policyName: image-guard
+  validationActions: ["Deny","Audit"]
