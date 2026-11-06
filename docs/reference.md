@@ -968,8 +968,8 @@ policy audit mode and top-level `Overrides`. Install it before the nodes go
 Ready:
 
 ```sh
-helm install cilium-crds oci://ghcr.io/truvity/charts/cilium-crds --version 1.20.1
-helm install cilium cilium/cilium --version 1.20.1 -n kube-system -f values.yaml \
+helm install cilium-crds oci://ghcr.io/truvity/charts/cilium-crds --version 1.20.4
+helm install cilium cilium/cilium --version 1.20.4 -n kube-system -f values.yaml \
   --set operator.skipCRDCreation=true
 helm install cilium-config oci://ghcr.io/truvity/charts/cilium-config --version <tag> -f network.yaml
 ```

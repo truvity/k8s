@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- `charts/cilium-crds`: **Cilium CRDs 1.20.4.** The chart moves from `1.20.1` to `1.20.4`, the upstream version it mirrors, and the release publishes it as `oci://ghcr.io/truvity/charts/cilium-crds:1.20.4`; `1.20.1` stays in the registry. Two CRDs change: `CiliumNodeConfig` now also serves the deprecated `cilium.io/v2alpha1` version (not the storage version), and `CiliumLocalRedirectPolicy` requires at least one entry in `spec.redirectBackend.toPorts` (`minItems: 1`). Install `cilium-crds` and the `cilium` chart at the same version: bump both to `1.20.4` together.
+
 ## v0.42.0
 
 - `pkg/aws/vpc`: **custom flow log fields and Parquet delivery.** `FlowLogs.Fields` (new) lists the record's fields by their AWS names (`srcaddr`, `pkt-dstaddr`, `interface-id`, ...) and becomes the flow log's custom format, for either destination. With the S3 destination, `FlowLogsS3Bucket.FileFormat` (new, `FlowLogsPlainText` or `FlowLogsParquet`) picks the object format and `HiveCompatiblePartitions` (new) writes `key=value` prefixes that a query engine can project without a crawler. With it, the bucket policy grants log delivery `s3:PutObject` on `AWSLogs/aws-account-id=<account>/*`, the prefix AWS writes to, instead of `AWSLogs/<account>/*`. `Validate` refuses a field that is not a field name, a field listed twice and an unknown file format. Unset, none of them registers an input, so a flow log on the defaults sees no diff. AWS cannot change any of them in place: setting, changing or clearing one on an existing flow log replaces it.
