@@ -24,6 +24,13 @@
 // trust that is not (for example one that admits a whole cluster) can only be
 // supplied through Args.TrustPolicy, which is used verbatim.
 //
+// Args.Mode picks how pods prove the role. The default is EKS Pod Identity. With
+// ModeIRSA the role trusts the cluster's OIDC provider through
+// sts:AssumeRoleWithWebIdentity, for the namespace's service accounts only, and
+// no association is registered: the ServiceAccount carries RoleARNAnnotation.
+// Each mode refuses the fields only the other one reads, instead of ignoring
+// them. The default mode registers exactly what it did before the field existed.
+//
 // Nothing is protected unless Args.Protect says so.
 //
 // See docs/reference.md for the children, their names and their aliases.

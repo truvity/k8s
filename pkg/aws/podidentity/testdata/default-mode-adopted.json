@@ -1,0 +1,87 @@
+[
+  {
+    "type": "aws:eks/podIdentityAssociation:PodIdentityAssociation",
+    "name": "ident-pia-alpha",
+    "parent": "example::truvity:k8s/aws:PodIdentity::ident",
+    "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "protect": true,
+    "ignoreChanges": [
+      "tags",
+      "tagsAll"
+    ],
+    "inputs": {
+      "clusterName": "c1",
+      "namespace": "team-a",
+      "region": "eu-central-1",
+      "roleArn": "",
+      "serviceAccount": "alpha"
+    }
+  },
+  {
+    "type": "aws:eks/podIdentityAssociation:PodIdentityAssociation",
+    "name": "ident-pia-zeta",
+    "parent": "example::truvity:k8s/aws:PodIdentity::ident",
+    "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "protect": true,
+    "import": "c1,a-zeta",
+    "ignoreChanges": [
+      "tags",
+      "tagsAll"
+    ],
+    "inputs": {
+      "clusterName": "c1",
+      "namespace": "team-a",
+      "region": "eu-central-1",
+      "roleArn": "",
+      "serviceAccount": "zeta"
+    }
+  },
+  {
+    "type": "aws:iam/policy:Policy",
+    "name": "ident-policy",
+    "parent": "example::truvity:k8s/aws:PodIdentity::ident",
+    "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "protect": true,
+    "import": "policy-arn",
+    "inputs": {
+      "description": "what it is for",
+      "name": "c1-app",
+      "policy": "{\"managed\":true}"
+    }
+  },
+  {
+    "type": "aws:iam/role:Role",
+    "name": "ident-role",
+    "parent": "example::truvity:k8s/aws:PodIdentity::ident",
+    "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "protect": true,
+    "import": "c1-app",
+    "inputs": {
+      "assumeRolePolicy": "{\"Statement\":[{\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"],\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn-of-the-cluster\"},\"StringEquals\":{\"aws:RequestTag/kubernetes-namespace\":\"team-a\",\"aws:RequestTag/kubernetes-service-account\":[\"zeta\",\"alpha\"],\"aws:SourceAccount\":\"acct-example\"}},\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}",
+      "name": "c1-app",
+      "permissionsBoundary": "boundary-arn"
+    }
+  },
+  {
+    "type": "aws:iam/rolePolicy:RolePolicy",
+    "name": "ident-role-policy",
+    "parent": "example::truvity:k8s/aws:PodIdentity::ident",
+    "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "inputs": {
+      "name": "inline",
+      "policy": "{\"inline\":true}",
+      "role": "c1-app"
+    }
+  },
+  {
+    "type": "aws:iam/rolePolicyAttachment:RolePolicyAttachment",
+    "name": "ident-attachment",
+    "parent": "example::truvity:k8s/aws:PodIdentity::ident",
+    "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "import": "c1-app/policy-arn",
+    "inputs": {
+      "policyArn": "",
+      "role": "c1-app"
+    }
+  }
+]
