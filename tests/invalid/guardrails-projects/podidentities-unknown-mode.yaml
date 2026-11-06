@@ -1,0 +1,5 @@
+# expect: value must be one of
+# A mode is pod-identity or irsa.
+podIdentities:
+  mode: sts
+  associations: {}

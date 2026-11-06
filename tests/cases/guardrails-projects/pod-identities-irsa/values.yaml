@@ -1,0 +1,11 @@
+# podIdentities in IRSA mode: a ServiceAccount carrying the role annotation, no
+# PodIdentityAssociation, and no clusterName or associationNamespace to set.
+podIdentities:
+  mode: irsa
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3"}
+    reader: {roleARN: "arn:example:iam::placeholder:role/example-reader"}
+projects:
+  - {name: shop, kind: product, podIdentities: [test-s3]}
+  - {name: docs, kind: product, podIdentities: [test-s3, reader]}
+  - {name: sandbox, kind: employee}

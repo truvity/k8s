@@ -1,24 +1,49 @@
 {{- /*
 For each name a row lists in `podIdentities`: a ServiceAccount of that name in
-the row's namespace, and the ACK PodIdentityAssociation <namespace>-<name> in
-the association's own namespace, out of the namespace's reach (a namespace
-that can edit itself could otherwise delete its credentials' binding).
+the row's namespace, and then, by the entry's mode:
+
+- pod-identity (the default): the ACK PodIdentityAssociation <namespace>-<name>
+  in the association's own namespace, out of the namespace's reach (a namespace
+  that can edit itself could otherwise delete its credentials' binding).
+- irsa: nothing else. The ServiceAccount carries the role in an annotation
+  (`podIdentities.roleARNAnnotation`, the key the pod identity webhook reads), so
+  there is no association to place, and the role's trust policy, which names the
+  service account, is what binds it. A tenant that can edit its own namespace can
+  edit the annotation, which is why the trust policy, not the annotation, is
+  the gate.
+
+The mode is `podIdentities.mode`, or the entry's own `mode`.
 */ -}}
 {{- $root := . -}}
 {{- $pi := .Values.podIdentities -}}
+{{- $defaultMode := $pi.mode | default "pod-identity" -}}
+{{- range $name, $a := ($pi.associations | default dict) }}
+{{- $mode := $a.mode | default $defaultMode }}
+{{- if and (eq $mode "irsa") $a.associationNamespace }}
+{{- fail (printf "podIdentities.associations.%s: associationNamespace is not used in irsa mode (there is no association to place)" $name) }}
+{{- end }}
+{{- if and (eq $mode "pod-identity") (not $a.associationNamespace) }}
+{{- fail (printf "podIdentities.associations.%s: associationNamespace is required in pod-identity mode" $name) }}
+{{- end }}
+{{- end }}
 {{- range $p := .Values.projects }}
 {{- range $name := $p.podIdentities | default list }}
-{{- if not $pi.clusterName }}{{ fail (printf "podIdentities.clusterName is required: projects.%s lists podIdentities" $p.name) }}{{ end }}
 {{- if not (hasKey ($pi.associations | default dict) $name) }}
 {{- fail (printf "projects.%s.podIdentities names %q, which is not in podIdentities.associations" $p.name $name) }}
 {{- end }}
 {{- $a := index $pi.associations $name }}
+{{- $mode := $a.mode | default $defaultMode }}
+{{- if and (eq $mode "pod-identity") (not $pi.clusterName) }}{{ fail (printf "podIdentities.clusterName is required: projects.%s lists podIdentities" $p.name) }}{{ end }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $name }}
   namespace: {{ $p.name }}
+{{- if eq $mode "irsa" }}
+  annotations:
+    {{ $pi.roleARNAnnotation | default "eks.amazonaws.com/role-arn" | quote }}: {{ $a.roleARN | quote }}
+{{- else }}
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -30,5 +55,6 @@ spec:
   namespace: {{ $p.name }}
   serviceAccount: {{ $name }}
   roleARN: {{ $a.roleARN | quote }}
+{{- end }}
 {{- end }}
 {{- end }}

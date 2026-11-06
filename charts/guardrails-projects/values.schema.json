@@ -149,6 +149,13 @@
       "type": "string",
       "pattern": "^[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$"
     },
+    "podIdentityMode": {
+      "enum": [
+        "pod-identity",
+        "irsa"
+      ],
+      "description": "pod-identity: a PodIdentityAssociation; irsa: the role annotation on the ServiceAccount"
+    },
     "imageEntry": {
       "type": "string",
       "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?/[a-z0-9._/-]*$",
@@ -535,6 +542,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "mode": {
+          "$ref": "#/definitions/podIdentityMode"
+        },
+        "roleARNAnnotation": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$",
+          "description": "the ServiceAccount annotation the pod identity webhook reads the role from (irsa mode)"
+        },
         "clusterName": {
           "type": "string"
         },
@@ -547,10 +562,12 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "roleARN",
-              "associationNamespace"
+              "roleARN"
             ],
             "properties": {
+              "mode": {
+                "$ref": "#/definitions/podIdentityMode"
+              },
               "roleARN": {
                 "type": "string",
                 "pattern": "^arn:[a-z-]+:iam::[^:]*:role/.+$"
