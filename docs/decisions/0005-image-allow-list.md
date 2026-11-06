@@ -21,9 +21,14 @@ be drawn where the pod is admitted, by namespace.
    tag or digest. No wildcard, no tag, no digest in an entry: a rule that can
    be read two ways is read the wrong way by someone. An image that does not
    begin with a registry host never matches.
-3. **Observe, then enforce.** The binding defaults to `[Warn, Audit]`. A warning
-   on a pod a controller creates is seen by nobody, so the audit annotation that
-   lists every offender is the signal. `[Deny, Audit]` enforces.
+3. **Observe, then enforce, one namespace at a time.** The binding defaults to
+   `[Warn, Audit]`. A warning on a pod a controller creates is seen by nobody, so
+   the audit annotation that lists every offender is the signal. `[Deny, Audit]`
+   enforces, for every namespace, and `images.enforce` on a row enforces that
+   namespace alone through a second binding of the same policy (`<name>-enforce`)
+   that selects the enforcing rows while the main binding selects the rest. A
+   cluster-wide switch would turn every row on at once, and the rows differ in
+   how quiet their audit log is.
 4. **A namespace with no list is not checked, and the render keeps that
    honest.** Unlike a PodIdentityAssociation, a pod exists in every namespace;
    default deny would stop the platform. Instead `kinds` names the rows that must
@@ -38,5 +43,9 @@ be drawn where the pod is admitted, by namespace.
   team that debugs lists its debug image in `common`.
 - **Digest-pinned entries.** The registry side already keeps tags immutable.
   Revisit if a registry cannot.
+- **One policy per enforcing row, or an `enforce` flag read by the expression.**
+  The first multiplies the cost-bounded map; the second makes the verdict depend
+  on a value the expression carries, while a binding's selector is the mechanism
+  the API server already offers for "this namespace, this action".
 - **A stricter `kinds` default.** `kinds` is empty so a cluster that does not
   set it sees no change; a consumer that wants every project row covered sets it.

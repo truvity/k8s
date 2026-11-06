@@ -30,6 +30,13 @@ removal on a pod that predates the list cannot deadlock.
 Roll out as the podIdentityAdmission does: [Warn, Audit] first, then [Deny,
 Audit]. A Warn on a pod a controller creates is seen by nobody; the audit
 annotation (all the offending images) is the signal to read.
+
+Enforcement moves one namespace at a time: a row with `images.enforce: true` is
+selected, by kubernetes.io/metadata.name, by a second binding `<name>-enforce`
+with [Deny, Audit], and the main binding (the cluster-wide validationActions)
+selects every other namespace with NotIn. The two partition the namespaces, so
+a namespace is judged by exactly one of them. With validationActions already
+containing Deny there is one binding and `enforce` adds nothing.
 */ -}}
 {{- /*
 The image list of a Pod as a CEL expression, `o` being object or oldObject.
@@ -66,6 +73,7 @@ Called as: include "guardrails-projects.podImages" "object"
 {{- end }}
 {{- end }}
 {{- $allow := dict -}}
+{{- $enforced := list -}}
 {{- range $p := .Values.projects }}
 {{- $img := $p.images | default dict -}}
 {{- if and $img.exempt (or $img.sets $img.allow) }}
@@ -83,7 +91,11 @@ Called as: include "guardrails-projects.podImages" "object"
 {{- if and (not $img.exempt) (not $entries) (has $p.kind $kinds) }}
 {{- fail (printf "projects %s: kind %s must carry an image allow-list (images.sets or images.allow) or images.exempt with its reason" $p.name $p.kind) }}
 {{- end }}
+{{- if and $img.enforce (or $img.exempt (not $entries)) }}
+{{- fail (printf "projects %s: images.enforce needs an allow-list (images.sets or images.allow) to enforce; an exempt row, or one with no list, is not checked" $p.name) }}
+{{- end }}
 {{- if and (not $img.exempt) $entries }}
+{{- if $img.enforce }}{{ $enforced = append $enforced $p.name }}{{ end }}
 {{- $all := uniq (sortAlpha (concat $common $entries)) -}}
 {{- $prefixes := list -}}
 {{- $repos := list -}}
@@ -94,6 +106,8 @@ Called as: include "guardrails-projects.podImages" "object"
 {{- end }}
 {{- end }}
 {{- $name := $ial.name | default "pod-image-allow-list" }}
+{{- /* A row that enforces matters only while the cluster-wide actions do not deny. */ -}}
+{{- $split := and $enforced (not (has "Deny" $actions)) -}}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -140,4 +154,26 @@ metadata:
 spec:
   policyName: {{ $name }}
   validationActions: {{ $actions | toJson }}
+{{- if $split }}
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: {{ $enforced | sortAlpha | toJson }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}-enforce
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny","Audit"]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: {{ $enforced | sortAlpha | toJson }}
+{{- end }}
 {{- end }}

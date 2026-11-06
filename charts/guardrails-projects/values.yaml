@@ -207,6 +207,9 @@ podIdentityAdmission:
 # out in observe mode, read the audit annotation, then enforce:
 #   validationActions: [Warn, Audit]   # default: admitted, warned, audited
 #   validationActions: [Deny, Audit]   # enforce (Deny cannot be combined with Warn)
+# Enforce one namespace at a time with `images.enforce: true` on its row: a
+# second binding, `<name>-enforce` ([Deny, Audit]), selects the enforcing rows'
+# namespaces and the main binding selects every other one.
 imageAllowList:
   enabled: false
   name: pod-image-allow-list
@@ -244,4 +247,5 @@ imageAllowList:
 #         sets: [shop]                     # names under imageAllowList.sets
 #         allow: [registry.example/tools/debug]
 #         exempt: "<why the row is not checked>"   # instead of a list
+#         enforce: true                    # deny for this row (needs a list), whatever validationActions says
 projects: []
