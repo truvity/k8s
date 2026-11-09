@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## v0.46.0
+
+- `pkg/aws/ackfactory`: **project roles bound to whole names, opt-in.** `ProjectRolesOptions.WholeNames` (new, default `false`) binds a project role's grants on roles, policies, instance profiles, buckets, DynamoDB tables, key aliases and the Pod Identity `PassRole` to the project's own names, instead of every name that contains the project's name (`*<Name>*`, which also fits another project whose name contains it, and the platform's roles and buckets that carry it). Roles, policies, instance profiles and tables become `<cluster>-<Name>.<x>`, buckets `<BucketPrefix><cluster>-<Name>-<x>` and key aliases `alias/<cluster>-<Name>-<x>`; the two hyphen forms are exact only while no project name is a hyphen-prefix of another, which the caller holds. `LegacyNames` (new), with `WholeNames`, also accepts the names projects used before the `.` form, for resources that already exist. `BucketPrefix` (new) is what comes before `<cluster>-<project>-` in bucket names. With `WholeNames` off, every policy is byte-identical to earlier releases.
+
 ## v0.45.0
 
 - `charts/guardrails-projects`: **enforce the image allow-list one namespace at a time.** A row's `images.enforce: true` (new, default `false`) makes that namespace refuse what is off its list, whatever `imageAllowList.validationActions` says. The chart renders a second binding of the same policy, `<name>-enforce` with `[Deny, Audit]`, that selects the enforcing rows' namespaces by `kubernetes.io/metadata.name`; the main binding gets the matching `NotIn` selector, so a namespace is judged by exactly one of the two. A row that enforces needs a list: `enforce` with `exempt`, or with neither `sets` nor `allow`, fails the render. Nothing renders differently until a row sets `enforce`: with no enforcing row, or with `validationActions` already holding `Deny`, there is still one binding, unchanged.
