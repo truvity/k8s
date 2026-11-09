@@ -1168,3 +1168,197 @@ func TestEmployeeRolesTakeAnotherPrefixAndControllers(t *testing.T) {
 		t.Errorf("trust %s", trust)
 	}
 }
+
+// iamMatch reports whether an IAM resource pattern (only "*" is a wildcard here)
+// matches the string.
+func iamMatch(pattern, s string) bool {
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return pattern == s
+	}
+
+	if !strings.HasPrefix(s, parts[0]) {
+		return false
+	}
+
+	s = s[len(parts[0]):]
+
+	for _, mid := range parts[1 : len(parts)-1] {
+		i := strings.Index(s, mid)
+		if i < 0 {
+			return false
+		}
+
+		s = s[i+len(mid):]
+	}
+
+	return strings.HasSuffix(s, parts[len(parts)-1])
+}
+
+func resources(t *testing.T, st statement) []string {
+	t.Helper()
+
+	switch r := st.Resource.(type) {
+	case string:
+		return []string{r}
+	case []any:
+		var out []string
+		for _, x := range r {
+			out = append(out, x.(string))
+		}
+
+		return out
+	}
+
+	t.Fatalf("statement %s has resources %v", st.Sid, st.Resource)
+
+	return nil
+}
+
+func matchesAny(t *testing.T, st statement, arn string) bool {
+	t.Helper()
+
+	for _, p := range resources(t, st) {
+		if iamMatch(p, arn) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func wholeNamesPolicy(t *testing.T, o ackfactory.ProjectRolesOptions, p ackfactory.ProjectRole) string {
+	t.Helper()
+
+	o.Boundary = "deploy"
+	o.WholeNames = true
+
+	regs, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+		return ackfactory.ProjectRoles(ctx, cluster, o, []ackfactory.ProjectRole{p})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return str(find(t, regs, "aws:iam/rolePolicy:RolePolicy", "c1-ack-project-"+p.Name+"-policy"), "policy")
+}
+
+// The default policy matches every name that contains the project's, so the
+// project "alpha" reaches the resources of "alpha-beta" and the platform's and
+// release roles that carry the name. WholeNames binds it to the project's own
+// names.
+func TestProjectPolicyWholeNamesDoNotReachOtherProjectsOrThePlatform(t *testing.T) {
+	const acct = "arn:part:iam::acct-example:"
+
+	foreign := map[string][]string{
+		"IAMWriteProjectPrefixed": {
+			acct + "role/c1-alpha-beta.x", acct + "role/c1-ack-project-alpha", acct + "role/c1-pg-backup-alpha",
+			acct + "role/release-alpha-codeartifact", acct + "role/c1-beta-alpha.x", acct + "role/c1-alphabet.x",
+			acct + "policy/c1-stable-alpha-charts-read", acct + "instance-profile/c1-beta-alpha.x",
+		},
+		"S3ProjectPrefixed":       {"arn:part:s3:::acme-c1-beta-alpha-x", "arn:part:s3:::acme-c1-alphabet-x", "arn:part:s3:::acme-c2-alpha-x", "arn:part:s3:::alpha-legacy"},
+		"DynamoDBProjectPrefixed": {"arn:part:dynamodb:*:acct-example:table/c1-alpha-beta.t", "arn:part:dynamodb:*:acct-example:table/beta-alpha"},
+		"KMSAliasByProjectName":   {"arn:part:kms:*:acct-example:alias/alpha-legacy-vault", "arn:part:kms:*:acct-example:alias/c1-beta-alpha-x"},
+	}
+
+	own := map[string][]string{
+		"IAMWriteProjectPrefixed": {acct + "role/c1-alpha.x", acct + "role/c1-alpha.vault", acct + "policy/c1-alpha.x", acct + "instance-profile/c1-alpha.x"},
+		"S3ProjectPrefixed":       {"arn:part:s3:::acme-c1-alpha-x", "arn:part:s3:::acme-c1-alpha-x/key"},
+		"DynamoDBProjectPrefixed": {"arn:part:dynamodb:*:acct-example:table/c1-alpha.t", "arn:part:dynamodb:*:acct-example:table/c1-alpha.t/index/i"},
+		"KMSAliasByProjectName":   {"arn:part:kms:*:acct-example:alias/c1-alpha-vault"},
+	}
+
+	// The default policy is the substring: it must reach what the test calls
+	// foreign, or this test proves nothing.
+	def := statements(t, projectPolicyOf(t, ackfactory.ProjectRolesOptions{Boundary: "deploy", PodIdentity: true}))
+	if !matchesAny(t, def["IAMWriteProjectPrefixed"], acct+"role/release-alpha-codeartifact") {
+		t.Fatal("the default policy no longer matches by substring: the test's premise is gone")
+	}
+
+	st := statements(t, wholeNamesPolicy(t, ackfactory.ProjectRolesOptions{BucketPrefix: "acme-", PodIdentity: true}, ackfactory.ProjectRole{Name: "alpha"}))
+
+	for sid, arns := range foreign {
+		for _, arn := range arns {
+			if matchesAny(t, st[sid], arn) {
+				t.Errorf("%s matches %s, another project's or the platform's", sid, arn)
+			}
+		}
+	}
+
+	for sid, arns := range own {
+		for _, arn := range arns {
+			if !matchesAny(t, st[sid], arn) {
+				t.Errorf("%s does not match %s, the project's own", sid, arn)
+			}
+		}
+	}
+
+	if !matchesAny(t, st["AllowPassOwnRoleToPodIdentity"], acct+"role/c1-alpha.x") || matchesAny(t, st["AllowPassOwnRoleToPodIdentity"], acct+"role/c1-beta-alpha.x") {
+		t.Errorf("PassRole resources %v", st["AllowPassOwnRoleToPodIdentity"].Resource)
+	}
+
+	// The ceiling role itself is no longer one of the project's roles.
+	if matchesAny(t, st["IAMWriteProjectPrefixed"], acct+"role/c1-ack-project-alpha") {
+		t.Error("the project may write its own ceiling role")
+	}
+}
+
+func TestProjectPolicyLegacyNamesAcceptTheSlugAndNothingElse(t *testing.T) {
+	const acct = "arn:part:iam::acct-example:"
+
+	st := statements(t, wholeNamesPolicy(t,
+		ackfactory.ProjectRolesOptions{LegacyNames: true, BucketPrefix: "acme-"},
+		ackfactory.ProjectRole{Name: "alpha", Slug: "al"}))
+
+	for sid, arns := range map[string][]string{
+		"IAMWriteProjectPrefixed": {acct + "role/c1-alpha.x", acct + "role/c1-al-alpha-x", acct + "policy/c1-al-x"},
+		"S3ProjectPrefixed":       {"arn:part:s3:::acme-c1-alpha-x", "arn:part:s3:::acme-c1-al-x/key"},
+		"KMSAliasByProjectName":   {"arn:part:kms:*:acct-example:alias/c1-al-vault", "arn:part:kms:*:acct-example:alias/c1-alpha-vault"},
+	} {
+		for _, arn := range arns {
+			if !matchesAny(t, st[sid], arn) {
+				t.Errorf("%s does not match the legacy name %s", sid, arn)
+			}
+		}
+	}
+
+	for sid, arns := range map[string][]string{
+		"IAMWriteProjectPrefixed": {acct + "role/c1-beta-al-x", acct + "role/release-alpha-x", acct + "role/c1-pg-backup-alpha"},
+		"S3ProjectPrefixed":       {"arn:part:s3:::acme-c1-beta-al-x", "arn:part:s3:::acme-c1-alp-x"},
+	} {
+		for _, arn := range arns {
+			if matchesAny(t, st[sid], arn) {
+				t.Errorf("%s matches %s", sid, arn)
+			}
+		}
+	}
+}
+
+func TestProjectPolicyWholeNamesGolden(t *testing.T) {
+	goldenFile(t, "policy-project-whole-names", wholeNamesPolicy(t, ackfactory.ProjectRolesOptions{
+		WorkloadBoundary: "workload", Tighten: true, PodIdentity: true, LegacyNames: true, BucketPrefix: "acme-",
+		ForbiddenRoles: []string{"c1-archive-*"},
+	}, ackfactory.ProjectRole{Name: "alpha", Slug: "al"}))
+}
+
+func TestWholeNamesOptionsAreRefusedWhenTheyCannotWork(t *testing.T) {
+	for name, tc := range map[string]struct {
+		o ackfactory.ProjectRolesOptions
+		p ackfactory.ProjectRole
+	}{
+		"legacy names without whole names":    {ackfactory.ProjectRolesOptions{Boundary: "deploy", LegacyNames: true}, ackfactory.ProjectRole{Name: "alpha"}},
+		"a bucket prefix without whole names": {ackfactory.ProjectRolesOptions{Boundary: "deploy", BucketPrefix: "acme-"}, ackfactory.ProjectRole{Name: "alpha"}},
+		"a wildcard in the prefix":            {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true, BucketPrefix: "a*"}, ackfactory.ProjectRole{Name: "alpha"}},
+		"a dot in the name":                   {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true}, ackfactory.ProjectRole{Name: "al.pha"}},
+		"a wildcard in the slug":              {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true, LegacyNames: true}, ackfactory.ProjectRole{Name: "alpha", Slug: "a*"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
+				return ackfactory.ProjectRoles(ctx, cluster, tc.o, []ackfactory.ProjectRole{tc.p})
+			})
+			if err == nil {
+				t.Fatal("want an error")
+			}
+		})
+	}
+}

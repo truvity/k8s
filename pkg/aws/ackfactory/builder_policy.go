@@ -3,6 +3,7 @@ package ackfactory
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // tightening is the set of opt-in changes to a project builder's identity
@@ -14,6 +15,13 @@ type tightening struct {
 	dropSSM          bool
 	dropDynamoDB     bool
 	podIdentity      bool
+
+	// wholeNames binds the policy to whole names (see wholeNames); the other
+	// fields are its inputs.
+	wholeNames   bool
+	legacyNames  bool
+	slug         string
+	bucketPrefix string
 }
 
 func (t tightening) set() bool { return t != tightening{} }
@@ -264,6 +272,10 @@ func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string, t tigh
 			st["Action"] = []string{"kms:ListAliases", "kms:ListKeys"}
 		}
 
+		if t.wholeNames {
+			t.names(c, name).apply(sid, st)
+		}
+
 		out = append(out, st)
 	}
 
@@ -276,7 +288,12 @@ func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string, t tigh
 	}
 
 	if t.podIdentity {
-		out = append(out, podIdentity(c, s, []string{c.roleARN("*" + name + "*")})...)
+		roles := []string{c.roleARN("*" + name + "*")}
+		if t.wholeNames {
+			roles = t.names(c, name).roles
+		}
+
+		out = append(out, podIdentity(c, s, roles)...)
 	}
 
 	if t.workloadBoundary != "" {
@@ -307,4 +324,79 @@ func marshalPolicy(version string, statements []map[string]any) string {
 	}
 
 	return string(b)
+}
+
+// resourceNames are the resource patterns of a project's own names, whole
+// names instead of the substring "*<name>*" that also fits "<other>-<name>" and
+// "<name>-<other>", the platform's roles that carry the name, and every other
+// project whose name contains it.
+//
+// A role, policy, instance profile and table is named "<cluster>-<name>.<x>"
+// (IAM allows "." in them, so a project "x" never reaches "x-y"), a bucket
+// "<prefix><cluster>-<name>-<x>" and a key alias "alias/<cluster>-<name>-<x>"
+// (neither holds a "."). Those two end in a hyphen, so they are exact only
+// while no project name is a hyphen-prefix of another: the caller holds that.
+// With legacyNames a role, policy, instance profile and table named
+// "<cluster>-<slug>-<x>" is the project's too, and a bucket or alias with the
+// slug in place of the name, for the resources that exist under the older
+// names.
+type resourceNames struct {
+	roles, policies, profiles, buckets, bucketObjects, tables, tableParts, aliases []string
+}
+
+func (t tightening) names(c Cluster, name string) resourceNames {
+	cluster := c.Name
+	roleNames := []string{cluster + "-" + name + ".*"}
+	bucketNames := []string{t.bucketPrefix + cluster + "-" + name + "-*"}
+	aliasNames := []string{cluster + "-" + name + "-*"}
+
+	if t.legacyNames {
+		slug := t.slug
+		if slug == "" {
+			slug = name
+		}
+
+		roleNames = append(roleNames, cluster+"-"+slug+"-*")
+
+		if slug != name {
+			bucketNames = append(bucketNames, t.bucketPrefix+cluster+"-"+slug+"-*")
+			aliasNames = append(aliasNames, cluster+"-"+slug+"-*")
+		}
+	}
+
+	var n resourceNames
+
+	for _, r := range roleNames {
+		n.roles = append(n.roles, c.roleARN(r))
+		n.policies = append(n.policies, c.iamARN("policy/"+r))
+		n.profiles = append(n.profiles, c.iamARN("instance-profile/"+r))
+		n.tables = append(n.tables, fmt.Sprintf("arn:%s:dynamodb:*:%s:table/%s", c.partition(), c.AccountID, r))
+		n.tableParts = append(n.tableParts, fmt.Sprintf("arn:%s:dynamodb:*:%s:table/%s/*", c.partition(), c.AccountID, r))
+	}
+
+	for _, b := range bucketNames {
+		n.buckets = append(n.buckets, fmt.Sprintf("arn:%s:s3:::%s", c.partition(), b))
+		n.bucketObjects = append(n.bucketObjects, fmt.Sprintf("arn:%s:s3:::%s/*", c.partition(), b))
+	}
+
+	for _, a := range aliasNames {
+		n.aliases = append(n.aliases, fmt.Sprintf("arn:%s:kms:*:%s:alias/%s", c.partition(), c.AccountID, a))
+	}
+
+	return n
+}
+
+// apply puts the whole-name patterns in the statement of the default policy
+// that carried the substring.
+func (n resourceNames) apply(sid string, st map[string]any) {
+	switch sid {
+	case "IAMWriteProjectPrefixed":
+		st["Resource"] = slices.Concat(n.roles, n.policies, n.profiles)
+	case "S3ProjectPrefixed":
+		st["Resource"] = slices.Concat(n.buckets, n.bucketObjects)
+	case "DynamoDBProjectPrefixed":
+		st["Resource"] = slices.Concat(n.tables, n.tableParts)
+	case "KMSAliasByProjectName":
+		st["Resource"] = n.aliases
+	}
 }
