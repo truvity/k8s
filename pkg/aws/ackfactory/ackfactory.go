@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
@@ -497,6 +498,10 @@ type ProjectRole struct {
 	// SSMPrefix is the parameter-store prefix the role may use, without a
 	// trailing slash. Empty means "/business/<Name>".
 	SSMPrefix string
+	// Slug is what the project's older resources carry after the cluster in
+	// place of Name: "<cluster>-<Slug>-<x>". Empty means Name. Read only with
+	// ProjectRolesOptions.WholeNames and LegacyNames.
+	Slug string
 }
 
 // ProjectRolesOptions are the inputs of ProjectRoles.
@@ -563,6 +568,28 @@ type ProjectRolesOptions struct {
 	// Tighten is shorthand for ProtectTags, RestrictKMS, DropSSM and
 	// DropDynamoDB. It does not turn on PodIdentity or set WorkloadBoundary.
 	Tighten bool
+	// WholeNames binds the role's grants on roles, policies, instance
+	// profiles, buckets, DynamoDB tables, key aliases and the PassRole of Pod
+	// Identity to the project's whole names, instead of to every name that
+	// contains the project's ("*<Name>*", which also fits another project
+	// whose name contains it, and the platform's roles and buckets that carry
+	// it). Roles, policies, instance profiles and tables are
+	// "<cluster>-<Name>.<x>", buckets "<BucketPrefix><cluster>-<Name>-<x>",
+	// key aliases "alias/<cluster>-<Name>-<x>". The two hyphen forms are exact
+	// only while no project name is a hyphen-prefix of another; the caller
+	// holds that. Names must be lower-case letters, digits and single hyphens.
+	// Off, the policy is the one earlier releases rendered.
+	WholeNames bool
+	// LegacyNames, with WholeNames, also accepts the names projects used
+	// before the "." form: roles, policies, instance profiles and tables
+	// "<cluster>-<Slug>-<x>", and buckets and aliases with the slug in place
+	// of the name. It is for resources that already exist; a project created
+	// with it off cannot create one.
+	LegacyNames bool
+	// BucketPrefix is what comes before "<cluster>-<project>-" in the names of
+	// the project's buckets, for example "acme-". May be empty. Read only with
+	// WholeNames.
+	BucketPrefix string
 }
 
 func (o ProjectRolesOptions) tightening() tightening {
@@ -573,6 +600,9 @@ func (o ProjectRolesOptions) tightening() tightening {
 		dropSSM:          o.DropSSM || o.Tighten,
 		dropDynamoDB:     o.DropDynamoDB || o.Tighten,
 		podIdentity:      o.PodIdentity,
+		wholeNames:       o.WholeNames,
+		legacyNames:      o.WholeNames && o.LegacyNames,
+		bucketPrefix:     o.BucketPrefix,
 	}
 }
 
@@ -602,6 +632,18 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 		return errors.New("options: Boundary is empty")
 	}
 
+	if o.LegacyNames && !o.WholeNames {
+		return errors.New("options: LegacyNames needs WholeNames")
+	}
+
+	if o.BucketPrefix != "" && !o.WholeNames {
+		return errors.New("options: BucketPrefix needs WholeNames")
+	}
+
+	if strings.ContainsAny(o.BucketPrefix, "*?") {
+		return errors.New("options: BucketPrefix holds a wildcard")
+	}
+
 	for _, p := range projects {
 		if p.Name == "" {
 			return errors.New("project role: Name is empty")
@@ -612,7 +654,18 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 			ssm = p.SSMPrefix
 		}
 
-		policy := projectPolicy(c, p.Name, ssm, o.ForbiddenRoles, o.tightening())
+		t := o.tightening()
+		t.slug = p.Slug
+
+		if o.WholeNames {
+			for _, n := range []string{p.Name, p.Slug} {
+				if n != "" && !sandboxName.MatchString(n) {
+					return fmt.Errorf("project role %s: %q is not lower-case letters, digits and single hyphens (WholeNames)", p.Name, n)
+				}
+			}
+		}
+
+		policy := projectPolicy(c, p.Name, ssm, o.ForbiddenRoles, t)
 
 		if err := newBuilderRole(ctx, c, o.Boundary, p.Name, o.Controllers, policy, o.ResourceOptions); err != nil {
 			return fmt.Errorf("project role for %s: %w", p.Name, err)
