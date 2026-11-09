@@ -1256,7 +1256,10 @@ func TestProjectPolicyWholeNamesDoNotReachOtherProjectsOrThePlatform(t *testing.
 			acct + "role/release-alpha-codeartifact", acct + "role/c1-beta-alpha.x", acct + "role/c1-alphabet.x",
 			acct + "policy/c1-stable-alpha-charts-read", acct + "instance-profile/c1-beta-alpha.x",
 		},
-		"S3ProjectPrefixed":       {"arn:part:s3:::acme-c1-beta-alpha-x", "arn:part:s3:::acme-c1-alphabet-x", "arn:part:s3:::acme-c2-alpha-x", "arn:part:s3:::alpha-legacy"},
+		"S3ProjectPrefixed": {
+			"arn:part:s3:::acme-c1-beta-alpha-x", "arn:part:s3:::acme-c1-alphabet-x",
+			"arn:part:s3:::acme-c2-alpha-x", "arn:part:s3:::alpha-legacy",
+		},
 		"DynamoDBProjectPrefixed": {"arn:part:dynamodb:*:acct-example:table/c1-alpha-beta.t", "arn:part:dynamodb:*:acct-example:table/beta-alpha"},
 		"KMSAliasByProjectName":   {"arn:part:kms:*:acct-example:alias/alpha-legacy-vault", "arn:part:kms:*:acct-example:alias/c1-beta-alpha-x"},
 	}
@@ -1293,7 +1296,8 @@ func TestProjectPolicyWholeNamesDoNotReachOtherProjectsOrThePlatform(t *testing.
 		}
 	}
 
-	if !matchesAny(t, st["AllowPassOwnRoleToPodIdentity"], acct+"role/c1-alpha.x") || matchesAny(t, st["AllowPassOwnRoleToPodIdentity"], acct+"role/c1-beta-alpha.x") {
+	pass := st["AllowPassOwnRoleToPodIdentity"]
+	if !matchesAny(t, pass, acct+"role/c1-alpha.x") || matchesAny(t, pass, acct+"role/c1-beta-alpha.x") {
 		t.Errorf("PassRole resources %v", st["AllowPassOwnRoleToPodIdentity"].Resource)
 	}
 
@@ -1348,9 +1352,15 @@ func TestWholeNamesOptionsAreRefusedWhenTheyCannotWork(t *testing.T) {
 	}{
 		"legacy names without whole names":    {ackfactory.ProjectRolesOptions{Boundary: "deploy", LegacyNames: true}, ackfactory.ProjectRole{Name: "alpha"}},
 		"a bucket prefix without whole names": {ackfactory.ProjectRolesOptions{Boundary: "deploy", BucketPrefix: "acme-"}, ackfactory.ProjectRole{Name: "alpha"}},
-		"a wildcard in the prefix":            {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true, BucketPrefix: "a*"}, ackfactory.ProjectRole{Name: "alpha"}},
-		"a dot in the name":                   {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true}, ackfactory.ProjectRole{Name: "al.pha"}},
-		"a wildcard in the slug":              {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true, LegacyNames: true}, ackfactory.ProjectRole{Name: "alpha", Slug: "a*"}},
+		"a wildcard in the prefix": {
+			ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true, BucketPrefix: "a*"},
+			ackfactory.ProjectRole{Name: "alpha"},
+		},
+		"a dot in the name": {ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true}, ackfactory.ProjectRole{Name: "al.pha"}},
+		"a wildcard in the slug": {
+			ackfactory.ProjectRolesOptions{Boundary: "deploy", WholeNames: true, LegacyNames: true},
+			ackfactory.ProjectRole{Name: "alpha", Slug: "a*"},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := run(t, func(ctx *pulumi.Context, _ ackfactory.Options) error {
