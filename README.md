@@ -131,8 +131,9 @@ project rows are inputs the platform supplies; see
 [the reference](docs/reference.md).
 
 **Company part.** A company's SRE writes its ACK objects for its project
-namespaces through its gitops repository, and its limit roles in its nexus
-repository, as the
+namespaces through its gitops repository. Its limit roles belong in its nexus
+repository once that stack has moved there; until then, and until the guard in
+the AWS organisation exists, only the platform team applies them, as the
 [delegation model](https://github.com/truvity/policy/blob/master/docs/delegation-model.md)
 describes for the AWS area. This repository gives a company no input of its
 own. The `guardrails-projects` chart, run by the platform, bounds what it
