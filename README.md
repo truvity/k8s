@@ -136,8 +136,9 @@ repository, as the
 [delegation model](https://github.com/truvity/policy/blob/master/docs/delegation-model.md)
 describes for the AWS area. This repository gives a company no input of its
 own. The `guardrails-projects` chart, run by the platform, bounds what it
-writes: its admission policy holds a project's `PodIdentityAssociation` to the
-project's own namespace and to the role prefixes of its row (see
+writes: its optional admission policy (`podIdentityAdmission`, off by default)
+holds a project's `PodIdentityAssociation` to the project's own namespace and to
+the role prefixes of its row (see
 [the reference](docs/reference.md#guardrails-projects)).
 
 ## Consumers
@@ -148,6 +149,7 @@ Pulumi preview (see
 The Go module is required by
 [artifacts](https://github.com/truvity/artifacts),
 [cd](https://github.com/truvity/cd),
+[ci-plane](https://github.com/truvity/ci-plane) (archived; its runner identity program),
 [ci-support](https://github.com/truvity/ci-support),
 [cnpg](https://github.com/truvity/cnpg),
 [gemaal](https://github.com/truvity/gemaal) (its test deploy program),
