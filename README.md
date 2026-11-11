@@ -69,8 +69,8 @@ permission boundaries or your accounts, does not install workloads into the
 cluster. The charts render cluster objects and never workloads:
 `cluster-baseline` labels namespaces someone else owns, `cluster-foundation`
 renders the foundation objects (namespaces, role bindings, storage classes),
-`eks-auto-node-pools` the Karpenter pools and `tenancy` what each tenant namespace
-needs around it; see
+`eks-auto-node-pools` the Karpenter pools and `tenancy` (deprecated) what each
+tenant namespace needs around it; see
 [the reference](docs/reference.md#chartscluster-baseline).
 
 ## The model
@@ -120,12 +120,43 @@ if out.Capabilities.Has(cluster.WorkloadIdentity) {
 }
 ```
 
+## Platform part and company part
+
+**Platform part.** The platform admin applies this repository's cluster side
+on the shared clusters: the Pulumi components and Go packages of the tables
+above (the cluster, its network, the identity of the cluster's controllers),
+and the cluster charts, among them `cluster-foundation`, `cluster-baseline`
+and `guardrails-projects`. Names, address ranges, permission boundaries and
+project rows are inputs the platform supplies; see
+[the reference](docs/reference.md).
+
+**Company part.** A company's SRE writes its ACK objects for its project
+namespaces through its gitops repository. Its limit roles belong in its nexus
+repository once that stack has moved there; until then, and until the guard in
+the AWS organisation exists, only the platform team applies them, as the
+[delegation model](https://github.com/truvity/policy/blob/master/docs/delegation-model.md)
+describes for the AWS area. This repository gives a company no input of its
+own. The `guardrails-projects` chart, run by the platform, bounds what it
+writes: its optional admission policy (`podIdentityAdmission`, off by default)
+holds a project's `PodIdentityAssociation` to the project's own namespace and to
+the role prefixes of its row (see
+[the reference](docs/reference.md#guardrails-projects)).
+
 ## Consumers
 
 A consumer adopts it cluster by cluster, each adoption proven by an empty
 Pulumi preview (see
 [docs/decisions/0002-urn-stability.md](docs/decisions/0002-urn-stability.md)).
-No consumer is recorded; a repository that adopts it adds a line here.
+The Go module is required by
+[artifacts](https://github.com/truvity/artifacts),
+[cd](https://github.com/truvity/cd),
+[ci-plane](https://github.com/truvity/ci-plane) (archived; its runner identity program),
+[ci-support](https://github.com/truvity/ci-support),
+[cnpg](https://github.com/truvity/cnpg),
+[gemaal](https://github.com/truvity/gemaal) (its test deploy program),
+[observability](https://github.com/truvity/observability) and the
+maintainers' platform repository. A repository that adopts it adds a line
+here.
 
 ## Neighbours
 
