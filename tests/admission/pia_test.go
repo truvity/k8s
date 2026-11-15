@@ -310,3 +310,55 @@ func TestPodIdentityAdmissionCanEnforce(t *testing.T) {
 		t.Errorf("platform-db is not exempt here, got %q", got)
 	}
 }
+
+// The top-level podIdentityRolePrefixes gives a namespace with no project row a
+// ceiling, and a namespace named by both a row and the top-level map takes the
+// union of the two lists.
+func TestPodIdentityAdmissionTopLevelCeiling(t *testing.T) {
+	pol, _ := load(t, "pia-admission-top-level")
+
+	for _, tc := range []struct {
+		name    string
+		obj     map[string]any
+		verdict string
+	}{
+		{"a namespace with no row, its top-level prefix", pia("arch", "arch", rolePrefix+"example-arch.vault"), ""},
+		{"a namespace with no row, another project's role", pia("arch", "arch", rolePrefix+"example-shop.vault"), badRole},
+		{"a namespace with no row, a Role by reference", piaRef("arch", "arch", "example-arch.vault", ""), ""},
+		{"the row's prefix of a namespace also named at the top level", pia("shop", "shop", rolePrefix+"example-shop.vault"), ""},
+		{"the top-level prefix of a namespace also named by a row", pia("shop", "shop", rolePrefix+"example-shop-top.vault"), ""},
+		{"a namespace named nowhere", pia("sandbox", "sandbox", rolePrefix+"example-arch.x"), noCeiling},
+		{"a row with no prefixes", pia("docs", "docs", rolePrefix+"example-docs.x"), noCeiling},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := admit(t, pol, "CREATE", tc.obj, map[string]any{})
+			if tc.verdict == "" && got != "" || !strings.Contains(got, tc.verdict) {
+				t.Errorf("got %q, want %q", got, tc.verdict)
+			}
+		})
+	}
+}
+
+// A top-level ceiling renders no object of its own: the namespace it names has
+// no row here, so nothing in the render is named for it (no Namespace,
+// NetworkPolicy, quota, RBAC or IAMRoleSelector).
+func TestPodIdentityAdmissionTopLevelRendersNoObject(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "golden", "guardrails-projects", "pia-admission-top-level.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, doc := range strings.Split(string(raw), "\n---\n") {
+		var o struct {
+			Kind     string
+			Metadata struct{ Name, Namespace string }
+		}
+		if err := yaml.Unmarshal([]byte(doc), &o); err != nil {
+			t.Fatal(err)
+		}
+
+		if o.Metadata.Name == "arch" || o.Metadata.Namespace == "arch" {
+			t.Errorf("%s %q is rendered for a namespace with no row", o.Kind, o.Metadata.Name)
+		}
+	}
+}

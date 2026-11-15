@@ -580,6 +580,21 @@
         }
       }
     },
+    "podIdentityRolePrefixes": {
+      "type": "object",
+      "description": "the role prefixes of a namespace with no project row, merged with the rows' podIdentityRolePrefixes",
+      "propertyNames": {
+        "$ref": "#/definitions/namespaceName"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "pattern": "^arn:[a-z-]+:iam::[^:]*:role/[^/]+$"
+        }
+      }
+    },
     "podIdentityAdmission": {
       "type": "object",
       "additionalProperties": false,

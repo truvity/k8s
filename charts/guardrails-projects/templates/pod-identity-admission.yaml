@@ -28,9 +28,18 @@ deletion.
 {{- if and (has "Deny" $actions) (has "Warn" $actions) }}
 {{- fail "podIdentityAdmission.validationActions: Deny and Warn cannot be combined (the API server refuses the binding); use [Deny, Audit] to enforce or [Warn, Audit] to observe" }}
 {{- end }}
+{{- /*
+The ceiling of each namespace: the top-level `podIdentityRolePrefixes` (a
+namespace that has no project row, written by someone else) merged with the
+rows' `podIdentityRolePrefixes`, per namespace, as a union. The top-level map
+renders no object of its own: only the guard reads it.
+*/ -}}
 {{- $prefixes := dict -}}
+{{- range $ns, $list := (.Values.podIdentityRolePrefixes | default dict) }}
+{{- if $list }}{{ $_ := set $prefixes $ns $list }}{{ end }}
+{{- end }}
 {{- range $p := .Values.projects }}
-{{- if $p.podIdentityRolePrefixes }}{{ $_ := set $prefixes $p.name $p.podIdentityRolePrefixes }}{{ end }}
+{{- if $p.podIdentityRolePrefixes }}{{ $_ := set $prefixes $p.name (concat (get $prefixes $p.name | default list) $p.podIdentityRolePrefixes | uniq) }}{{ end }}
 {{- end }}
 {{- $exempt := $pa.exemptNamespaces | default list -}}
 {{- range $a := (.Values.podIdentities.associations | default dict) }}

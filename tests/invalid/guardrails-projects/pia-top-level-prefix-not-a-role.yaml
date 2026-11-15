@@ -1,0 +1,4 @@
+# expect: does not match
+# A top-level role prefix is a role ARN prefix, as a row's is.
+podIdentityRolePrefixes:
+  arch: ["example-arch."]
