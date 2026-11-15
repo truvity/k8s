@@ -4,6 +4,10 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
+## Unreleased
+
+- Go toolchain go1.27.4 (was go1.27.3): fixes GO-2026-6859 in `net/http`, an HTTP/1 server crash from a race in `MaxBytesReader` header handling, reported by `govulncheck` on every `vuln` run since 2026-11-11. The `go` directive stays 1.27.0, so consumers need no change; binaries and images built from this module are rebuilt with the fixed standard library.
+
 ## v0.46.0
 
 - `charts/guardrails-projects`: **a PodIdentityAssociation ceiling for a namespace with no project row.** The new top-level `podIdentityRolePrefixes` (default `{}`) maps a namespace to its role prefixes, in the same shape and with the same checks as a row's `podIdentityRolePrefixes`. The guard reads it next to the rows' prefixes, so a namespace written by another component (the foundation's arch namespace, say) can have a ceiling without a project row: no Namespace, NetworkPolicy, quota, RBAC or IAMRoleSelector is rendered for it. A namespace named both by a row and at the top level takes the union of the two lists. Nothing renders differently until a value is set: every existing render is byte-identical, and only the new case `tests/cases/guardrails-projects/pia-admission-top-level` is added. Moving a namespace from the top level to a row, or back, changes nothing in the guard.
