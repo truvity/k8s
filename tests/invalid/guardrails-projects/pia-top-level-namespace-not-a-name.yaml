@@ -1,0 +1,4 @@
+# expect: does not match
+# A top-level key is a namespace name.
+podIdentityRolePrefixes:
+  Arch_Team: ["arn:example:iam::placeholder:role/example-arch."]

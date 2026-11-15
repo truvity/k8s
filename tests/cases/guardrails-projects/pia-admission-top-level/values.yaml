@@ -1,0 +1,22 @@
+# A namespace with no project row keeps a ceiling: `arch` is named only by the
+# top-level podIdentityRolePrefixes and renders no object of its own (no
+# Namespace, NetworkPolicy, quota, RBAC). `shop` is named by both its row and
+# the top-level map, so its ceiling is the union of the two lists.
+podIdentities:
+  clusterName: example
+  associations:
+    test-s3: {roleARN: "arn:example:iam::placeholder:role/example-test-s3", associationNamespace: identity-system}
+podIdentityAdmission:
+  enabled: true
+podIdentityRolePrefixes:
+  arch:
+    - "arn:example:iam::placeholder:role/example-arch."
+  shop:
+    - "arn:example:iam::placeholder:role/example-shop-top."
+projects:
+  - name: shop
+    kind: product
+    podIdentityRolePrefixes:
+      - "arn:example:iam::placeholder:role/example-shop."
+  - name: docs
+    kind: product

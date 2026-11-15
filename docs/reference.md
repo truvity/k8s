@@ -1546,7 +1546,11 @@ follows the last `/`, for example `<cluster>-<project>.`). The policy cannot rea
 the IAM role's; the namespace's own `Role`s remain bounded by its builder and permissions
 boundary. With both `roleARN` and `roleRef` set, both must pass; with neither, the
 association is refused. A namespace without a row, or a row without
-prefixes, has no ceiling and may create none (default deny). Namespaces are
+prefixes, has no ceiling and may create none (default deny), unless the
+top-level `podIdentityRolePrefixes` (a map from namespace to prefixes, the same
+checks) names it: that gives a namespace written by another component a ceiling
+without rendering any object for it, and a namespace named both ways takes the
+union. Namespaces are
 matched by name, never by a label. **The cluster is not checked:** the policy
 does not read `spec.clusterName` or `spec.clusterRef`, so it does not stop an
 association from naming another cluster the EKS controller can reach. What bounds

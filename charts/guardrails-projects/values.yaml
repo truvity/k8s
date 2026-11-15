@@ -180,6 +180,17 @@ podIdentities:
 # Roll out in observe mode, read the audit log, then enforce:
 #   validationActions: [Warn, Audit]   # default: admitted, warned, audited
 #   validationActions: [Deny, Audit]   # enforce (Deny cannot be combined with Warn)
+#
+# A namespace that has no project row, and so no object rendered here (the
+# platform's own namespace, written by another component), can still have a
+# ceiling: `podIdentityRolePrefixes` maps the namespace to its role prefixes,
+# the same shape and checks as a row's, and the guard reads it next to the
+# rows' prefixes. A namespace named in both takes the union of the two lists.
+# The map renders no Namespace, NetworkPolicy, quota, RBAC or any other object.
+#
+#   podIdentityRolePrefixes:
+#     arch: ["arn:<partition>:iam::<account>:role/<cluster>-arch."]
+podIdentityRolePrefixes: {}
 podIdentityAdmission:
   enabled: false
   name: ack-pod-identity-association-guard
