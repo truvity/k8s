@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws"
@@ -19,6 +20,13 @@ const (
 
 	// DefaultPartition is the ARN partition used when Cluster.Partition is empty.
 	DefaultPartition = "aws"
+
+	// BuilderSuffix ends the name of a builder role of the dotted shape,
+	// "<cluster>-<vendor>-<project>-<customer>[-<part>].ack-project".
+	BuilderSuffix = ".ack-project"
+
+	// maxRoleName is IAM's limit on a role name.
+	maxRoleName = 64
 )
 
 // Cluster is the EKS cluster the controllers run in.
@@ -53,6 +61,17 @@ func (c Cluster) policyARN(name string) string {
 
 func (c Cluster) roleARN(name string) string {
 	return fmt.Sprintf("arn:%s:iam::%s:role/%s", c.partition(), c.AccountID, name)
+}
+
+// projectAssumeResources are the builder roles a controller may assume: the
+// default shape "<cluster>-ack-project-*" and the dotted shape
+// "<cluster>-*.ack-project" (see ProjectRole.BuilderName). The trust policy of
+// each builder, not this pattern, decides which controllers may assume it.
+func (c Cluster) projectAssumeResources() []string {
+	return []string{
+		c.roleARN(c.Name + "-ack-project-*"),
+		c.roleARN(c.Name + "-*" + BuilderSuffix),
+	}
 }
 
 func (c Cluster) iamARN(suffix string) string {
@@ -131,8 +150,8 @@ func policyJSON(ctx *pulumi.Context, provider *aws.Provider, statements []iam.Ge
 // controller that mints every other IAM role in the bundle.
 //
 // WithProjectAssume additionally lets the controller assume the per-project
-// capability roles ({cluster}-ack-project-*): set it on clusters that host
-// projects.
+// capability roles ({cluster}-ack-project-* and {cluster}-*.ack-project): set
+// it on clusters that host projects.
 //
 // The trust is podidentity's default: the cluster's account and ARN, and the
 // controller's namespace and service account (ack-iam/ack-iam-controller),
@@ -172,7 +191,7 @@ func IAM(ctx *pulumi.Context, c Cluster, o Options, withProjectAssume bool) (*po
 			Sid:       pulumi.StringRef("AssumeProjectRoles"),
 			Effect:    pulumi.StringRef("Allow"),
 			Actions:   []string{actionAssumeRole, actionTagSession},
-			Resources: []string{c.roleARN(c.Name + "-ack-project-*")},
+			Resources: c.projectAssumeResources(),
 		})
 	}
 
@@ -225,7 +244,8 @@ func EKS(ctx *pulumi.Context, c Cluster, o Options) (*podidentity.PodIdentity, e
 // EKSOptions are the optional inputs of EKSWith. All zero: EKS.
 type EKSOptions struct {
 	// ProjectAssume lets the controller assume the per-project roles
-	// ({cluster}-ack-project-*), as IAM's withProjectAssume does. Required
+	// ({cluster}-ack-project-* and {cluster}-*.ack-project), as IAM's
+	// withProjectAssume does. Required
 	// once the controller runs with the IAMRoleSelector feature gate on
 	// (featureGates.IAMRoleSelector in the controller's Helm values, with
 	// enableCARM off): it then acts in each project namespace as that
@@ -286,7 +306,7 @@ func EKSWith(ctx *pulumi.Context, c Cluster, o Options, e EKSOptions) (*podident
 			Sid:       pulumi.StringRef("AssumeProjectRoles"),
 			Effect:    pulumi.StringRef("Allow"),
 			Actions:   []string{actionAssumeRole, actionTagSession},
-			Resources: []string{c.roleARN(c.Name + "-ack-project-*")},
+			Resources: c.projectAssumeResources(),
 		})
 	}
 
@@ -380,8 +400,8 @@ type ServicesOptions struct {
 
 // Services deploys, or adopts, the identity of each service controller: a
 // managed policy, a role under the boundary, the attachment and the
-// association, looked up with the program's context. Each controller may also assume the project roles
-// ({cluster}-ack-project-*).
+// association, looked up with the program's context. Each controller may also
+// assume the project roles ({cluster}-ack-project-* and {cluster}-*.ack-project).
 func Services(ctx *pulumi.Context, c Cluster, o ServicesOptions) error {
 	if err := o.validate(c); err != nil {
 		return err
@@ -416,12 +436,14 @@ func deployService(ctx *pulumi.Context, c Cluster, o ServicesOptions, svc Servic
 		boundary = o.Boundary
 	}
 
+	assume := c.projectAssumeResources()
+
 	policyDoc := fmt.Sprintf(
 		`{"Version":"2012-10-17","Statement":[`+
 			`{"Effect":"Allow","Action":%q,"Resource":"*"},`+
 			`{"Sid":"AssumeProjectRoles","Effect":"Allow",`+
-			`"Action":["sts:AssumeRole","sts:TagSession"],"Resource":%q}]}`,
-		svc.Action, c.roleARN(c.Name+"-ack-project-*"))
+			`"Action":["sts:AssumeRole","sts:TagSession"],"Resource":[%q,%q]}]}`,
+		svc.Action, assume[0], assume[1])
 
 	trust := fmt.Sprintf(
 		`{"Version":"2012-10-17","Statement":[{"Effect":"Allow",`+
@@ -502,6 +524,81 @@ type ProjectRole struct {
 	// place of Name: "<cluster>-<Slug>-<x>". Empty means Name. Read only with
 	// ProjectRolesOptions.WholeNames and LegacyNames.
 	Slug string
+
+	// Vendor, Customer and Part pick the second name shape of the role:
+	// "<cluster>-<Vendor>-<Name>-<Customer>[-<Part>].ack-project", for example
+	// "prod-acme-shop-eu.ack-project". All three empty (the default) keep
+	// "<cluster>-ack-project-<Name>". Vendor and Customer are set together;
+	// Part is optional and needs them. Each is one DNS label (lower-case
+	// letters, digits and hyphens, not starting or ending with a hyphen), as
+	// Name then is, and the whole role name is at most 64 characters.
+	//
+	// The role still carries the tags project=<Name> and cluster=<cluster>, and
+	// the same policy as the default shape would: only its name differs. The
+	// two shapes can exist at once for one project: list the project twice,
+	// once without these fields and once with them (see ProjectRoles).
+	Vendor, Customer, Part string
+}
+
+// BuilderName is the name of the project's builder role in the cluster: the
+// default "<cluster>-ack-project-<Name>", or, when Vendor and Customer are
+// set, "<cluster>-<Vendor>-<Name>-<Customer>[-<Part>].ack-project". It does
+// not validate; ProjectRoles does.
+func (p ProjectRole) BuilderName(c Cluster) string {
+	if !p.dotted() {
+		return defaultBuilderName(c, p.Name)
+	}
+
+	name := c.Name + "-" + p.Vendor + "-" + p.Name + "-" + p.Customer
+	if p.Part != "" {
+		name += "-" + p.Part
+	}
+
+	return name + BuilderSuffix
+}
+
+func defaultBuilderName(c Cluster, project string) string {
+	return c.Name + "-ack-project-" + project
+}
+
+// dotted says whether the role has the dotted name shape. Any of the three
+// fields set means it does; validateBuilderName refuses an incomplete set.
+func (p ProjectRole) dotted() bool {
+	return p.Vendor != "" || p.Customer != "" || p.Part != ""
+}
+
+// dnsLabel is one name segment of the dotted shape.
+var dnsLabel = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// validateBuilderName checks the fields of the dotted shape and returns the
+// role name. The default shape is returned as it always was, unchecked.
+func (p ProjectRole) validateBuilderName(c Cluster) (string, error) {
+	if !p.dotted() {
+		return defaultBuilderName(c, p.Name), nil
+	}
+
+	var errs []error
+
+	if p.Vendor == "" || p.Customer == "" {
+		errs = append(errs, errors.New("vendor and customer are set together, and part needs both"))
+	}
+
+	for _, f := range []struct{ field, v string }{{"Name", p.Name}, {"Vendor", p.Vendor}, {"Customer", p.Customer}, {"Part", p.Part}} {
+		if f.v == "" && f.field != "Name" {
+			continue
+		}
+
+		if !dnsLabel.MatchString(f.v) {
+			errs = append(errs, fmt.Errorf("%s %q is not a DNS label (lower-case letters, digits and hyphens, at most 63, no leading or trailing hyphen)", f.field, f.v))
+		}
+	}
+
+	name := p.BuilderName(c)
+	if len(name) > maxRoleName {
+		errs = append(errs, fmt.Errorf("role name %q is %d characters, the limit is %d", name, len(name), maxRoleName))
+	}
+
+	return name, errors.Join(errs...)
 }
 
 // ProjectRolesOptions are the inputs of ProjectRoles.
@@ -611,8 +708,16 @@ func DefaultProjectControllers() []string {
 	return []string{"iam", "s3", "kms", "dynamodb"}
 }
 
-// ProjectRoles mints one {cluster}-ack-project-{name} role per entry: the
-// controllers assume it for the CRs of the project's namespace. The service
+// ProjectRoles mints one builder role per entry: {cluster}-ack-project-{name},
+// or, for an entry with Vendor and Customer, the dotted
+// {cluster}-{vendor}-{name}-{customer}[-{part}].ack-project. The controllers
+// assume it for the CRs of the project's namespace.
+//
+// A project may be listed more than once when the entries carry different role
+// names (the default shape and one or more dotted ones): each is its own role
+// and policy, registered under its own name, so a project with both shapes at
+// once changes no resource the default shape already registers. Two entries
+// with the same role name are refused. The service
 // controllers' roles are created later (by the IAM controller, in two phases),
 // so the trust names the account root with an ArnEquals condition on the
 // controller roles: robust to a controller role being recreated.
@@ -644,10 +749,23 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 		return errors.New("options: BucketPrefix holds a wildcard")
 	}
 
+	seen := map[string]bool{}
+
 	for _, p := range projects {
 		if p.Name == "" {
 			return errors.New("project role: Name is empty")
 		}
+
+		roleName, err := p.validateBuilderName(c)
+		if err != nil {
+			return fmt.Errorf("project role %s: %w", p.Name, err)
+		}
+
+		if seen[roleName] {
+			return fmt.Errorf("project role %s: the role name %q is listed twice", p.Name, roleName)
+		}
+
+		seen[roleName] = true
 
 		ssm := "/business/" + p.Name
 		if p.SSMPrefix != "" {
@@ -665,9 +783,9 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 			}
 		}
 
-		policy := projectPolicy(c, p.Name, ssm, o.ForbiddenRoles, t)
+		policy := projectPolicy(c, p.Name, roleName, ssm, o.ForbiddenRoles, t)
 
-		if err := newBuilderRole(ctx, c, o.Boundary, p.Name, o.Controllers, policy, o.ResourceOptions); err != nil {
+		if err := newBuilderRole(ctx, c, o.Boundary, roleName, p.Name, o.Controllers, policy, o.ResourceOptions); err != nil {
 			return fmt.Errorf("project role for %s: %w", p.Name, err)
 		}
 	}
@@ -675,11 +793,14 @@ func ProjectRoles(ctx *pulumi.Context, c Cluster, o ProjectRolesOptions, project
 	return nil
 }
 
-// newBuilderRole registers {cluster}-ack-project-{name}, tagged with the
-// project and cluster, trusting the controllers, with its inline policy. The
+// newBuilderRole registers the builder role roleName, tagged with the project
+// and cluster, trusting the controllers, with its inline policy. The Pulumi
+// names are the role name and "<role name>-policy": for the default shape
+// "<cluster>-ack-project-<project>" those are what they always were, and a
+// dotted name differs from every default one (it ends in ".ack-project"). The
 // identity policy scopes the builder; the boundary supplies the entrapment
 // (the tag requirement and the child-boundary allow-list).
-func newBuilderRole(ctx *pulumi.Context, c Cluster, boundary, name string, controllers []string, policy string, ro []pulumi.ResourceOption) error {
+func newBuilderRole(ctx *pulumi.Context, c Cluster, boundary, roleName, project string, controllers []string, policy string, ro []pulumi.ResourceOption) error {
 	if controllers == nil {
 		controllers = DefaultProjectControllers()
 	}
@@ -693,8 +814,6 @@ func newBuilderRole(ctx *pulumi.Context, c Cluster, boundary, name string, contr
 
 		arns += fmt.Sprintf("%q", c.roleARN(fmt.Sprintf("%s-ack-%s", c.Name, ctl)))
 	}
-
-	roleName := fmt.Sprintf("%s-ack-project-%s", c.Name, name)
 
 	trust := fmt.Sprintf(`{
   "Version": "2012-10-17",
@@ -711,7 +830,7 @@ func newBuilderRole(ctx *pulumi.Context, c Cluster, boundary, name string, contr
 		AssumeRolePolicy:    pulumi.String(trust),
 		PermissionsBoundary: pulumi.String(c.policyARN(boundary)),
 		Tags: pulumi.StringMap{
-			"project": pulumi.String(name),
+			"project": pulumi.String(project),
 			"cluster": pulumi.String(c.Name),
 		},
 	}, ro...)

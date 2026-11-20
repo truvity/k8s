@@ -99,7 +99,7 @@ func EmployeeRoles(ctx *pulumi.Context, c Cluster, o EmployeeRolesOptions, sandb
 	policy := employeePolicy(c, o)
 
 	for _, sb := range sandboxes {
-		if err := newBuilderRole(ctx, c, o.Boundary, sb.Name, o.Controllers, policy, o.ResourceOptions); err != nil {
+		if err := newBuilderRole(ctx, c, o.Boundary, defaultBuilderName(c, sb.Name), sb.Name, o.Controllers, policy, o.ResourceOptions); err != nil {
 			return fmt.Errorf("employee role for %s: %w", sb.Name, err)
 		}
 	}

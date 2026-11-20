@@ -736,7 +736,7 @@ err = ackfactory.ProjectRoles(ctx, c, ackfactory.ProjectRolesOptions{Boundary: "
 | `IAM` | A `podidentity` component `ack-iam-<cluster>`: role `<cluster>-ack-iam` (IAM management inside the account, Pod Identity association calls, and with `withProjectAssume` the project roles) and its association for `ack-iam/ack-iam-controller`. |
 | `EKS`, `EKSWith` | A `podidentity` component `ack-eks-<cluster>`: role `<cluster>-ack-eks` and its association for `ack-eks/ack-eks-controller`. `EKSWith` takes `EKSOptions` (below). |
 | `Services` | One `podidentity` component `ack-svc/<cluster>-ack-<svc>` per service (default `s3`, `kms`, `dynamodb`): managed policy, role, attachment and association for `ack-<svc>/ack-<svc>-controller`. A policy, role or association that is live is adopted (`Lookup`) instead of created. |
-| `ProjectRoles` | Per project a role `<cluster>-ack-project-<name>` and its policy `<cluster>-ack-project-<name>-policy`, resources scoped to the project name, assumed by the controllers. |
+| `ProjectRoles` | Per entry a role and its policy `<role>-policy`, resources scoped to the project name, assumed by the controllers. The role is `<cluster>-ack-project-<name>`, or with `Vendor` and `Customer` set `<cluster>-<vendor>-<name>-<customer>[-<part>].ack-project` (see below). |
 | `EmployeeRoles` | Per employee sandbox the same pair, `<cluster>-ack-project-<name>` and `-policy`, with the project builder's tightened policy keyed on the role's own tags (see below). |
 
 The roles of the IAM and EKS controllers trust only their own controller's
@@ -786,6 +786,34 @@ name moves the live roles to it in place. A key with no `project` tag is not
 protected by the key tag deny, so the builder's boundary should name the tag
 too.
 
+### Two builder name shapes
+
+A builder's name is, by default, `<cluster>-ack-project-<name>`. Setting
+`ProjectRole.Vendor` and `ProjectRole.Customer` (and optionally `Part`) gives it
+the second shape `<cluster>-<vendor>-<name>-<customer>[-<part>].ack-project`,
+for example `prod-acme-shop-eu.ack-project`. `ProjectRole.BuilderName(c)` returns
+the name. Each of `Name`, `Vendor`, `Customer` and `Part` must be one DNS label
+(lower-case letters, digits and hyphens, no leading or trailing hyphen), and the
+whole name at most 64 characters; `ProjectRoles` refuses anything else before it
+registers a resource.
+
+Only the name changes: the role carries the same `project` and `cluster` tags,
+boundary, trust and identity policy as the default shape, except that the
+`ProtectTags` deny of touching "the role itself" names the dotted role.
+
+The two shapes can exist for one project at once: list the project twice, once
+without the new fields and once with them (or once per customer or part). The
+Pulumi names of a role are its role name and `<role name>-policy`, so the
+default builder keeps the names, and the URNs, it always had, and a dotted one
+cannot collide with it (a default name has no `.`). Two entries with the same
+role name are refused.
+
+The controllers' `sts:AssumeRole` and `sts:TagSession` grants (`IAM` with
+`withProjectAssume`, `EKSWith` with `ProjectAssume`, and every service
+controller's policy) now name both `<cluster>-ack-project-*` and
+`<cluster>-*.ack-project`. Each builder's trust, not that pattern, decides which
+controllers may assume it.
+
 ### IAMRoleSelector on the EKS controller
 
 By default the EKS controller makes every Pod Identity association as its own
@@ -801,8 +829,8 @@ that does nothing:
   selectors themselves are the ones `guardrails-projects` renders from the rows'
   `ackRoleARN`.
 - The identity: `EKSWith(ctx, c, o, ackfactory.EKSOptions{ProjectAssume: true})`
-  adds `sts:AssumeRole` and `sts:TagSession` on `<cluster>-ack-project-*`
-  (without it the gate cannot work: the assume is refused). `RoleNames`
+  adds `sts:AssumeRole` and `sts:TagSession` on `<cluster>-ack-project-*` and
+  `<cluster>-*.ack-project` (without it the gate cannot work: the assume is refused). `RoleNames`
   narrows `iam:GetRole`, `iam:PassRole` and `iam:ListAttachedRolePolicies` from
   `<cluster>-*` to role-name patterns (`*-pg-*`, say), the roles the controller
   still binds as itself. On the project side `ProjectRolesOptions.Controllers`
