@@ -1584,7 +1584,25 @@ does not read `spec.clusterName` or `spec.clusterRef`, so it does not stop an
 association from naming another cluster the EKS controller can reach. What bounds
 the cluster is the identity policy of the project's builder role (Pod Identity
 association calls only on its own cluster, `ProjectRolesOptions.PodIdentity`),
-not this policy. Exempt by name, because their associations
+not this policy. **The target hop is checked only with `checkTarget`.** An association may name a role
+in another account to assume from the first (`spec.targetRoleARN`, or
+`spec.targetRoleRef`). `podIdentityAdmission.checkTarget` (default `false`: nothing is
+rendered for it and every existing render is byte-identical) adds three checks. A
+`targetRoleARN` must be `arn:<partition>:iam::<account>:role/<name>` where `<name>` has
+no path and starts with the role-name part of one of the namespace's
+`podIdentityRolePrefixes`: the same plain `startsWith` as for `roleARN`, so a dotted
+prefix (`<cluster>-<vendor>-<project>-`, `...-eu.`) needs no chart change, and the
+partition is the prefix's. Its `<account>` must be one of the namespace's target
+accounts: the row's `podIdentityTargetAccounts` and the top-level
+`podIdentityTargetAccounts` (a map from namespace to account IDs), as a union;
+a namespace that has none uses `podIdentityAdmission.targetAccounts`, the chart-wide
+default (`[]`). With no account for a namespace, every `targetRoleARN` is refused.
+`spec.targetRoleRef` is refused unless `podIdentityAdmission.allowTargetRoleRef` is
+`true` (default `false`); then it is checked like `roleRef`: a `Role` of the same
+namespace whose name starts with the role-name part of a prefix. The policy cannot read
+the `Role`, so its account is not checked: allow it only where the namespace's `Role`s
+are bounded to their account. The same `validationActions` apply to the target checks.
+Exempt by name, because their associations
 bind other namespaces by design: `podIdentityAdmission.exemptNamespaces` (a
 database operator's, say) and the `associationNamespace` of every
 `podIdentities.associations` entry. An update that leaves `spec` alone is

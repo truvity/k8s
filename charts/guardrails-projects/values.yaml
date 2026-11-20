@@ -191,6 +191,15 @@ podIdentities:
 #   podIdentityRolePrefixes:
 #     arch: ["arn:<partition>:iam::<account>:role/<cluster>-arch."]
 podIdentityRolePrefixes: {}
+# The accounts a namespace's associations may target with spec.targetRoleARN
+# (the cross-account hop), by namespace: the same shape as the map above, a
+# union with the rows' `podIdentityTargetAccounts`. Read only with
+# `podIdentityAdmission.checkTarget`. A namespace with none uses
+# `podIdentityAdmission.targetAccounts`.
+#
+#   podIdentityTargetAccounts:
+#     arch: ["acct-one"]
+podIdentityTargetAccounts: {}
 podIdentityAdmission:
   enabled: false
   name: ack-pod-identity-association-guard
@@ -201,6 +210,25 @@ podIdentityAdmission:
   # of a database operator:
   #   exemptNamespaces: [cnpg-system]
   exemptNamespaces: []
+  # The cross-account hop: spec.targetRoleARN and spec.targetRoleRef. Off by
+  # default, and then the render is unchanged. On, a targetRoleARN must be
+  # `arn:<partition>:iam::<account>:role/<name>`, <name> with no path and
+  # starting with the role-name part of one of the namespace's
+  # `podIdentityRolePrefixes` (a plain startsWith, so a dotted prefix such as
+  # `<cluster>-<vendor>-<project>-` works as it is), and <account> one of the
+  # namespace's target accounts: the row's and the top-level
+  # `podIdentityTargetAccounts` (a union), else `targetAccounts` below. With no
+  # account for a namespace, every targetRoleARN is refused. The same
+  # validationActions apply.
+  checkTarget: false
+  # The accounts of every namespace that names none of its own.
+  targetAccounts: []
+  # false: spec.targetRoleRef is refused. true: it is checked like roleRef
+  # (a Role of the same namespace, whose name starts with the role-name part
+  # of a prefix). The policy cannot read the Role, so its account is not
+  # checked: allow it only where the namespace's Roles are bounded to their
+  # account.
+  allowTargetRoleRef: false
 
 # --- Image allow-list ---------------------------------------------------------
 # A ValidatingAdmissionPolicy and its binding for the images of a namespace's
@@ -266,6 +294,7 @@ imageAllowList:
 #       ackRoleARN: "<the IAM role ARN>"
 #       podIdentityRolePrefixes:           # with podIdentityAdmission: the roles the namespace's associations may bind
 #         - "arn:<partition>:iam::<account>:role/<cluster>-<project>."
+#       podIdentityTargetAccounts: ["acct-one"]   # with podIdentityAdmission.checkTarget: the accounts its associations may hop to
 #       podIdentities: [test-s3]           # names under podIdentities.associations
 #       tailnets: [corp]                   # names under networkPolicy.tailnetIngress.tailnets
 #       images:                            # with imageAllowList: the registries its pods may pull from

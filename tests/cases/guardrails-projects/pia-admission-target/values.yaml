@@ -1,0 +1,32 @@
+# The cross-account hop is checked (`checkTarget`): a targetRoleARN must be a
+# role of the namespace by a prefix (the dotted shape included) in an account
+# of the namespace's list. `shop` has its own account; `docs` falls back to the
+# chart-wide list; `arch` (no row) is named at the top level and its accounts
+# are the union of its two lists; `ci-shop` has no ceiling. targetRoleRef is
+# refused (allowTargetRoleRef is off).
+podIdentities:
+  clusterName: example
+  associations:
+    test-s3: {roleARN: "arn:example:iam::acct-one:role/prod-acme-test-s3", associationNamespace: identity-system}
+podIdentityAdmission:
+  enabled: true
+  checkTarget: true
+  targetAccounts: ["acct-three"]
+podIdentityRolePrefixes:
+  arch:
+    - "arn:example:iam::acct-one:role/prod-acme-arch-"
+podIdentityTargetAccounts:
+  arch: ["acct-four"]
+projects:
+  - name: shop
+    kind: product
+    podIdentityRolePrefixes:
+      - "arn:example:iam::acct-one:role/prod-acme-shop-"
+    podIdentityTargetAccounts: ["acct-two", "acct-five"]
+  - name: docs
+    kind: product
+    podIdentityRolePrefixes:
+      - "arn:example:iam::acct-one:role/prod-acme-docs."
+  - name: ci-shop
+    kind: ci
+    podIdentities: [test-s3]

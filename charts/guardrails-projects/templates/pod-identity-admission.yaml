@@ -14,7 +14,24 @@ controller may pass, so the policy refuses it unless
     namespace's own Roles stay bounded by its builder and permissions
     boundary. When both roleARN and roleRef are set, both must pass.
 A namespace with no row, or a row with no prefixes, has no ceiling and may not
-create associations (default deny). Exempt by name: `podIdentityAdmission.
+create associations (default deny).
+
+`podIdentityAdmission.checkTarget` (default false: nothing below is rendered
+and the output is unchanged) adds the cross-account hop of an association,
+spec.targetRoleARN and spec.targetRoleRef:
+  - spec.targetRoleARN must be `arn:<partition>:iam::<account>:role/<name>`
+    where <name> has no path and starts with the role-name part of one of the
+    namespace's prefixes (the same plain startsWith as for roleARN, so a prefix
+    of the dotted shape `<cluster>-<vendor>-<project>-` or `...-eu.` needs no
+    chart change), the partition is the prefix's, and <account> is one of the
+    namespace's target accounts. Those are the row's and the top-level
+    `podIdentityTargetAccounts`, as a union; a namespace that has none falls
+    back to `podIdentityAdmission.targetAccounts`. With no account for a
+    namespace, every targetRoleARN is refused.
+  - spec.targetRoleRef is refused unless `allowTargetRoleRef` is true; then it
+    is checked like roleRef (same namespace, a name from a prefix). The Role's
+    account cannot be read by the policy, so allow it only where the
+    namespace's own Roles are bounded to their account. Exempt by name: `podIdentityAdmission.
 exemptNamespaces` and the `associationNamespace` of every
 `podIdentities.associations` entry, whose associations bind other namespaces
 by design (the platform's, not a project's). A namespace is named by
@@ -40,6 +57,21 @@ renders no object of its own: only the guard reads it.
 {{- end }}
 {{- range $p := .Values.projects }}
 {{- if $p.podIdentityRolePrefixes }}{{ $_ := set $prefixes $p.name (concat (get $prefixes $p.name | default list) $p.podIdentityRolePrefixes | uniq) }}{{ end }}
+{{- end }}
+{{- /* The target accounts of each namespace that has a ceiling. */ -}}
+{{- $targetAccounts := dict -}}
+{{- if $pa.checkTarget }}
+{{- $own := dict -}}
+{{- range $ns, $list := (.Values.podIdentityTargetAccounts | default dict) }}
+{{- if $list }}{{ $_ := set $own $ns $list }}{{ end }}
+{{- end }}
+{{- range $p := .Values.projects }}
+{{- if $p.podIdentityTargetAccounts }}{{ $_ := set $own $p.name (concat (get $own $p.name | default list) $p.podIdentityTargetAccounts | uniq) }}{{ end }}
+{{- end }}
+{{- range $ns, $_ := $prefixes }}
+{{- $list := get $own $ns | default ($pa.targetAccounts | default list) }}
+{{- if $list }}{{ $_ := set $targetAccounts $ns ($list | uniq | sortAlpha) }}{{ end }}
+{{- end }}
 {{- end }}
 {{- $exempt := $pa.exemptNamespaces | default list -}}
 {{- range $a := (.Values.podIdentities.associations | default dict) }}
@@ -67,6 +99,10 @@ spec:
   variables:
     - name: rolePrefixes
       expression: {{ $prefixes | toJson | toJson }}
+{{- if $pa.checkTarget }}
+    - name: targetAccounts
+      expression: {{ $targetAccounts | toJson | toJson }}
+{{- end }}
   validations:
     - expression: "has(object.spec.namespace) && object.spec.namespace == object.metadata.namespace"
       message: "a PodIdentityAssociation binds the namespace it lives in: spec.namespace must equal metadata.namespace"
@@ -93,6 +129,41 @@ spec:
            object.spec.roleRef.from.name.startsWith(p.substring(p.lastIndexOf('/') + 1))))
       message: "spec.roleRef must name a Role of this namespace's project: roleRef.from.namespace absent or this namespace, and a name that starts with the role-name part of one of its podIdentityRolePrefixes"
       reason: Forbidden
+{{- if $pa.checkTarget }}
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) || !has(object.spec.targetRoleARN) ||
+        (object.spec.targetRoleARN.split(':').size() == 6 &&
+         variables.rolePrefixes[object.metadata.namespace].exists(p,
+           object.spec.targetRoleARN.split(':')[0] == 'arn' &&
+           object.spec.targetRoleARN.split(':')[1] == p.split(':')[1] &&
+           object.spec.targetRoleARN.split(':')[2] == 'iam' &&
+           object.spec.targetRoleARN.split(':')[3] == '' &&
+           object.spec.targetRoleARN.split(':')[5].startsWith('role/' + p.substring(p.lastIndexOf('/') + 1)) &&
+           !object.spec.targetRoleARN.split(':')[5].substring(5).contains('/')))
+      message: "spec.targetRoleARN must be a role of this namespace's project: an IAM role ARN with no path whose name starts with the role-name part of one of its podIdentityRolePrefixes"
+      reason: Forbidden
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) || !has(object.spec.targetRoleARN) ||
+        (object.spec.targetRoleARN.split(':').size() == 6 &&
+         object.metadata.namespace in variables.targetAccounts &&
+         object.spec.targetRoleARN.split(':')[4] in variables.targetAccounts[object.metadata.namespace])
+      message: "spec.targetRoleARN must be in an account this namespace may target (podIdentityTargetAccounts); a namespace with no target account may not set it"
+      reason: Forbidden
+{{- if $pa.allowTargetRoleRef }}
+    - expression: >-
+        !(object.metadata.namespace in variables.rolePrefixes) || !has(object.spec.targetRoleRef) ||
+        (has(object.spec.targetRoleRef.from) && has(object.spec.targetRoleRef.from.name) &&
+         (!has(object.spec.targetRoleRef.from.namespace) || object.spec.targetRoleRef.from.namespace == object.metadata.namespace) &&
+         variables.rolePrefixes[object.metadata.namespace].exists(p,
+           object.spec.targetRoleRef.from.name.startsWith(p.substring(p.lastIndexOf('/') + 1))))
+      message: "spec.targetRoleRef must name a Role of this namespace's project: targetRoleRef.from.namespace absent or this namespace, and a name that starts with the role-name part of one of its podIdentityRolePrefixes"
+      reason: Forbidden
+{{- else }}
+    - expression: "!has(object.spec.targetRoleRef)"
+      message: "spec.targetRoleRef is not allowed: name the target with spec.targetRoleARN (podIdentityAdmission.allowTargetRoleRef is false)"
+      reason: Forbidden
+{{- end }}
+{{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

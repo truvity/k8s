@@ -362,3 +362,165 @@ func TestPodIdentityAdmissionTopLevelRendersNoObject(t *testing.T) {
 		}
 	}
 }
+
+// piaTarget is an association with a role of the project and a target: the
+// cross-account hop. target "" leaves targetRoleARN unset.
+func piaTarget(ns, role, target string) map[string]any {
+	obj := pia(ns, ns, role)
+	if target != "" {
+		obj["spec"].(map[string]any)["targetRoleARN"] = target
+	}
+
+	return obj
+}
+
+// piaTargetRef is an association with a role of the project and a targetRoleRef.
+func piaTargetRef(ns, role, name, fromNs string) map[string]any {
+	from := map[string]any{"name": name}
+	if fromNs != "" {
+		from["namespace"] = fromNs
+	}
+
+	obj := pia(ns, ns, role)
+	obj["spec"].(map[string]any)["targetRoleRef"] = map[string]any{"from": from}
+
+	return obj
+}
+
+const (
+	own         = "arn:example:iam::acct-one:role/"
+	otherAcct   = "arn:example:iam::acct-two:role/"
+	acct3       = "arn:example:iam::acct-three:role/"
+	acct4       = "arn:example:iam::acct-four:role/"
+	acct5       = "arn:example:iam::acct-five:role/"
+	acct9       = "arn:example:iam::acct-nine:role/"
+	badTarget   = "spec.targetRoleARN must be a role"
+	badTargetAc = "spec.targetRoleARN must be in an account"
+	noTargetRef = "spec.targetRoleRef is not allowed"
+	badTargetRf = "spec.targetRoleRef must name a Role"
+)
+
+// With checkTarget the hop is judged like the role: a name from the
+// namespace's prefixes (the dotted shape included, by a plain startsWith) in an
+// account of the namespace's list.
+func TestPodIdentityAdmissionTarget(t *testing.T) {
+	pol, binding := load(t, "pia-admission-target")
+
+	for _, tc := range []struct {
+		name    string
+		obj     map[string]any
+		verdict string
+	}{
+		{"no target: unchanged", piaTarget("shop", own+"prod-acme-shop-eu.eso", ""), ""},
+		{"no target, a bad role: still refused", piaTarget("shop", own+"prod-acme-docs.x", ""), badRole},
+		{"a dotted name, its account", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"prod-acme-shop-eu.eso"), ""},
+		{"a dotted name, the other account of the list", piaTarget("shop", own+"prod-acme-shop-eu.eso", acct5+"prod-acme-shop-eu.eso"), ""},
+		{"a dashed name from the same prefix", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"prod-acme-shop-us.vault"), ""},
+		{"the prefix alone as a name", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"prod-acme-shop-"), ""},
+		{"another project's role as target", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"prod-acme-docs.x"), badTarget},
+		{"a controller's role as target", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"prod-acme-ack-iam"), badTarget},
+		{"a name that only contains the prefix", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"x-prod-acme-shop-eu.eso"), badTarget},
+		{"a path in the target", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"path/prod-acme-shop-eu.eso"), badTarget},
+		{"a path after the prefix", piaTarget("shop", own+"prod-acme-shop-eu.eso", otherAcct+"prod-acme-shop-a/b"), badTarget},
+		{"not a role ARN", piaTarget("shop", own+"prod-acme-shop-eu.eso", "prod-acme-shop-eu.eso"), badTarget},
+		{"a user ARN", piaTarget("shop", own+"prod-acme-shop-eu.eso", "arn:example:iam::acct-two:user/prod-acme-shop-eu.eso"), badTarget},
+		{"another service", piaTarget("shop", own+"prod-acme-shop-eu.eso", "arn:example:sts::acct-two:role/prod-acme-shop-eu.eso"), badTarget},
+		{"another partition", piaTarget("shop", own+"prod-acme-shop-eu.eso", "arn:other:iam::acct-two:role/prod-acme-shop-eu.eso"), badTarget},
+		{"an empty target", piaTarget("shop", own+"prod-acme-shop-eu.eso", " "), badTarget},
+		{"an account that is not on the list", piaTarget("shop", own+"prod-acme-shop-eu.eso", acct9+"prod-acme-shop-eu.eso"), badTargetAc},
+		{"the chart-wide account, but the namespace has its own list", piaTarget("shop", own+"prod-acme-shop-eu.eso", acct3+"prod-acme-shop-eu.eso"), badTargetAc},
+		{"the role's own account is not a target account", piaTarget("shop", own+"prod-acme-shop-eu.eso", own+"prod-acme-shop-eu.eso"), badTargetAc},
+		{"an empty account", piaTarget("shop", own+"prod-acme-shop-eu.eso", "arn:example:iam:::role/prod-acme-shop-eu.eso"), badTargetAc},
+		{"a namespace with no list of its own uses the chart-wide one", piaTarget("docs", own+"prod-acme-docs.x", acct3+"prod-acme-docs.y"), ""},
+		{"the chart-wide list, another account", piaTarget("docs", own+"prod-acme-docs.x", otherAcct+"prod-acme-docs.y"), badTargetAc},
+		{"the chart-wide list, another project's name", piaTarget("docs", own+"prod-acme-docs.x", acct3+"prod-acme-shop-eu.x"), badTarget},
+		{"a namespace with no row: the union of its two lists", piaTarget("arch", own+"prod-acme-arch-vault", acct4+"prod-acme-arch-vault"), ""},
+		{"a namespace with no row, the chart-wide account", piaTarget("arch", own+"prod-acme-arch-vault", acct3+"prod-acme-arch-vault"), badTargetAc},
+		{"a namespace with no ceiling", piaTarget("ci-shop", own+"prod-acme-ci.x", otherAcct+"prod-acme-ci.x"), noCeiling},
+		{"a targetRoleRef is refused", piaTargetRef("shop", own+"prod-acme-shop-eu.eso", "prod-acme-shop-eu.eso", ""), noTargetRef},
+		{"a targetRoleRef of another namespace is refused", piaTargetRef("shop", own+"prod-acme-shop-eu.eso", "prod-acme-shop-eu.eso", "docs"), noTargetRef},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := admit(t, pol, "CREATE", tc.obj, map[string]any{})
+			if tc.verdict == "" && got != "" || !strings.Contains(got, tc.verdict) {
+				t.Errorf("got %q, want %q", got, tc.verdict)
+			}
+		})
+	}
+
+	// An update that adds a bad target is judged; one that leaves spec alone is skipped.
+	bad := piaTarget("shop", own+"prod-acme-shop-eu.eso", acct9+"prod-acme-shop-eu.eso")
+	good := piaTarget("shop", own+"prod-acme-shop-eu.eso", "")
+
+	if got := admit(t, pol, "UPDATE", bad, good); !strings.Contains(got, badTargetAc) {
+		t.Errorf("an update to a bad target, got %q", got)
+	}
+
+	if got := admit(t, pol, "UPDATE", bad, bad); got != skipSpec {
+		t.Errorf("an update that leaves spec alone, got %q", got)
+	}
+
+	// The actions are not touched by the target check.
+	if got := strings.Join(binding.Spec.ValidationActions, ","); got != "Warn,Audit" {
+		t.Errorf("binding actions %q", got)
+	}
+}
+
+// With allowTargetRoleRef a targetRoleRef is judged like roleRef; with no
+// account listed anywhere, every targetRoleARN is refused.
+func TestPodIdentityAdmissionTargetRoleRefAllowed(t *testing.T) {
+	pol, _ := load(t, "pia-admission-target-roleref")
+	role := own + "prod-acme-shop-eu.eso"
+
+	for _, tc := range []struct {
+		name    string
+		obj     map[string]any
+		verdict string
+	}{
+		{"a Role of the project", piaTargetRef("shop", role, "prod-acme-shop-eu.eso", ""), ""},
+		{"a Role of the project, namespace spelled out", piaTargetRef("shop", role, "prod-acme-shop-eu.eso", "shop"), ""},
+		{"a Role of another namespace", piaTargetRef("shop", role, "prod-acme-shop-eu.eso", "docs"), badTargetRf},
+		{"another project's Role", piaTargetRef("shop", role, "prod-acme-docs.x", ""), badTargetRf},
+		{"no name", withTargetRef(piaTarget("shop", role, ""), map[string]any{"from": map[string]any{}}), badTargetRf},
+		{"no from", withTargetRef(piaTarget("shop", role, ""), map[string]any{}), badTargetRf},
+		{"no target at all", piaTarget("shop", role, ""), ""},
+		{"no account anywhere: any targetRoleARN is refused", piaTarget("shop", role, otherAcct+"prod-acme-shop-eu.eso"), badTargetAc},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := admit(t, pol, "CREATE", tc.obj, map[string]any{})
+			if tc.verdict == "" && got != "" || !strings.Contains(got, tc.verdict) {
+				t.Errorf("got %q, want %q", got, tc.verdict)
+			}
+		})
+	}
+}
+
+func withTargetRef(obj map[string]any, ref map[string]any) map[string]any {
+	obj["spec"].(map[string]any)["targetRoleRef"] = ref
+
+	return obj
+}
+
+// Off by default: the policy of a render that does not set checkTarget has no
+// target variable and no validation that reads a target.
+func TestPodIdentityAdmissionTargetOffByDefault(t *testing.T) {
+	pol, _ := load(t, "pia-admission")
+
+	for _, v := range pol.Spec.Variables {
+		if v.Name == "targetAccounts" {
+			t.Error("the default render has a targetAccounts variable")
+		}
+	}
+
+	for _, v := range pol.Spec.Validations {
+		if strings.Contains(v.Expression, "target") {
+			t.Errorf("the default render reads a target: %s", v.Expression)
+		}
+	}
+
+	// An association with a foreign target is admitted: the default checks no hop.
+	obj := piaTarget("shop", rolePrefix+"example-shop.vault", acct9+"anything")
+	if got := admit(t, pol, "CREATE", obj, map[string]any{}); got != "" {
+		t.Errorf("got %q", got)
+	}
+}

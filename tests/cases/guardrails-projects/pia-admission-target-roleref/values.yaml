@@ -1,0 +1,15 @@
+# checkTarget with allowTargetRoleRef: a targetRoleRef is checked like roleRef
+# (a Role of the same namespace, a name from one of the prefixes). No account
+# is listed anywhere, so every targetRoleARN is refused.
+podIdentities:
+  clusterName: example
+  associations: {}
+podIdentityAdmission:
+  enabled: true
+  checkTarget: true
+  allowTargetRoleRef: true
+projects:
+  - name: shop
+    kind: product
+    podIdentityRolePrefixes:
+      - "arn:example:iam::acct-one:role/prod-acme-shop-"
