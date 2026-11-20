@@ -6,6 +6,8 @@ them, and for anything breaking, what to do.
 
 ## Unreleased
 
+- `pkg/aws/ackfactory`: **a second name shape for the per-project builder roles.** `ProjectRole` gains `Vendor`, `Customer` and `Part` (all unset by default), and `ProjectRole.BuilderName(Cluster)` returns the role's name: the default `<cluster>-ack-project-<name>`, or with `Vendor` and `Customer` set `<cluster>-<vendor>-<name>-<customer>[-<part>].ack-project` (`BuilderSuffix` is the `.ack-project` end). Segments must be DNS labels and the name at most 64 characters; `ProjectRoles` refuses the rest before registering anything. A project can be listed more than once with different role names, so both shapes can exist at once: a role is registered under its own name and `<name>-policy`, so the default builder keeps its URNs and inputs (pinned by a test), and two entries with the same role name are refused. With `ProtectTags` a dotted builder's own-role deny names the dotted role. The controllers' assume grants (`IAM` with `withProjectAssume`, `EKSWith` with `ProjectAssume`, and every service controller's managed policy) now list `<cluster>-*.ack-project` next to `<cluster>-ack-project-*`: a live policy updates in place on the next apply (a single `Resource` string becomes a list in the service controllers' policy document), and nothing else renders differently for a caller that uses only the default shape.
+
 - Go toolchain go1.27.4 (was go1.27.3): fixes GO-2026-6859 in `net/http`, an HTTP/1 server crash from a race in `MaxBytesReader` header handling, reported by `govulncheck` on every `vuln` run since 2026-11-11. The `go` directive stays 1.27.0, so consumers need no change; binaries and images built from this module are rebuilt with the fixed standard library.
 
 ## v0.46.0
