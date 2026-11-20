@@ -125,6 +125,15 @@ it out in three steps, per cluster, the least important cluster first.
 3. **Enforce.** Switch to `[Deny, Audit]`. `Deny` with `Warn` is refused by the
    chart. Rolling back is the previous values.
 
+Then, if associations hop to a role in another account, turn on the target
+check the same way: list the accounts each namespace may target (a row's
+`podIdentityTargetAccounts`, the top-level map, or the chart-wide
+`podIdentityAdmission.targetAccounts`) and set `checkTarget: true` under the
+same `validationActions`, observing first. With `checkTarget` off, which is the
+default, a `spec.targetRoleARN` or `spec.targetRoleRef` is not looked at. With
+it on and no account listed, every `targetRoleARN` is refused, and so is every
+`targetRoleRef` unless `allowTargetRoleRef` is `true`.
+
 Know what it does not check. The policy does not read the association's
 cluster (`spec.clusterName` or `spec.clusterRef`): the cluster is bounded by the
 identity policy of the project's builder role, not here. A `roleRef` is judged

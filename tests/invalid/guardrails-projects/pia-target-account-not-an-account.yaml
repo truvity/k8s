@@ -1,0 +1,6 @@
+# expect: does not match
+# A target account is the account as it appears in a role ARN, not an ARN or a spaced string.
+projects:
+  - name: shop
+    kind: product
+    podIdentityTargetAccounts: ["acct one"]

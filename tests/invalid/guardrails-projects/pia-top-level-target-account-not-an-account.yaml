@@ -1,0 +1,4 @@
+# expect: does not match
+# A target account is the account as it appears in a role ARN, not an ARN or a spaced string.
+podIdentityTargetAccounts:
+  arch: ["arn:example:iam::acct-one:root"]
