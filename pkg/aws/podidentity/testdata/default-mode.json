@@ -17,6 +17,9 @@
     "name": "ident-policy",
     "parent": "example::truvity:k8s/aws:PodIdentity::ident",
     "provider": "example::pulumi:providers:aws::aws::aws-id",
+    "ignoreChanges": [
+      "description"
+    ],
     "inputs": {
       "description": "what it is for",
       "name": "c1-app",
