@@ -4,7 +4,7 @@ The first release is v0.1.0 (its heading carries no date until the tag is cut).
 Entries are written for someone deciding whether to bump: what changed for
 them, and for anything breaking, what to do.
 
-## Unreleased
+## v0.48.0
 
 - `pkg/aws/iamkit` and `pkg/aws/podidentity`: **a changed IAM policy description no longer replaces the policy.** IAM cannot edit a policy's description, so the provider replaces the policy when it changes, and the policy is detached from its roles for the window. `Kit.Policy` and the managed policy of `podidentity` (so every `ackfactory` service policy) are now registered with `IgnoreChanges` on `description`: the description is still an input, a new policy gets it, and a later edit of the text (an INF-2050 rename that changes a name quoted in it, say) shows no diff. For a live policy this changes the resource options only (the pinned `podidentity` testdata gains `ignoreChanges: [description]` and nothing else): no input, no URN and no rendered document changes, and the next apply is a no-op. The live description stays the one the policy was created with; to have it match the code, replace the policy on purpose. Roles are unchanged: `iamkit` sets no role description, and a role's description is editable in place. To keep the old behaviour set `Kit.TrackDescription` or `ManagedPolicy.TrackDescription`.
 
