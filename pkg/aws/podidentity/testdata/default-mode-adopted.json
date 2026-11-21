@@ -43,6 +43,9 @@
     "provider": "example::pulumi:providers:aws::aws::aws-id",
     "protect": true,
     "import": "policy-arn",
+    "ignoreChanges": [
+      "description"
+    ],
     "inputs": {
       "description": "what it is for",
       "name": "c1-app",

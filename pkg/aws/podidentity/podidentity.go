@@ -101,8 +101,12 @@ type ManagedPolicy struct {
 	// Name is the policy's name. Required.
 	Name string
 	// Description is the policy's description. It cannot be changed in IAM
-	// once set, so adopting an existing policy needs the live value.
+	// once set. The policy is registered with IgnoreChanges on "description",
+	// so editing the text never replaces it (and adopting an existing policy
+	// needs no matching value); TrackDescription turns that off.
 	Description string
+	// TrackDescription makes a changed Description replace the policy.
+	TrackDescription bool
 	// Document is the policy JSON. Required.
 	Document pulumi.StringInput
 }
@@ -609,11 +613,16 @@ func (b *builder) build(trust pulumi.StringInput) error {
 	if m := a.ManagedPolicy; m != nil {
 		var err error
 
+		extra := importOpt(a.Imports.Policy)
+		if !m.TrackDescription {
+			extra = append(extra, pulumi.IgnoreChanges([]string{"description"}))
+		}
+
 		policy, err = iam.NewPolicy(b.ctx, b.child(Child{Kind: KindPolicy}), &iam.PolicyArgs{
 			Name:        pulumi.String(m.Name),
 			Description: pulumi.String(m.Description),
 			Policy:      m.Document,
-		}, b.childOpts(true, importOpt(a.Imports.Policy)...)...)
+		}, b.childOpts(true, extra...)...)
 		if err != nil {
 			return fmt.Errorf("create policy: %w", err)
 		}

@@ -13,6 +13,10 @@
 // impossible to replace (the first change of an immutable field fails the
 // apply), and iam.Policy's description is immutable: adopt a live object with
 // a one-time `pulumi import`, then declare it plainly.
+//
+// A policy ignores later changes to its description (Kit.TrackDescription
+// turns that off): the description is prose, and a rename that edits it must
+// not replace a policy that roles use.
 package iamkit
 
 import (
@@ -69,6 +73,12 @@ type Kit struct {
 	Boundary string
 	// Opts are added to every registration (a parent, say).
 	Opts []pulumi.ResourceOption
+	// TrackDescription makes a changed policy description count as a change,
+	// which replaces the policy (IAM cannot edit one). Unset, Policy
+	// registers the object with IgnoreChanges on "description": the live
+	// description stays as it was created, and an edit to the text in the
+	// program is a no-op.
+	TrackDescription bool
 }
 
 func (k Kit) opts() []pulumi.ResourceOption {
@@ -90,15 +100,23 @@ func (k Kit) roleArgs(name string, trust pulumi.StringInput) *iam.RoleArgs {
 // Policy registers a customer-managed policy named name, logical name
 // Prefix+name.
 //
-// An IAM policy's description is immutable: another description replaces the
-// policy, which detaches it from its roles for a window. Do not edit one on
-// its own.
+// An IAM policy's description is immutable: another description would
+// replace the policy, which detaches it from its roles for a window. So the
+// policy is registered with IgnoreChanges on "description" and a later edit
+// of the text changes nothing in the account (the description of a new
+// policy is still the one given). Set Kit.TrackDescription to have the
+// replace instead.
 func (k Kit) Policy(name, description, document string) (*iam.Policy, error) {
+	opts := k.opts()
+	if !k.TrackDescription {
+		opts = append(opts, pulumi.IgnoreChanges([]string{"description"}))
+	}
+
 	return iam.NewPolicy(k.Ctx, k.Prefix+name, &iam.PolicyArgs{
 		Name:        pulumi.String(name),
 		Description: pulumi.String(description),
 		Policy:      pulumi.String(document),
-	}, k.opts()...)
+	}, opts...)
 }
 
 // Role registers a role named name, trusting trust, with policy attached:

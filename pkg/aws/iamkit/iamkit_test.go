@@ -16,6 +16,7 @@ import (
 
 type registration struct {
 	typ, name, parent, provider string
+	ignore                      []string
 	inputs                      resource.PropertyMap
 }
 
@@ -30,6 +31,7 @@ func (r *recorder) NewResource(args pulumi.MockResourceArgs) (string, resource.P
 	if rpc := args.RegisterRPC; rpc != nil {
 		reg.parent = rpc.GetParent()
 		reg.provider = rpc.GetProvider()
+		reg.ignore = rpc.GetIgnoreChanges()
 	}
 
 	r.mu.Lock()
@@ -49,6 +51,13 @@ func (*recorder) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 func run(t *testing.T, boundary string, program func(iamkit.Kit) error) []registration {
 	t.Helper()
 
+	return runKit(t, iamkit.Kit{Boundary: boundary}, program)
+}
+
+// runKit completes kit's context, provider and prefix.
+func runKit(t *testing.T, kit iamkit.Kit, program func(iamkit.Kit) error) []registration {
+	t.Helper()
+
 	rec := &recorder{}
 
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
@@ -57,7 +66,9 @@ func run(t *testing.T, boundary string, program func(iamkit.Kit) error) []regist
 			return err
 		}
 
-		return program(iamkit.Kit{Ctx: ctx, Provider: provider, Prefix: "ids/", Boundary: boundary})
+		kit.Ctx, kit.Provider, kit.Prefix = ctx, provider, "ids/"
+
+		return program(kit)
 	}, pulumi.WithMocks("project", "stack", rec))
 	if err != nil {
 		t.Fatal(err)
@@ -157,6 +168,59 @@ func TestKitNamesAndInputs(t *testing.T) {
 				t.Errorf("%s inputs: %v", r.name, r.inputs)
 			}
 		}
+	}
+}
+
+// IAM cannot edit a policy's description, so a changed one would replace the
+// policy and detach it from its roles for a window. The kit registers a
+// policy with IgnoreChanges on the description (the engine then reports no
+// diff for it), leaves the roles alone (a role's description is not
+// immutable and the kit sets none), and TrackDescription is the way out.
+func TestPolicyIgnoresDescriptionChanges(t *testing.T) {
+	t.Parallel()
+
+	program := func(k iamkit.Kit) error {
+		policy, err := k.Policy("reader", "Reads one bucket", "{}")
+		if err != nil {
+			return err
+		}
+
+		_, err = k.Role("worker", pulumi.String("{}"), policy)
+
+		return err
+	}
+
+	for _, tc := range []struct {
+		name   string
+		track  bool
+		ignore []string
+	}{
+		{"default", false, []string{"description"}},
+		{"opt-out", true, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			regs := runKit(t, iamkit.Kit{TrackDescription: tc.track}, program)
+
+			for _, r := range regs {
+				want := []string(nil)
+				if r.typ == "aws:iam/policy:Policy" {
+					want = tc.ignore
+				}
+
+				if !reflect.DeepEqual(r.ignore, want) {
+					t.Errorf("%s %s: ignoreChanges %v, want %v", r.typ, r.name, r.ignore, want)
+				}
+			}
+
+			// The description is still an input: a new policy gets it.
+			for _, r := range regs {
+				if r.typ == "aws:iam/policy:Policy" && str(r, "description") != "Reads one bucket" {
+					t.Errorf("policy description input: %v", r.inputs)
+				}
+			}
+		})
 	}
 }
 
