@@ -939,7 +939,10 @@ func TestEKSWithProjectAssumeAndNarrowedRoles(t *testing.T) {
 
 	assume := st["AssumeProjectRoles"]
 	if !slices.Equal(assume.Actions, []string{"sts:AssumeRole", "sts:TagSession"}) ||
-		!slices.Equal(assume.Resources, []string{"arn:part:iam::acct-example:role/c1-ack-project-*"}) {
+		!slices.Equal(assume.Resources, []string{
+			"arn:part:iam::acct-example:role/c1-ack-project-*",
+			"arn:part:iam::acct-example:role/c1-*.ack-project",
+		}) {
 		t.Errorf("project assume statement %+v", assume)
 	}
 

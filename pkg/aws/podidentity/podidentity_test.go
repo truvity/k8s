@@ -460,8 +460,31 @@ func TestNothingIsImportedOrIgnoredByDefault(t *testing.T) {
 	}
 
 	for _, r := range children(res.regs) {
-		if r.importID != "" || len(r.ignore) != 0 {
-			t.Errorf("%s %s: import %q ignore %v", r.typ, r.name, r.importID, r.ignore)
+		var want []string
+		if r.typ == "aws:iam/policy:Policy" {
+			// IAM cannot edit a description: an edit of the text must not
+			// replace the policy.
+			want = []string{"description"}
+		}
+
+		if r.importID != "" || !slices.Equal(r.ignore, want) {
+			t.Errorf("%s %s: import %q ignore %v, want ignore %v", r.typ, r.name, r.importID, r.ignore, want)
+		}
+	}
+}
+
+func TestManagedPolicyTrackDescriptionOptsOut(t *testing.T) {
+	a := base()
+	a.ManagedPolicy.TrackDescription = true
+
+	res, err := run(t, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, r := range children(res.regs) {
+		if len(r.ignore) != 0 {
+			t.Errorf("%s %s: ignore %v, want none", r.typ, r.name, r.ignore)
 		}
 	}
 }

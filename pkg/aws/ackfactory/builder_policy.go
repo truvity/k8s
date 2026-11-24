@@ -32,15 +32,38 @@ func (t tightening) set() bool { return t != tightening{} }
 // serves every sandbox.
 type subject struct {
 	project, cluster string
+	// builder is the builder's own role name when it is not the
+	// "<cluster>-ack-project-<project>" of the default shape (the dotted
+	// "<cluster>-<vendor>-<project>-<customer>.ack-project"). Empty: the default.
+	builder string
 }
 
 func literalSubject(c Cluster, project string) subject {
 	return subject{project: project, cluster: c.Name}
 }
 
+// literalBuilderSubject is literalSubject for a builder that carries roleName,
+// which may be the default shape or the dotted one (see ProjectRole.BuilderName).
+func literalBuilderSubject(c Cluster, project, roleName string) subject {
+	s := literalSubject(c, project)
+	if roleName != s.defaultBuilder() {
+		s.builder = roleName
+	}
+
+	return s
+}
+
+func (s subject) defaultBuilder() string {
+	return s.cluster + "-ack-project-" + s.project
+}
+
 // ownRole is the builder's own role ARN.
 func (s subject) ownRole(c Cluster) string {
-	return c.roleARN(s.cluster + "-ack-project-" + s.project)
+	if s.builder != "" {
+		return c.roleARN(s.builder)
+	}
+
+	return c.roleARN(s.defaultBuilder())
 }
 
 // stmt builds one policy statement.
@@ -156,8 +179,10 @@ func onlyWorkloadBoundary(c Cluster, boundary string) map[string]any {
 	})
 }
 
-// projectPolicy is a project role's identity policy.
-func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string, t tightening) string {
+// projectPolicy is the identity policy of the project role named roleName. The
+// policy is keyed on the project name; roleName only decides which role the
+// protectTags deny of touching "the project role itself" names.
+func projectPolicy(c Cluster, name, roleName, ssmPrefix string, forbidden []string, t tightening) string {
 	doc := fmt.Sprintf(`{
   "Version": "2012-10-17",
   "Statement": [{
@@ -246,7 +271,7 @@ func projectPolicy(c Cluster, name, ssmPrefix string, forbidden []string, t tigh
 		panic(fmt.Sprintf("ackfactory: project policy is not JSON: %v", err))
 	}
 
-	s := literalSubject(c, name)
+	s := literalBuilderSubject(c, name, roleName)
 	drop := map[string]bool{}
 
 	if t.dropSSM {
