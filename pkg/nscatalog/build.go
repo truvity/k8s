@@ -185,9 +185,15 @@ type (
 	}
 
 	// AppProject is one delivery project and its destination namespace.
+	// Several AppProjects may share a namespace (one per component or lane
+	// of a project, say) when they belong to the namespace's owner.
 	AppProject struct {
 		Name      string
 		Namespace string
+		// Owner is the company the AppProject belongs to; empty for the
+		// namespace's owner. One that names another company than the
+		// namespace's owner (Inputs.Owners, else DefaultOwner) is refused.
+		Owner string
 	}
 
 	// Component is one namespace a component of the cluster owns.
@@ -617,16 +623,38 @@ func (b *builder) addKargo() {
 	}
 }
 
-// addAppProjects: the delivery project whose destination is a namespace.
+// addAppProjects: the delivery projects whose destination is a namespace.
+// Several may share one namespace, listed in name order with the first as
+// the primary; the same AppProject named twice for one namespace, and an
+// AppProject of another company than the namespace's owner, are refused.
 func (b *builder) addAppProjects() error {
+	byNamespace := map[string][]string{}
+
 	for _, ap := range b.in.AppProjects {
 		r := b.row(ap.Namespace)
-		if r.Delivery.AppProject != "" {
-			return fmt.Errorf("cluster %s: namespace %s is the destination of two AppProjects, %s and %s",
-				b.in.Cluster, ap.Namespace, r.Delivery.AppProject, ap.Name)
+
+		if ap.Owner != "" && ap.Owner != r.Observability.Owner {
+			return fmt.Errorf("cluster %s: AppProject %s of %s has namespace %s of %s as its destination",
+				b.in.Cluster, ap.Name, ap.Owner, ap.Namespace, r.Observability.Owner)
 		}
 
-		r.Delivery.AppProject = ap.Name
+		if slices.Contains(byNamespace[ap.Namespace], ap.Name) {
+			return fmt.Errorf("cluster %s: AppProject %s is listed twice for namespace %s",
+				b.in.Cluster, ap.Name, ap.Namespace)
+		}
+
+		byNamespace[ap.Namespace] = append(byNamespace[ap.Namespace], ap.Name)
+	}
+
+	for ns, names := range byNamespace {
+		slices.Sort(names)
+
+		d := &b.rows[ns].Delivery
+		d.AppProject = names[0]
+
+		if len(names) > 1 {
+			d.AppProjects = names
+		}
 	}
 
 	return nil

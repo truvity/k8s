@@ -176,10 +176,29 @@ type (
 	// Delivery is the delivery concern.
 	Delivery struct {
 		// AppProject is the ArgoCD AppProject (on the management
-		// cluster) whose destination is this namespace.
+		// cluster) whose destination is this namespace. Where several
+		// are, it is the primary one: the first of AppProjects.
 		AppProject string `yaml:"appProject,omitempty"`
+		// AppProjects are every AppProject whose destination is this
+		// namespace, sorted by name, when there is more than one; empty
+		// for one or none, so a single-AppProject row reads as before.
+		AppProjects []string `yaml:"appProjects,omitempty,flow"`
 	}
 )
+
+// Projects are every AppProject whose destination is the namespace, sorted
+// by name: AppProjects, or the single AppProject, or none.
+func (d Delivery) Projects() []string {
+	if len(d.AppProjects) > 0 {
+		return slices.Clone(d.AppProjects)
+	}
+
+	if d.AppProject != "" {
+		return []string{d.AppProject}
+	}
+
+	return nil
+}
 
 // Row returns the named row, or nil.
 func (c *Catalog) Row(name string) *Row {

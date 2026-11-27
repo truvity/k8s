@@ -2,6 +2,7 @@ package nscatalog_test
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -226,12 +227,127 @@ func TestBuildKargo(t *testing.T) {
 	}
 }
 
-func TestBuildRefusesTwoAppProjectsForOneNamespace(t *testing.T) {
-	in := buildInputs()
-	in.AppProjects = append(in.AppProjects, nscatalog.AppProject{Name: "other", Namespace: "shop"})
+// TestBuildSingleAppProjectRowUnchanged: a namespace with one AppProject
+// marshals as it always did, appProject alone, with no appProjects key.
+func TestBuildSingleAppProjectRowUnchanged(t *testing.T) {
+	c := mustBuild(t, buildInputs())
 
-	if _, err := nscatalog.Build(in); err == nil || !strings.Contains(err.Error(), "two AppProjects") {
-		t.Fatalf("err %v, want the two-AppProjects refusal", err)
+	r := mustRow(t, c, "shop")
+	if r.Delivery.AppProject != "shop-dev" || r.Delivery.AppProjects != nil ||
+		!slices.Equal(r.Delivery.Projects(), []string{"shop-dev"}) {
+		t.Fatalf("shop delivery %+v", r.Delivery)
+	}
+
+	data, err := nscatalog.Marshal(c, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(data), "    delivery:\n      appProject: shop-dev\n") || strings.Contains(string(data), "appProjects") {
+		t.Fatalf("single-AppProject delivery block changed:\n%s", data)
+	}
+
+	if got := mustRow(t, c, "broker").Delivery.Projects(); got != nil {
+		t.Errorf("broker has AppProjects %v", got)
+	}
+}
+
+// TestBuildSharedAppProjectNamespace: one AppProject per component or lane
+// on one namespace of one owner, listed in name order, the first primary.
+func TestBuildSharedAppProjectNamespace(t *testing.T) {
+	in := buildInputs()
+	in.Owners["partner"] = append(in.Owners["partner"], "sso")
+	in.Components = append(in.Components, nscatalog.Component{Name: "sso"})
+	in.AppProjects = append(in.AppProjects,
+		nscatalog.AppProject{Name: "dev-sso-master-haven", Namespace: "sso", Owner: "partner"},
+		nscatalog.AppProject{Name: "dev-sso-keycloak", Namespace: "sso"},
+		nscatalog.AppProject{Name: "dev-sso-haven", Namespace: "sso", Owner: "partner"},
+	)
+
+	c := mustBuild(t, in)
+
+	want := []string{"dev-sso-haven", "dev-sso-keycloak", "dev-sso-master-haven"}
+
+	d := mustRow(t, c, "sso").Delivery
+	if d.AppProject != want[0] || !slices.Equal(d.AppProjects, want) || !slices.Equal(d.Projects(), want) {
+		t.Fatalf("sso delivery %+v, want primary %s of %v", d, want[0], want)
+	}
+
+	if d := mustRow(t, c, "shop").Delivery; d.AppProject != "shop-dev" || d.AppProjects != nil {
+		t.Errorf("shop delivery %+v", d)
+	}
+
+	data, err := nscatalog.Marshal(c, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(data), "      appProject: dev-sso-haven\n      appProjects: [dev-sso-haven, dev-sso-keycloak, dev-sso-master-haven]\n") {
+		t.Fatalf("shared delivery block:\n%s", data)
+	}
+
+	back, err := nscatalog.Unmarshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := back.Row("sso").Delivery.Projects(); !slices.Equal(got, want) {
+		t.Fatalf("round trip %v", got)
+	}
+
+	// The input order does not matter.
+	slices.Reverse(in.AppProjects)
+
+	if d2 := mustRow(t, mustBuild(t, in), "sso").Delivery; !reflect.DeepEqual(d2, d) {
+		t.Fatalf("order-dependent: %+v vs %+v", d2, d)
+	}
+}
+
+// TestBuildRefusesAppProjectConflicts: what still cannot share a namespace.
+func TestBuildRefusesAppProjectConflicts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra []nscatalog.AppProject
+		want  string
+	}{
+		"another company's AppProject on a namespace": {
+			extra: []nscatalog.AppProject{{Name: "acme-shop", Namespace: "shop", Owner: "acme"}},
+			want:  "AppProject acme-shop of acme has namespace shop of partner as its destination",
+		},
+		"two companies' AppProjects on one namespace": {
+			extra: []nscatalog.AppProject{
+				{Name: "a-broker", Namespace: "broker", Owner: "acme"},
+				{Name: "p-broker", Namespace: "broker", Owner: "partner"},
+			},
+			want: "AppProject p-broker of partner has namespace broker of acme as its destination",
+		},
+		"one AppProject listed twice": {
+			extra: []nscatalog.AppProject{{Name: "shop-dev", Namespace: "shop"}},
+			want:  "AppProject shop-dev is listed twice for namespace shop",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			in := buildInputs()
+			in.AppProjects = append(in.AppProjects, tc.extra...)
+
+			if _, err := nscatalog.Build(in); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildAppProjectOfTheNamespaceOwner: an Owner that is the namespace's
+// owner is accepted, explicitly or by DefaultOwner.
+func TestBuildAppProjectOfTheNamespaceOwner(t *testing.T) {
+	in := buildInputs()
+	in.AppProjects = []nscatalog.AppProject{
+		{Name: "shop-dev", Namespace: "shop", Owner: "partner"},
+		{Name: "broker-dev", Namespace: "broker", Owner: "acme"},
+	}
+
+	c := mustBuild(t, in)
+	if mustRow(t, c, "shop").Delivery.AppProject != "shop-dev" || mustRow(t, c, "broker").Delivery.AppProject != "broker-dev" {
+		t.Fatalf("owner-matched AppProjects not recorded")
 	}
 }
 
